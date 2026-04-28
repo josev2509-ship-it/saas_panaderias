@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Carga de centros</title>
+</head>
+<body style="font-family: Arial; padding: 40px;">
+    <h1>🏫 Carga masiva de centros educativos</h1>
+
+    <a href="/plantilla-centros/">⬇ Descargar plantilla de centros</a>
+
+    <form method="post" action="/cargar-centros/" enctype="multipart/form-data">
+        {% csrf_token %}
+        <br><br>
+        <input type="file" name="archivo" accept=".xlsx" required>
+        <button type="submit">📤 Importar centros</button>
+    </form>
+
+    <br><br>
+    <a href="/admin/">← Volver al admin</a>
+</body>
+</html>

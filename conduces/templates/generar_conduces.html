@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Generar Conduces Automáticos</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            margin: 0;
+            padding: 35px;
+        }
+
+        .contenedor {
+            max-width: 760px;
+            margin: 30px auto;
+            background: white;
+            padding: 35px;
+            border-radius: 14px;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.10);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 28px;
+            font-size: 28px;
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 18px;
+            margin-bottom: 6px;
+            font-size: 16px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #c7c7c7;
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+
+        .nota {
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 12px 14px;
+            border-radius: 8px;
+            color: #1e3a8a;
+            font-size: 14px;
+            margin-top: 12px;
+            line-height: 1.6;
+        }
+
+        .botones {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 13px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            font-size: 15px;
+        }
+
+        .btn-generar {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-volver {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .mensaje {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+
+<body>
+<div class="contenedor">
+    <h2>⚙️ Generar Conduces Automáticos</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="mensaje {{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="POST">
+        {% csrf_token %}
+
+        <label>Empresa:</label>
+        <select name="empresa" required>
+            <option value="">Seleccione una empresa</option>
+            {% for empresa in empresas %}
+                <option value="{{ empresa.id }}">{{ empresa.nombre }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Fecha desde:</label>
+        <input type="date" name="fecha_desde" required>
+
+        <label>Fecha hasta:</label>
+        <input type="date" name="fecha_hasta" required>
+
+        <label>Número inicial de conduce:</label>
+        <input 
+            type="text" 
+            name="numero_inicial" 
+            placeholder="Opcional. Ejemplo: 0001, 0100"
+        >
+
+        <div class="nota">
+            <strong>Observación:</strong><br>
+            Si dejas el número inicial vacío, el sistema iniciará en <strong>1</strong> si no existen conduces previos.
+            Si ya existen conduces, continuará automáticamente desde el último número creado.
+        </div>
+
+        <div class="botones">
+            <button type="submit" class="btn btn-generar">
+                Generar conduces
+            </button>
+
+            <a href="/admin/conduces/conduce/" class="btn btn-volver">
+                Volver
+            </a>
+        </div>
+    </form>
+</div>
+</body>
+</html>

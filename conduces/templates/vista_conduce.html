@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Conduce {{ conduce.numero }}</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #e5e7eb;
+            margin: 0;
+            padding: 30px;
+        }
+
+        .acciones {
+            max-width: 850px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .verde { background: #16a34a; }
+        .azul { background: #2563eb; }
+        .rojo { background: #dc2626; }
+        .gris { background: #6b7280; }
+
+        .hoja {
+            width: 8.5in;
+            min-height: 11in;
+            background: white;
+            margin: auto;
+            padding: 35px;
+            box-sizing: border-box;
+            color: #000;
+        }
+
+        .encabezado {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .empresa {
+            font-size: 22px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .datos-empresa {
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .titulo {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 25px 0;
+            text-transform: uppercase;
+        }
+
+        .fila-superior {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .cuadro {
+            border: 1px solid #000;
+            padding: 10px;
+            min-height: 45px;
+        }
+
+        .cuadro strong {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+        }
+
+        th, td {
+            border: 1px solid #000;
+            padding: 10px;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        th {
+            background: #f3f4f6;
+            text-align: center;
+        }
+
+        .texto-centro {
+            margin-top: 25px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .firmas {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            margin-top: 90px;
+            text-align: center;
+        }
+
+        .linea {
+            border-top: 1px solid #000;
+            padding-top: 8px;
+            font-size: 14px;
+        }
+
+        .estado-anulado {
+            color: #b91c1c;
+            font-weight: bold;
+            text-align: center;
+            font-size: 22px;
+            border: 2px solid #b91c1c;
+            padding: 10px;
+            margin: 20px 0;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .acciones {
+                display: none;
+            }
+
+            .hoja {
+                width: 100%;
+                min-height: auto;
+                padding: 25px;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="acciones">
+        <button onclick="window.print()" class="btn verde">Imprimir</button>
+        <a href="/conduce/{{ conduce.id }}/editar/" class="btn azul">Editar</a>
+        <a href="/conduce/{{ conduce.id }}/anular/" class="btn rojo">Anular</a>
+        <a href="/buscar-conduces/" class="btn gris">Volver a búsqueda</a>
+        <a href="/admin/conduces/conduce/" class="btn gris">Volver a conduces</a>
+    </div>
+
+    <div class="hoja">
+
+        <div class="encabezado">
+            <div class="empresa">{{ conduce.empresa.nombre }}</div>
+
+            <div class="datos-empresa">
+                RNC: {{ conduce.empresa.rnc }} |
+                Tel.: {{ conduce.empresa.telefono }} |
+                {{ conduce.empresa.direccion }}
+            </div>
+        </div>
+
+        <div class="titulo">
+            CONDUCE
+        </div>
+
+        {% if conduce.estado == "anulado" %}
+            <div class="estado-anulado">
+                CONDUCE ANULADO
+            </div>
+        {% endif %}
+
+        <div class="fila-superior">
+            <div class="cuadro">
+                <strong>No. de conduce:</strong>
+                {{ conduce.numero }}
+            </div>
+
+            <div class="cuadro">
+                <strong>Fecha:</strong>
+                {{ conduce.fecha }}
+            </div>
+
+            <div class="cuadro">
+                <strong>Código del centro:</strong>
+                {{ conduce.centro.codigo }}
+            </div>
+
+            <div class="cuadro">
+                <strong>Centro educativo:</strong>
+                {{ conduce.centro.nombre }}
+            </div>
+
+            <div class="cuadro">
+                <strong>Director/a:</strong>
+                {{ conduce.centro.director }}
+            </div>
+
+            <div class="cuadro">
+                <strong>Contacto:</strong>
+                {{ conduce.centro.telefono }}
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Cantidad</th>
+                    <th>Descripción del producto</th>
+                    <th>Observaciones</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                <tr>
+                    <td style="text-align:center;">{{ conduce.cantidad }}</td>
+                    <td>{{ conduce.producto }}</td>
+                    <td>{{ conduce.observaciones|default:"" }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="texto-centro">
+            Recibido conforme por el centro educativo indicado, correspondiente a las raciones entregadas en la fecha señalada en este conduce.
+        </div>
+
+        <div class="firmas">
+            <div class="linea">
+                Firma y sello del centro educativo
+            </div>
+
+            <div class="linea">
+                Entregado por
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

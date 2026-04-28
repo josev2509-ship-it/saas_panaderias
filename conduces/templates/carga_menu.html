@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Carga de menú</title>
+</head>
+<body style="font-family: Arial; padding: 40px;">
+    <h1>📅 Carga masiva de menú diario</h1>
+    {% if messages %}
+    {% for message in messages %}
+        <p style="padding:10px; background:#ffe6e6; border:1px solid #cc0000;">
+            {{ message }}
+        </p>
+    {% endfor %}
+{% endif %}
+    <a href="/plantilla-menu/">⬇ Descargar plantilla de menú</a>
+
+    <form method="post" action="/cargar-menu/" enctype="multipart/form-data">
+        {% csrf_token %}
+        <br><br>
+        <input type="file" name="archivo" accept=".xlsx" required>
+        <button type="submit">📤 Importar menú</button>
+    </form>
+
+    <br><br>
+    <a href="/admin/">← Volver al admin</a>
+</body>
+</html>

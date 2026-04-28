@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Carga masiva</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background-color: #f5f6fa;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: auto;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            background-color: #2d89ef;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: #1b5fbd;
+        }
+
+        .link {
+            display: inline-block;
+            margin-bottom: 10px;
+            color: #2d89ef;
+            text-decoration: none;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+
+        input[type="file"] {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>📥 Carga masiva</h1>
+
+    <!-- CENTROS -->
+    <div class="card">
+        <h2>🏫 Centros educativos</h2>
+
+        <a class="link" href="/plantilla-centros/">⬇ Descargar plantilla</a>
+
+        <form method="post" action="/cargar-centros/" enctype="multipart/form-data">
+            {% csrf_token %}
+            <br>
+            <input type="file" name="archivo" accept=".xlsx" required>
+            <button class="btn" type="submit">Importar centros</button>
+        </form>
+    </div>
+
+    <!-- MENU -->
+    <div class="card">
+        <h2>📅 Menú diario</h2>
+
+        <a class="link" href="/plantilla-menu/">⬇ Descargar plantilla</a>
+
+        <form method="post" action="/cargar-menu/" enctype="multipart/form-data">
+            {% csrf_token %}
+            <br>
+            <input type="file" name="archivo" accept=".xlsx" required>
+            <button class="btn" type="submit">Importar menú</button>
+        </form>
+    </div>
+
+    <a href="/admin/">← Volver al admin</a>
+
+</div>
+
+</body>
+</html>

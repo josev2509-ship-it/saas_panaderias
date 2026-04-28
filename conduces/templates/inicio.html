@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Conduces</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            margin: 0;
+            padding: 40px;
+        }
+
+        .contenedor {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 40px;
+            border-radius: 18px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.10);
+            text-align: center;
+        }
+
+        h1 {
+            color: #111827;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #6b7280;
+            margin-bottom: 35px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
+        }
+
+        .btn {
+            display: block;
+            padding: 20px;
+            border-radius: 14px;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .azul { background: #2563eb; }
+        .gris { background: #6b7280; }
+        .verde { background: #16a34a; }
+        .morado { background: #7c3aed; }
+    </style>
+</head>
+
+<body>
+    <div class="contenedor">
+        <h1>Sistema de Conduces</h1>
+        <p>Panel principal de gestión operativa</p>
+
+        <div class="grid">
+            <a class="btn azul" href="/carga-centros/">Cargar centros</a>
+            <a class="btn gris" href="/carga-menu/">Cargar menú</a>
+            <a class="btn verde" href="/generar-conduces/">Generar conduces</a>
+            <a class="btn morado" href="/buscar-conduces/">Gestionar conduces</a>
+        </div>
+    </div>
+</body>
+</html>

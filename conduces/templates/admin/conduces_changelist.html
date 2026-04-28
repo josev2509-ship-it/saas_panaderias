@@ -1,0 +1,78 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools %}
+
+<style>
+    .botones-admin-conduces {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .boton-admin-conduce,
+    .botones-admin-conduces .addlink {
+        width: 245px !important;
+        height: 50px !important;
+        padding: 0 18px !important;
+        border-radius: 16px !important;
+        color: white !important;
+        text-decoration: none !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        letter-spacing: 0.2px !important;
+        text-transform: none !important;
+        display: inline-flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        gap: 8px !important;
+        box-sizing: border-box !important;
+        background-image: none !important;
+        border: none !important;
+        white-space: nowrap !important;
+        line-height: 1 !important;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14) !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    .boton-azul {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    }
+
+    .boton-gris {
+        background: linear-gradient(135deg, #6b7280, #4b5563) !important;
+    }
+
+    .botones-admin-conduces .addlink {
+        background: linear-gradient(135deg, #374151, #1f2937) !important;
+    }
+
+    .boton-admin-conduce:hover,
+    .botones-admin-conduces .addlink:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.20) !important;
+        opacity: 1 !important;
+    }
+
+    .boton-admin-conduce:active,
+    .botones-admin-conduces .addlink:active {
+        transform: translateY(0) !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16) !important;
+    }
+</style>
+
+<div class="botones-admin-conduces">
+    <a href="/buscar-conduces/" class="boton-admin-conduce boton-azul">
+        🔎 Gestionar conduces
+    </a>
+
+    <a href="/generar-conduces/" class="boton-admin-conduce boton-gris">
+        ⚙️ Generar conduces
+    </a>
+
+    {{ block.super }}
+</div>
+
+{% endblock %}
