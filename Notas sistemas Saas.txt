@@ -1,0 +1,69 @@
+python manage.py runserver Para arrancar el servidor
+PS C:\Users\Dell\SaaS_Panaderias>
+C:\Users\Dell\SaaS_Panaderias Aquí es donde esta el proyecto
+Para contnual
+🔹 Paso 1: Abre VS Code
+Paso 2: Abre tu proyecto
+File → Open Folder
+C:\Users\Dell\SaaS_Panaderias
+🔹 Paso 3: Abre la terminal
+Presiona:
+
+Ctrl +
+(o menú → Terminal → New Terminal) `
+🔹 Paso 4: Activa el entorno virtual
+
+En la terminal escribe:
+
+venv\Scripts\activate
+
+Debe verse así:
+
+(venv) C:\Users\Dell\SaaS_Panaderias>
+🔹 Paso 5: Levanta el sistema
+python manage.py runserver
+🔹 Paso 6: Abre en el navegador
+http://127.0.0.1:8000/
+
+josev2509-ship-it  usuario en GitHub
+
+
+
+
+
+
+
+______________________________
+
+1. Abre VS Code
+2. Abre tu proyecto
+En VS Code:
+File → Open Folder
+Selecciona:
+C:\Users\Dell\SaaS_Panaderias
+3. Abre la terminal
+Arriba en VS Code:
+Terminal → New Terminal
+4. Activa el entorno virtual
+En la terminal pega:
+venv\Scripts\activate
+Debe verse algo así:
+(venv) PS C:\Users\Dell\SaaS_Panaderias>
+5. Enciende el sistema
+python manage.py runserver
+6. Abre el sistema en el navegador
+http://127.0.0.1:8000/
+7. Para guardar nuevos cambios en GitHub
+Cuando hagamos cambios nuevos:
+git add .git commit -m "descripcion del cambio"git push origin main
+
+_______________________________________________________________
+💡 Nota importante
+
+Si algún día entras y no ves algo:
+
+👉 ejecutas:
+
+git pull
+
+y se actualiza todo
