@@ -1,0 +1,230 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapa de centros</title>
+
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        #mapa {
+            height: 650px;
+            border-radius: 22px;
+        }
+
+        .map-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 20px;
+        }
+
+        .map-panel {
+            background: white;
+            border-radius: 24px;
+            padding: 22px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
+        }
+
+        .location-box {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 18px;
+            padding: 16px;
+            margin: 18px 0;
+        }
+
+        .location-status {
+            padding: 10px 12px;
+            border-radius: 12px;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+
+        .status-ok {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Panel principal</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
+        <a href="{% url 'mapa_centros' %}">🗺️ Mapa de centros</a>
+        <a href="{% url 'carga_menu' %}">📅 Gestión de menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Mapa de centros educativos</h1>
+                <p>Busca centros por código y registra su ubicación.</p>
+            </div>
+
+            <a href="{% url 'carga_centros' %}" class="btn btn-light">Volver a centros</a>
+        </div>
+
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <section class="map-layout">
+
+            <div class="map-panel">
+                <h3>Buscar centro</h3>
+
+                <form method="get">
+                    <input 
+                        type="text" 
+                        name="codigo" 
+                        value="{{ codigo }}" 
+                        placeholder="Código del centro"
+                    >
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn">Buscar</button>
+                        <a href="{% url 'mapa_centros' %}" class="btn btn-secondary">Ver todos</a>
+                    </div>
+                </form>
+
+                {% if centro_buscado %}
+                    <div class="location-box">
+                        <h3>{{ centro_buscado.codigo }} - {{ centro_buscado.nombre }}</h3>
+
+                        <p>
+                            <strong>Director:</strong> {{ centro_buscado.director|default:"No registrado" }}<br>
+                            <strong>Teléfono:</strong> {{ centro_buscado.telefono|default:"No registrado" }}<br>
+                            <strong>Matrícula:</strong> {{ centro_buscado.matricula }}<br>
+                            <strong>Dirección:</strong> {{ centro_buscado.direccion|default:"No registrada" }}
+                        </p>
+
+                        {% if mensaje_ubicacion %}
+                            <div class="location-status {% if centro_buscado.latitud and centro_buscado.longitud %}status-ok{% else %}status-warning{% endif %}">
+                                {{ mensaje_ubicacion }}
+                            </div>
+                        {% endif %}
+
+                        <form method="post" action="{% url 'actualizar_ubicacion_centro' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="centro_id" value="{{ centro_buscado.id }}">
+
+                            <div class="form-grid">
+                                <div>
+                                    <label>Latitud</label>
+                                    <input 
+                                        type="text" 
+                                        name="latitud" 
+                                        value="{{ centro_buscado.latitud|default:'' }}"
+                                        placeholder="18.5579400"
+                                        required
+                                    >
+                                </div>
+
+                                <div>
+                                    <label>Longitud</label>
+                                    <input 
+                                        type="text" 
+                                        name="longitud" 
+                                        value="{{ centro_buscado.longitud|default:'' }}"
+                                        placeholder="-69.7012200"
+                                        required
+                                    >
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="btn">Guardar ubicación</button>
+                            </div>
+                        </form>
+                    </div>
+                {% endif %}
+
+                <h3>Centros con ubicación</h3>
+                <p>Total: {{ centros.count }}</p>
+            </div>
+
+            <div class="panel-card">
+                <div id="mapa"></div>
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+    const centros = {{ centros_json|safe }};
+
+    const mapa = L.map('mapa').setView([18.7357, -70.1627], 8);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(mapa);
+
+    const marcadores = {};
+    const grupo = L.featureGroup();
+
+    centros.forEach(centro => {
+        const marker = L.marker([centro.latitud, centro.longitud]);
+
+        marker.bindPopup(`
+            <strong>${centro.nombre}</strong><br>
+            <b>Código:</b> ${centro.codigo}<br>
+            <b>Matrícula:</b> ${centro.matricula}<br>
+            <b>Director:</b> ${centro.director || 'No registrado'}<br>
+            <b>Teléfono:</b> ${centro.telefono || 'No registrado'}<br>
+            <b>Dirección:</b> ${centro.direccion || 'No registrada'}
+        `);
+
+        marker.addTo(mapa);
+        marker.addTo(grupo);
+
+        marcadores[centro.codigo.trim().toLowerCase()] = marker;
+    });
+
+    if (centros.length > 0) {
+        mapa.fitBounds(grupo.getBounds(), { padding: [40, 40] });
+    }
+
+    function enfocarCentro(codigo) {
+        const marker = marcadores[codigo.trim().toLowerCase()];
+
+        if (marker) {
+            mapa.setView(marker.getLatLng(), 17);
+            marker.openPopup();
+        }
+    }
+
+    {% if centro_buscado and centro_buscado.latitud and centro_buscado.longitud %}
+        setTimeout(() => {
+            enfocarCentro("{{ centro_buscado.codigo|escapejs }}");
+        }, 500);
+    {% endif %}
+</script>
+
+</body>
+</html>

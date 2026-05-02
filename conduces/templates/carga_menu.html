@@ -1,27 +1,141 @@
+{% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Carga de menú</title>
+    <meta charset="UTF-8">
+    <title>SaaS Panaderías | Gestión de Menú Diario</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
 </head>
-<body style="font-family: Arial; padding: 40px;">
-    <h1>📅 Carga masiva de menú diario</h1>
-    {% if messages %}
-    {% for message in messages %}
-        <p style="padding:10px; background:#ffe6e6; border:1px solid #cc0000;">
-            {{ message }}
-        </p>
-    {% endfor %}
-{% endif %}
-    <a href="/plantilla-menu/">⬇ Descargar plantilla de menú</a>
 
-    <form method="post" action="/cargar-menu/" enctype="multipart/form-data">
-        {% csrf_token %}
-        <br><br>
-        <input type="file" name="archivo" accept=".xlsx" required>
-        <button type="submit">📤 Importar menú</button>
-    </form>
+<body>
 
-    <br><br>
-    <a href="/admin/">← Volver al admin</a>
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Dashboard</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
+        <a href="{% url 'carga_menu' %}">📅 Gestión de menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Gestión de menú diario</h1>
+                <p>Consulta, crea, edita, elimina y carga el menú diario.</p>
+            </div>
+
+            <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+        </div>
+
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <section class="management-toolbar">
+            <form method="get" class="search-box">
+                <input type="text" name="q" value="{{ q }}" placeholder="Buscar por producto o fecha...">
+                <button type="submit" class="btn">Buscar</button>
+                <a href="{% url 'carga_menu' %}" class="btn btn-secondary">Limpiar</a>
+            </form>
+
+            <div class="toolbar-actions">
+                <a href="{% url 'plantilla_menu' %}" class="btn btn-secondary">Descargar plantilla</a>
+            </div>
+        </section>
+
+        <section class="panel-card high-card">
+            <div class="section-header">
+                <h3>Crear menú manualmente</h3>
+                <p>Registra un producto para una fecha específica.</p>
+            </div>
+
+            <form method="post" action="{% url 'crear_menu_diario' %}">
+                {% csrf_token %}
+
+                <div class="form-grid">
+                    <div>
+                        <label>Fecha</label>
+                        <input type="date" name="fecha" required>
+                    </div>
+
+                    <div>
+                        <label>Producto</label>
+                        <input type="text" name="producto" placeholder="Ej: Pan, Galleta, Muffin..." required>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn">Guardar menú</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel-card high-card">
+            <div class="section-header">
+                <h3>Cargar menú por Excel</h3>
+                <p>Sube la plantilla oficial con fechas y productos.</p>
+            </div>
+
+            <form method="post" action="{% url 'cargar_menu_excel' %}" enctype="multipart/form-data" class="upload-form">
+                {% csrf_token %}
+                <input type="file" name="archivo" accept=".xlsx" required>
+                <button type="submit" class="btn">Subir Excel</button>
+            </form>
+        </section>
+
+        <section class="table-card high-card">
+            <div class="section-header">
+                <h3>Menú registrado</h3>
+                <p>Total: {{ menus.count }} registros</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for menu in menus %}
+                    <tr>
+                        <td>{{ menu.fecha }}</td>
+                        <td><strong>{{ menu.producto }}</strong></td>
+                        <td>
+                            <div class="row-actions">
+                                <a href="{% url 'editar_menu_diario' menu.id %}" class="btn btn-small">Editar</a>
+
+                                <form method="post" action="{% url 'eliminar_menu_diario' menu.id %}" onsubmit="return confirm('¿Seguro que deseas eliminar este menú?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger btn-small">Eliminar</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3">No hay menú diario registrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+    </main>
+
+</div>
+
 </body>
 </html>

@@ -1,0 +1,129 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SaaS Panaderías | Dashboard</title>
+
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Dashboard</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Centros educativos</a>
+        <a href="{% url 'carga_menu' %}">📅 Menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Dashboard</h1>
+                <p>Resumen general de producción, conduces y centros educativos.</p>
+            </div>
+        </div>
+
+        <section class="kpi-grid">
+
+            <div class="kpi-card">
+                <h3>Total raciones entregadas</h3>
+                <p>{{ total_raciones }}</p>
+                <small>Raciones registradas en conduces</small>
+            </div>
+
+            <div class="kpi-card">
+                <h3>Total conduces</h3>
+                <p>{{ total_conduces }}</p>
+                <small>Documentos generados</small>
+            </div>
+
+            <div class="kpi-card">
+                <h3>Centros activos</h3>
+                <p>{{ total_centros }}</p>
+                <small>Centros educativos registrados</small>
+            </div>
+
+            <div class="kpi-card">
+                <h3>Proyección de ventas</h3>
+                <p>RD$ {{ proyeccion_ventas }}</p>
+                <small>Estimación según raciones</small>
+            </div>
+
+        </section>
+
+        <section class="quick-actions">
+
+            <a href="{% url 'generar_conduces' %}" class="action-card">
+                <span>➕</span>
+                <h3>Generar conduces</h3>
+                <p>Crear conduces por rango de fecha y centros cargados.</p>
+            </a>
+
+            <a href="{% url 'buscar_conduces' %}" class="action-card">
+                <span>🔍</span>
+                <h3>Buscar conduces</h3>
+                <p>Consultar, editar, visualizar o anular conduces.</p>
+            </a>
+
+            <a href="{% url 'carga_centros' %}" class="action-card">
+                <span>🏫</span>
+                <h3>Centros educativos</h3>
+                <p>Gestionar centros, matrículas, directores y teléfonos.</p>
+            </a>
+
+            <a href="{% url 'carga_menu' %}" class="action-card">
+                <span>📅</span>
+                <h3>Menú diario</h3>
+                <p>Cargar y administrar los productos por fecha.</p>
+            </a>
+
+        </section>
+
+        <section class="delivery-card">
+            <div>
+                <h3>Producto a entregar mañana</h3>
+                <p class="delivery-product">{{ producto_manana }}</p>
+                <small>Fecha: {{ fecha_manana }}</small>
+            </div>
+        </section>
+
+        <section class="chart-grid">
+
+            <div class="chart-card">
+                <h3>Producción por día</h3>
+                <canvas id="produccionDia"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3>Distribución por producto</h3>
+                <canvas id="productoChart"></canvas>
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+    window.labels_dias = {{ labels_dias|safe }};
+    window.data_dias = {{ data_dias|safe }};
+
+    window.labels_productos = {{ labels_productos|safe }};
+    window.data_productos = {{ data_productos|safe }};
+</script>
+
+<script src="{% static 'conduces/js/dashboard.js' %}"></script>
+
+</body>
+</html>

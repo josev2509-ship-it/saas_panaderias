@@ -1,21 +1,211 @@
+{% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Carga de centros</title>
+    <meta charset="UTF-8">
+    <title>SaaS Panaderías | Gestión de Centros</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
 </head>
-<body style="font-family: Arial; padding: 40px;">
-    <h1>🏫 Carga masiva de centros educativos</h1>
 
-    <a href="/plantilla-centros/">⬇ Descargar plantilla de centros</a>
+<body>
 
-    <form method="post" action="/cargar-centros/" enctype="multipart/form-data">
-        {% csrf_token %}
-        <br><br>
-        <input type="file" name="archivo" accept=".xlsx" required>
-        <button type="submit">📤 Importar centros</button>
-    </form>
+<div class="main-layout">
 
-    <br><br>
-    <a href="/admin/">← Volver al admin</a>
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Dashboard</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
+        <a href="{% url 'carga_menu' %}">📅 Menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+        <a href="{% url 'mapa_centros' %}" class="btn">🗺️ Ver mapa de centros</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Gestión de centros educativos</h1>
+                <p>Consulta, crea, edita, elimina y carga centros educativos.</p>
+            </div>
+
+            <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+        </div>
+
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <section class="management-toolbar">
+            <form method="get" class="search-box">
+                <input 
+                    type="text" 
+                    name="q" 
+                    value="{{ q }}" 
+                    placeholder="Buscar por código, nombre, director, provincia o distrito..."
+                >
+                <button type="submit" class="btn">Buscar</button>
+                <a href="{% url 'carga_centros' %}" class="btn btn-secondary">Limpiar</a>
+            </form>
+
+            <div class="toolbar-actions">
+                <a href="{% url 'plantilla_centros' %}" class="btn btn-secondary">Descargar plantilla</a>
+            </div>
+        </section>
+
+        <section class="panel-card high-card">
+            <div class="section-header">
+                <div>
+                    <h3>Crear centro educativo</h3>
+                    <p>Registra un centro manualmente sin usar Excel.</p>
+                </div>
+            </div>
+
+            <form method="post" action="{% url 'crear_centro' %}">
+                {% csrf_token %}
+
+                <div class="form-grid">
+                    <div>
+                        <label>Código</label>
+                        <input type="text" name="codigo" required>
+                    </div>
+
+                    <div>
+                        <label>Nombre del centro</label>
+                        <input type="text" name="nombre" required>
+                    </div>
+
+                    <div>
+                        <label>Director</label>
+                        <input type="text" name="director">
+                    </div>
+
+                    <div>
+                        <label>Teléfono</label>
+                        <input type="text" name="telefono">
+                    </div>
+
+                    <div>
+                        <label>Provincia</label>
+                        <input type="text" name="provincia">
+                    </div>
+
+                    <div>
+                        <label>Regional / Distrito</label>
+                        <input type="text" name="regional_distrito">
+                    </div>
+
+                    <div>
+                        <label>Matrícula</label>
+                        <input type="number" name="matricula" min="0">
+                    </div>
+
+                    <div>
+                        <label>Dirección</label>
+                        <input type="text" name="direccion">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn">Guardar centro</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel-card high-card">
+            <div class="section-header">
+                <div>
+                    <h3>Cargar centros por Excel</h3>
+                    <p>Sube la plantilla con los centros asignados.</p>
+                </div>
+            </div>
+
+            <form 
+                method="post" 
+                action="{% url 'cargar_centros_excel' %}" 
+                enctype="multipart/form-data" 
+                class="upload-form"
+            >
+                {% csrf_token %}
+                <input type="file" name="archivo" accept=".xlsx" required>
+                <button type="submit" class="btn">Subir Excel</button>
+            </form>
+        </section>
+
+        <section class="table-card high-card">
+            <div class="section-header">
+                <div>
+                    <h3>Centros registrados</h3>
+                    <p>Total: {{ centros.count }} centros educativos</p>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Centro educativo</th>
+                        <th>Director</th>
+                        <th>Teléfono</th>
+                        <th>Provincia</th>
+                        <th>Regional/Distrito</th>
+                        <th>Matrícula</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for centro in centros %}
+                    <tr>
+                        <td><strong>{{ centro.codigo }}</strong></td>
+                        <td>
+                            <strong>{{ centro.nombre }}</strong><br>
+                            <small>{{ centro.direccion }}</small>
+                        </td>
+                        <td>{{ centro.director }}</td>
+                        <td>{{ centro.telefono }}</td>
+                        <td>{{ centro.provincia }}</td>
+                        <td>{{ centro.regional_distrito }}</td>
+                        <td>{{ centro.matricula }}</td>
+                        <td>
+                            <div class="row-actions">
+                                <a href="{% url 'editar_centro' centro.id %}" class="btn btn-small">
+                                    Editar
+                                </a>
+
+                                <form 
+                                    method="post" 
+                                    action="{% url 'eliminar_centro' centro.id %}" 
+                                    onsubmit="return confirm('¿Seguro que deseas eliminar este centro?');"
+                                >
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger btn-small">
+                                        Eliminar
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8">No hay centros educativos registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+    </main>
+
+</div>
+
 </body>
 </html>

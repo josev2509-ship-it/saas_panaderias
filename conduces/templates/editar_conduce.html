@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Conduce</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: linear-gradient(135deg, #f6f8fb 0%, #eef4ff 100%);
+            color: #172033;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 285px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border-right: 1px solid #e8edf3;
+            padding: 24px 18px;
+            box-shadow: 8px 0 30px rgba(15, 23, 42, 0.05);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            box-shadow: 0 12px 22px rgba(37, 99, 235, 0.28);
+        }
+
+        .logo strong {
+            display: block;
+            font-size: 17px;
+        }
+
+        .logo small {
+            display: block;
+            color: #8b95a7;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .menu-title {
+            font-size: 11px;
+            color: #9ca3af;
+            margin: 20px 0 8px;
+            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: .5px;
+        }
+
+        .menu a,
+        .menu summary {
+            display: block;
+            padding: 12px 14px;
+            margin-bottom: 6px;
+            border-radius: 14px;
+            color: #334155;
+            text-decoration: none;
+            font-weight: 650;
+            cursor: pointer;
+            list-style: none;
+        }
+
+        .menu a:hover,
+        .menu summary:hover,
+        .menu a.active {
+            background: linear-gradient(135deg, #eef4ff, #f3edff);
+            color: #2563eb;
+        }
+
+        .menu details a {
+            margin-left: 18px;
+            font-size: 14px;
+            padding: 10px 14px;
+            color: #64748b;
+        }
+
+        .content {
+            flex: 1;
+            padding: 34px;
+        }
+
+        .page {
+            max-width: 1050px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 31px;
+            font-weight: 850;
+        }
+
+        .header p {
+            margin: 7px 0 0;
+            color: #6b7280;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 14px;
+            padding: 12px 18px;
+            text-decoration: none;
+            font-weight: 850;
+            cursor: pointer;
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: white;
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.20);
+        }
+
+        .btn-light {
+            background: white;
+            color: #172033;
+            border: 1px solid #e5eaf2;
+        }
+
+        .form-card {
+            background: white;
+            border-radius: 28px;
+            padding: 30px;
+            border: 1px solid #edf0f5;
+            box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, #eef4ff, #f3edff);
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 24px;
+            color: #334155;
+            font-size: 14px;
+            border: 1px solid #e5eaf2;
+        }
+
+        .section-title {
+            margin: 0 0 20px;
+            font-size: 19px;
+            font-weight: 850;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .field.full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            display: block;
+            font-weight: 750;
+            margin-bottom: 8px;
+            color: #334155;
+            font-size: 14px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            border: 1px solid #e5eaf2;
+            border-radius: 15px;
+            padding: 13px 14px;
+            font-size: 14px;
+            outline: none;
+            background: white;
+        }
+
+        textarea {
+            min-height: 115px;
+            resize: vertical;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, .08);
+        }
+
+        input[readonly] {
+            background: #f8fafc;
+            color: #64748b;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        @media (max-width: 1000px) {
+            .sidebar {
+                display: none;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon">S</div>
+            <div>
+                <strong>SaaS Panaderías</strong>
+                <small>Gestión INABIE</small>
+            </div>
+        </div>
+
+        <div class="menu">
+            <div class="menu-title">Principal</div>
+            <a href="{% url 'inicio' %}">📊 Panel principal</a>
+
+            <div class="menu-title">Gestión operativa</div>
+
+            <details open>
+                <summary>📄 Conduces</summary>
+                <a href="{% url 'buscar_conduces' %}">Buscar conduces</a>
+                <a href="{% url 'generar_conduces' %}">Generar conduces</a>
+                <a href="{% url 'acciones_conduces' %}">Acciones masivas</a>
+            </details>
+
+            <details>
+                <summary>🏫 Centros educativos</summary>
+                <a href="{% url 'carga_centros' %}">Cargar centros</a>
+                <a href="{% url 'plantilla_centros' %}">Descargar plantilla</a>
+            </details>
+
+            <details>
+                <summary>🍞 Menú diario</summary>
+                <a href="{% url 'carga_menu' %}">Cargar menú</a>
+                <a href="{% url 'plantilla_menu' %}">Descargar plantilla</a>
+            </details>
+        </div>
+    </aside>
+
+    <main class="content">
+
+        <div class="page">
+
+            <div class="header">
+                <div>
+                    <h1>✏️ Editar Conduce</h1>
+                    <p>Modifica los datos del conduce sin entrar a la pantalla de administración.</p>
+                </div>
+
+                <a href="{% url 'buscar_conduces' %}" class="btn btn-light">← Volver a conduces</a>
+            </div>
+
+            <form method="post" class="form-card">
+                {% csrf_token %}
+
+                <div class="info-box">
+                    Estás editando el conduce <strong>No. {{ conduce.numero }}</strong> del centro 
+                    <strong>{{ conduce.centro.codigo }} - {{ conduce.centro.nombre }}</strong>.
+                </div>
+
+                <h3 class="section-title">Datos principales</h3>
+
+                <div class="grid">
+
+                    <div class="field">
+                        <label>Número de conduce</label>
+                        <input type="text" name="numero" value="{{ conduce.numero }}">
+                    </div>
+
+                    <div class="field">
+                        <label>Fecha</label>
+                        <input type="date" name="fecha" value="{{ conduce.fecha|date:'Y-m-d' }}">
+                    </div>
+
+                    <div class="field full">
+                        <label>Centro educativo</label>
+                        <input type="text" value="{{ conduce.centro.codigo }} - {{ conduce.centro.nombre }}" readonly>
+                    </div>
+
+                    <div class="field">
+                        <label>Producto</label>
+                        <input type="text" name="producto" value="{{ conduce.producto }}">
+                    </div>
+
+                    <div class="field">
+                        <label>Cantidad</label>
+                        <input type="number" name="cantidad" value="{{ conduce.cantidad }}">
+                    </div>
+
+                    <div class="field">
+                        <label>Estado</label>
+                        <select name="estado">
+                            <option value="borrador" {% if conduce.estado == "borrador" %}selected{% endif %}>Borrador</option>
+                            <option value="entregado" {% if conduce.estado == "entregado" %}selected{% endif %}>Entregado</option>
+                            <option value="anulado" {% if conduce.estado == "anulado" %}selected{% endif %}>Anulado</option>
+                        </select>
+                    </div>
+
+                    <div class="field full">
+                        <label>Observaciones</label>
+                        <textarea name="observaciones">{{ conduce.observaciones }}</textarea>
+                    </div>
+
+                </div>
+
+                <div class="actions">
+                    <a href="{% url 'buscar_conduces' %}" class="btn btn-light">Cancelar</a>
+                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                </div>
+
+            </form>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

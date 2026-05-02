@@ -1,0 +1,60 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar menú diario</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+</head>
+
+<body>
+
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+
+        <a href="{% url 'inicio' %}">Dashboard</a>
+        <a href="{% url 'buscar_conduces' %}">Conduces</a>
+        <a href="{% url 'carga_centros' %}">Centros</a>
+        <a href="{% url 'carga_menu' %}">Menú</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <h1>Editar menú diario</h1>
+            <a href="{% url 'carga_menu' %}" class="btn btn-light">Volver</a>
+        </div>
+
+        <div class="panel-card">
+
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="form-grid">
+                    <div>
+                        <label>Fecha</label>
+                        <input type="date" name="fecha" value="{{ menu.fecha|date:'Y-m-d' }}" required>
+                    </div>
+
+                    <div>
+                        <label>Producto</label>
+                        <input type="text" name="producto" value="{{ menu.producto }}" required>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn">Guardar cambios</button>
+                </div>
+
+            </form>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

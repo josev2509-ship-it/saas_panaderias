@@ -1,188 +1,182 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Gestionar Conduces</title>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f3f4f6;
-            padding: 20px;
-            margin: 0;
-        }
-
-        h2 {
-            text-align: center;
-            margin-top: 25px;
-            margin-bottom: 25px;
-        }
-
-        .barra-superior {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 18px;
-        }
-
-        .btn {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 7px;
-            cursor: pointer;
-            color: white;
-            font-weight: bold;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-azul { background: #2563eb; }
-        .btn-verde { background: #16a34a; }
-        .btn-rojo { background: #dc2626; }
-        .btn-gris { background: #6b7280; }
-        .btn-morado { background: #7c3aed; }
-
-        .filtros {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 14px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        input {
-            padding: 10px;
-            min-width: 160px;
-        }
-
-        .acciones {
-            margin: 15px 0;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-        }
-
-        th, td {
-            border: 1px solid #ddd;
-            padding: 7px;
-            font-size: 13px;
-            text-align: left;
-        }
-
-        th {
-            background: #e5e7eb;
-        }
-    </style>
+    <title>SaaS Panaderías | Gestión de Conduces</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
 </head>
 
 <body>
 
-<div class="barra-superior">
-    <a href="/" class="btn btn-gris">⬅ Volver al inicio</a>
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Panel principal</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
+        <a href="{% url 'mapa_centros' %}">🗺️ Mapa de centros</a>
+        <a href="{% url 'carga_menu' %}">📅 Gestión de menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Gestión de conduces</h1>
+                <p>Consulta, edita, visualiza, elimina y genera reportes de conduces.</p>
+            </div>
+
+            <div class="form-actions">
+                <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+                <a href="{% url 'generar_conduces' %}" class="btn">Generar conduces</a>
+            </div>
+        </div>
+
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <section class="panel-card high-card">
+            <div class="section-header">
+                <h3>Filtros de búsqueda</h3>
+                <p>Busca por número, centro, código, producto, fecha o estado.</p>
+            </div>
+
+            <form method="get">
+                <div class="form-grid">
+                    <div>
+                        <label>Búsqueda general</label>
+                        <input 
+                            type="text" 
+                            name="q" 
+                            value="{{ q }}" 
+                            placeholder="No. conduce, centro, código o producto..."
+                        >
+                    </div>
+
+                    <div>
+                        <label>Fecha desde</label>
+                        <input type="date" name="fecha_desde" value="{{ fecha_desde }}">
+                    </div>
+
+                    <div>
+                        <label>Fecha hasta</label>
+                        <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}">
+                    </div>
+
+                    <div>
+                        <label>Estado</label>
+                        <select name="estado">
+                            <option value="">Todos</option>
+                            <option value="borrador" {% if estado == "borrador" %}selected{% endif %}>Borrador</option>
+                            <option value="generado" {% if estado == "generado" %}selected{% endif %}>Generado</option>
+                            <option value="entregado" {% if estado == "entregado" %}selected{% endif %}>Entregado</option>
+                            <option value="anulado" {% if estado == "anulado" %}selected{% endif %}>Anulado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn">Buscar</button>
+                    <a href="{% url 'buscar_conduces' %}" class="btn btn-secondary">Limpiar</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="management-toolbar">
+            <div class="toolbar-actions">
+                <a 
+                    href="{% url 'generar_relacion_diaria_pdf' %}?fecha={{ fecha_desde }}" 
+                    class="btn"
+                >
+                    📌 Relación diaria PDF
+                </a>
+
+                <a 
+                    href="{% url 'generar_relacion_general_pdf' %}?fecha_inicio={{ fecha_desde }}&fecha_fin={{ fecha_hasta }}" 
+                    class="btn btn-secondary"
+                >
+                    📑 Relación general PDF
+                </a>
+            </div>
+        </section>
+
+        <section class="table-card high-card">
+            <div class="section-header">
+                <h3>Listado de conduces</h3>
+                <p>Total mostrado: {{ conduces.count }} conduces.</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Número</th>
+                        <th>Fecha</th>
+                        <th>Código</th>
+                        <th>Centro educativo</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for conduce in conduces %}
+                    <tr>
+                        <td><strong>{{ conduce.numero }}</strong></td>
+                        <td>{{ conduce.fecha|date:"d/m/Y" }}</td>
+                        <td>
+                            <span class="badge-code">{{ conduce.centro.codigo }}</span>
+                        </td>
+                        <td>{{ conduce.centro.nombre }}</td>
+                        <td>{{ conduce.producto }}</td>
+                        <td>{{ conduce.cantidad }}</td>
+                        <td>
+                            <span class="status-badge status-{{ conduce.estado }}">
+                                {{ conduce.get_estado_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="row-actions">
+                                <a href="{% url 'vista_conduce' conduce.id %}" class="btn btn-small">Ver</a>
+                                <a href="{% url 'editar_conduce' conduce.id %}" class="btn btn-small btn-secondary">Editar</a>
+                                <a href="{% url 'visualizar_pdf_conduce' conduce.id %}" class="btn btn-small">PDF</a>
+
+                                <form 
+                                    method="post" 
+                                    action="{% url 'eliminar_conduce' conduce.id %}" 
+                                    onsubmit="return confirm('¿Seguro que deseas eliminar este conduce?');"
+                                >
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger btn-small">
+                                        Eliminar
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8">No hay conduces registrados con los filtros seleccionados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+    </main>
+
 </div>
-
-<h2>📋 Gestionar Conduces</h2>
-
-<form method="GET" class="filtros">
-    <input type="text" name="codigo_centro" placeholder="Código centro" value="{{ codigo_centro }}">
-    <input type="date" name="fecha_desde" id="fecha_desde" value="{{ fecha_desde }}">
-    <input type="date" name="fecha_hasta" id="fecha_hasta" value="{{ fecha_hasta }}">
-
-    <button type="submit" class="btn btn-azul">Buscar</button>
-
-    <button type="button" class="btn btn-morado" onclick="generarRelacionGeneral()">
-        📊 Relación general PDF
-    </button>
-</form>
-
-<form method="POST" action="/acciones-conduces/">
-    {% csrf_token %}
-
-    <div class="acciones">
-        <button type="submit" name="accion" value="relacion_diaria_pdf" class="btn btn-verde">
-            📄 Relación diaria PDF
-        </button>
-
-        <button type="submit" name="accion" value="pdf_ver" class="btn btn-azul">
-            👁️ Ver PDF
-        </button>
-
-        <button type="submit" name="accion" value="pdf_descargar" class="btn btn-gris">
-            ⬇️ Descargar PDF
-        </button>
-
-        <button type="submit" name="accion" value="anular" class="btn btn-rojo">
-            ❌ Anular
-        </button>
-
-        <button type="submit" name="accion" value="entregado" class="btn btn-verde">
-            ✔️ Marcar entregado
-        </button>
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th><input type="checkbox" onclick="toggleAll(this)"></th>
-                <th>Número</th>
-                <th>Fecha</th>
-                <th>Centro</th>
-                <th>Código</th>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            {% for c in conduces %}
-            <tr>
-                <td><input type="checkbox" name="conduces" value="{{ c.id }}"></td>
-                <td>{{ c.numero }}</td>
-                <td>{{ c.fecha }}</td>
-                <td>{{ c.centro.nombre }}</td>
-                <td>{{ c.centro.codigo }}</td>
-                <td>{{ c.producto }}</td>
-                <td>{{ c.cantidad }}</td>
-                <td>{{ c.estado }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="8">No hay resultados</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</form>
-
-<script>
-function toggleAll(source) {
-    const checkboxes = document.querySelectorAll('input[name="conduces"]');
-    checkboxes.forEach(cb => cb.checked = source.checked);
-}
-
-function generarRelacionGeneral() {
-    const desde = document.getElementById("fecha_desde").value;
-    const hasta = document.getElementById("fecha_hasta").value;
-
-    if (!desde || !hasta) {
-        alert("Para generar la relación general debes seleccionar fecha desde y fecha hasta.");
-        return;
-    }
-
-    const url = `/relacion-general/pdf/?fecha_inicio=${desde}&fecha_fin=${hasta}`;
-    window.open(url, "_blank");
-}
-</script>
 
 </body>
 </html>

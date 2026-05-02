@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Editar centro educativo{% endblock %}
+
+{% block contenido %}
+
+<div class="form-card">
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-grid">
+            <div>
+                <label>Código</label>
+                <input type="text" name="codigo" value="{{ centro.codigo }}" required>
+            </div>
+
+            <div>
+                <label>Nombre del centro</label>
+                <input type="text" name="nombre" value="{{ centro.nombre }}" required>
+            </div>
+
+            <div>
+                <label>Director</label>
+                <input type="text" name="director" value="{{ centro.director }}">
+            </div>
+
+            <div>
+                <label>Teléfono</label>
+                <input type="text" name="telefono" value="{{ centro.telefono }}">
+            </div>
+
+            <div>
+                <label>Provincia</label>
+                <input type="text" name="provincia" value="{{ centro.provincia }}">
+            </div>
+
+            <div>
+                <label>Regional / Distrito</label>
+                <input type="text" name="regional_distrito" value="{{ centro.regional_distrito }}">
+            </div>
+
+            <div>
+                <label>Matrícula</label>
+                <input type="number" name="matricula" value="{{ centro.matricula }}" min="0">
+            </div>
+
+            <div>
+                <label>Dirección</label>
+                <input type="text" name="direccion" value="{{ centro.direccion }}">
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn">Guardar cambios</button>
+            <a href="{% url 'carga_centros' %}" class="btn btn-secondary">Cancelar</a>
+        </div>
+
+    </form>
+
+</div>
+
+{% endblock %}

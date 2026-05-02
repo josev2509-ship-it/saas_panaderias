@@ -1,71 +1,167 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Sistema de Conduces</title>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f3f4f6;
-            margin: 0;
-            padding: 40px;
-        }
-
-        .contenedor {
-            max-width: 900px;
-            margin: auto;
-            background: white;
-            padding: 40px;
-            border-radius: 18px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.10);
-            text-align: center;
-        }
-
-        h1 {
-            color: #111827;
-            margin-bottom: 10px;
-        }
-
-        p {
-            color: #6b7280;
-            margin-bottom: 35px;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 18px;
-        }
-
-        .btn {
-            display: block;
-            padding: 20px;
-            border-radius: 14px;
-            color: white;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 16px;
-        }
-
-        .azul { background: #2563eb; }
-        .gris { background: #6b7280; }
-        .verde { background: #16a34a; }
-        .morado { background: #7c3aed; }
-    </style>
+    <title>SaaS Panaderías | Panel principal</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
-    <div class="contenedor">
-        <h1>Sistema de Conduces</h1>
-        <p>Panel principal de gestión operativa</p>
 
-        <div class="grid">
-            <a class="btn azul" href="/carga-centros/">Cargar centros</a>
-            <a class="btn gris" href="/carga-menu/">Cargar menú</a>
-            <a class="btn verde" href="/generar-conduces/">Generar conduces</a>
-            <a class="btn morado" href="/buscar-conduces/">Gestionar conduces</a>
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Panel principal</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
+        <a href="{% url 'mapa_centros' %}">🗺️ Mapa de centros</a>
+        <a href="{% url 'carga_menu' %}">📅 Gestión de menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Panel principal</h1>
+                <p>Resumen del mes en curso y comportamiento histórico de conduces.</p>
+            </div>
         </div>
-    </div>
+
+        <section class="kpi-grid">
+            <div class="kpi-card">
+                <h3>Raciones del mes</h3>
+                <p>{{ total_raciones }}</p>
+                <small>Raciones registradas en el mes actual</small>
+            </div>
+
+            <div class="kpi-card">
+                <h3>Conduces del mes</h3>
+                <p>{{ total_conduces }}</p>
+                <small>Conduces generados en el mes actual</small>
+            </div>
+
+            <div class="kpi-card">
+                <h3>Centros activos</h3>
+                <p>{{ total_centros }}</p>
+                <small>Centros educativos registrados</small>
+            </div>
+
+            <div class="kpi-card">
+                <h3>Proyección del mes</h3>
+                <p>RD$ {{ proyeccion_ventas }}</p>
+                <small>Estimación según raciones del mes</small>
+            </div>
+        </section>
+
+        <section class="quick-actions">
+            <a href="{% url 'buscar_conduces' %}" class="action-card">
+                <div class="action-icon">📄</div>
+                <div>
+                    <h3>Gestión de conduces</h3>
+                    <p>Buscar, editar, visualizar, anular, eliminar y generar reportes.</p>
+                </div>
+            </a>
+
+            <a href="{% url 'generar_conduces' %}" class="action-card">
+                <div class="action-icon">➕</div>
+                <div>
+                    <h3>Generar conduces</h3>
+                    <p>Crear conduces automáticos por empresa y rango de fechas.</p>
+                </div>
+            </a>
+
+            <a href="{% url 'carga_centros' %}" class="action-card">
+                <div class="action-icon">🏫</div>
+                <div>
+                    <h3>Gestión de centros</h3>
+                    <p>Ver, buscar, crear, editar y eliminar centros educativos.</p>
+                </div>
+            </a>
+
+            <a href="{% url 'mapa_centros' %}" class="action-card">
+                <div class="action-icon">🗺️</div>
+                <div>
+                    <h3>Mapa de centros</h3>
+                    <p>Visualizar la ubicación de los centros y buscar por código.</p>
+                </div>
+            </a>
+
+            <a href="{% url 'carga_menu' %}" class="action-card">
+                <div class="action-icon">📅</div>
+                <div>
+                    <h3>Gestión de menú diario</h3>
+                    <p>Ver, cargar, crear, editar y eliminar productos por fecha.</p>
+                </div>
+            </a>
+        </section>
+
+        <section class="delivery-card">
+            <h3>Producto a entregar mañana</h3>
+            <p class="delivery-product">{{ producto_manana }}</p>
+            <small>Fecha: {{ fecha_manana }}</small>
+        </section>
+
+        <section class="chart-grid">
+            <div class="chart-card">
+                <h3>Producción diaria del mes</h3>
+                <canvas id="produccionDia"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3>Distribución por producto del mes</h3>
+                <canvas id="productoChart"></canvas>
+            </div>
+        </section>
+
+        <section class="table-card high-card">
+            <div class="section-header">
+                <h3>Resumen por mes</h3>
+                <p>Histórico de conduces y raciones generadas.</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Mes</th>
+                        <th>Total conduces</th>
+                        <th>Total raciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in resumen_meses %}
+                    <tr>
+                        <td>{{ item.mes|date:"F Y" }}</td>
+                        <td>{{ item.total_conduces }}</td>
+                        <td>{{ item.total_raciones }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3">No hay datos registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+    window.labels_dias = {{ labels_dias|safe }};
+    window.data_dias = {{ data_dias|safe }};
+    window.labels_productos = {{ labels_productos|safe }};
+    window.data_productos = {{ data_productos|safe }};
+</script>
+
+<script src="{% static 'conduces/js/dashboard.js' %}"></script>
+
 </body>
 </html>
