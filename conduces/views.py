@@ -9,6 +9,9 @@ from django.db.models.functions import TruncMonth
 from django.contrib import messages
 from django.utils import timezone
 
+from decimal import Decimal
+from django.db import transaction
+
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import from_excel
 
@@ -19,7 +22,7 @@ from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
-from .models import Empresa, CentroEducativo, MenuDiario, Conduce
+from .models import Empresa, CentroEducativo, MenuDiario, Conduce, ProductoFacturacion, ComprobanteFiscal, Factura, DetalleFactura
 from .utils import (
     generar_pdf_conduce,
     generar_pdf_conduces_masivo,
@@ -1137,3 +1140,559 @@ def generar_relacion_general_pdf(request):
     response = HttpResponse(buffer, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="relacion_general_conduces.pdf"'
     return response
+# =====================================================
+# GESTIÓN DE FACTURACIÓN
+# =====================================================
+
+def clasificar_categoria_factura(producto):
+    producto = (producto or "").upper().strip()
+
+    if "PAN DE ZANAHORIA" in producto:
+        return "PAN_CON_VEGETALES"
+
+    if "MUFFIN" in producto or "MUFIN" in producto:
+        return "BIZCOCHO"
+
+    if "BIZCOCHO" in producto or "BISCOCHO" in producto:
+        return "BIZCOCHO"
+
+    if "GALLETA" in producto or "GALLETAS" in producto:
+        return "GALLETA"
+
+    if "VEGETALES" in producto:
+        return "PAN_CON_VEGETALES"
+
+    return "PAN"
+
+
+def facturacion(request):
+    empresas = Empresa.objects.all()
+    productos = ProductoFacturacion.objects.all().order_by("id")
+    comprobantes = ComprobanteFiscal.objects.all().order_by("ncf")
+    comprobantes_disponibles = ComprobanteFiscal.objects.filter(usado=False).order_by("ncf")
+    facturas = Factura.objects.select_related("empresa", "comprobante").all().order_by("-fecha_factura", "-id")
+
+    total_facturado = facturas.exclude(estado="anulada").aggregate(total=Sum("total"))["total"] or 0
+    total_itbis = facturas.exclude(estado="anulada").aggregate(total=Sum("itbis"))["total"] or 0
+
+    return render(request, "facturacion.html", {
+        "empresas": empresas,
+        "productos": productos,
+        "comprobantes": comprobantes,
+        "comprobantes_disponibles": comprobantes_disponibles,
+        "facturas": facturas,
+        "total_facturado": total_facturado,
+        "total_itbis": total_itbis,
+    })
+
+
+def crear_producto_facturacion(request):
+    if request.method == "POST":
+        categoria = request.POST.get("categoria")
+        nombre = request.POST.get("nombre", "").strip()
+        precio = request.POST.get("precio_sin_itbis", "0").replace(",", ".")
+        aplica_itbis = request.POST.get("aplica_itbis") == "on"
+        porcentaje_itbis = request.POST.get("porcentaje_itbis", "18").replace(",", ".")
+
+        ProductoFacturacion.objects.update_or_create(
+            categoria=categoria,
+            defaults={
+                "nombre": nombre,
+                "precio_sin_itbis": Decimal(precio),
+                "aplica_itbis": aplica_itbis,
+                "porcentaje_itbis": Decimal(porcentaje_itbis),
+                "activo": True,
+            }
+        )
+
+        messages.success(request, "Producto de facturación guardado correctamente.")
+
+    return redirect("facturacion")
+
+
+def crear_comprobante_fiscal(request):
+    if request.method == "POST":
+        ncf = request.POST.get("ncf", "").strip().upper()
+        fecha_validez = request.POST.get("fecha_validez")
+
+        if not ncf or not fecha_validez:
+            messages.error(request, "Debe completar el NCF y la fecha de validez.")
+            return redirect("facturacion")
+
+        ComprobanteFiscal.objects.get_or_create(
+            ncf=ncf,
+            defaults={
+                "fecha_validez": fecha_validez,
+                "usado": False,
+            }
+        )
+
+        messages.success(request, "Comprobante fiscal registrado correctamente.")
+
+    return redirect("facturacion")
+
+
+@transaction.atomic
+def generar_factura(request):
+    if request.method != "POST":
+        return redirect("facturacion")
+
+    empresa_id = request.POST.get("empresa")
+    fecha_inicio = request.POST.get("fecha_inicio")
+    fecha_fin = request.POST.get("fecha_fin")
+    comprobante_id = request.POST.get("comprobante")
+    bloques = int(request.POST.get("bloques") or 1)
+
+    if not empresa_id or not fecha_inicio or not fecha_fin:
+        messages.error(request, "Debe completar empresa, fecha inicio y fecha fin.")
+        return redirect("facturacion")
+
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+
+    fecha_inicio = datetime.strptime(fecha_inicio, "%Y-%m-%d").date()
+    fecha_fin = datetime.strptime(fecha_fin, "%Y-%m-%d").date()
+
+    conduces = (
+        Conduce.objects
+        .filter(
+            empresa=empresa,
+            fecha__range=[fecha_inicio, fecha_fin]
+        )
+        .exclude(estado="anulado")
+        .select_related("centro", "empresa")
+        .order_by("fecha", "numero")
+    )
+
+    if not conduces.exists():
+        messages.error(request, "No existen conduces válidos para ese período.")
+        return redirect("facturacion")
+
+    if comprobante_id:
+        comprobante = get_object_or_404(ComprobanteFiscal, id=comprobante_id, usado=False)
+    else:
+        comprobante = ComprobanteFiscal.objects.filter(usado=False).order_by("ncf").first()
+
+    if not comprobante:
+        messages.error(request, "No hay comprobantes fiscales disponibles.")
+        return redirect("facturacion")
+
+    productos_config = {
+        p.categoria: p
+        for p in ProductoFacturacion.objects.filter(activo=True)
+    }
+
+    categorias_requeridas = ["PAN", "PAN_CON_VEGETALES", "GALLETA", "BIZCOCHO"]
+
+    for categoria in categorias_requeridas:
+        if categoria not in productos_config:
+            messages.error(request, f"Falta configurar el producto de facturación: {categoria}.")
+            return redirect("facturacion")
+
+    cantidades = {
+        "PAN": 0,
+        "PAN_CON_VEGETALES": 0,
+        "GALLETA": 0,
+        "BIZCOCHO": 0,
+    }
+
+    for conduce in conduces:
+        categoria = clasificar_categoria_factura(conduce.producto)
+        cantidades[categoria] += conduce.cantidad or 0
+
+    conduces_lista = list(conduces)
+
+    def numero_orden(conduce):
+        try:
+            return int(conduce.numero)
+        except:
+            return 0
+
+    conduces_lista.sort(key=numero_orden)
+
+    conduce_inicial = conduces_lista[0].numero
+    conduce_final = conduces_lista[-1].numero
+
+    fecha_factura = max(c.fecha for c in conduces_lista)
+    primera_entrega = min(c.fecha for c in conduces_lista)
+    ultima_entrega = max(c.fecha for c in conduces_lista)
+
+    subtotal_exento = Decimal("0.00")
+    subtotal_gravado = Decimal("0.00")
+
+    factura = Factura.objects.create(
+        empresa=empresa,
+        comprobante=comprobante,
+        fecha_factura=fecha_factura,
+        fecha_inicio=primera_entrega,
+        fecha_fin=ultima_entrega,
+        cantidad_conduces=len(conduces_lista),
+        conduce_inicial=conduce_inicial,
+        conduce_final=conduce_final,
+        bloques=bloques,
+        estado="emitida",
+    )
+
+    for categoria, cantidad in cantidades.items():
+        producto_config = productos_config[categoria]
+        precio = producto_config.precio_sin_itbis
+        valor = Decimal(cantidad) * precio
+
+        DetalleFactura.objects.create(
+            factura=factura,
+            producto=producto_config.nombre_factura,
+            categoria=categoria,
+            cantidad=cantidad,
+            precio_sin_itbis=precio,
+            aplica_itbis=producto_config.aplica_itbis,
+            valor=valor,
+        )
+
+        if producto_config.aplica_itbis:
+            subtotal_gravado += valor
+        else:
+            subtotal_exento += valor
+
+    subtotal = subtotal_exento + subtotal_gravado
+
+    porcentaje_itbis = Decimal("18.00")
+    productos_gravados = ProductoFacturacion.objects.filter(activo=True, aplica_itbis=True)
+
+    if productos_gravados.exists():
+        porcentaje_itbis = productos_gravados.first().porcentaje_itbis
+
+    itbis = subtotal_gravado * (porcentaje_itbis / Decimal("100"))
+    total = subtotal + itbis
+
+    factura.subtotal_exento = subtotal_exento
+    factura.subtotal_gravado = subtotal_gravado
+    factura.subtotal = subtotal
+    factura.itbis = itbis
+    factura.total = total
+    factura.save()
+
+    comprobante.usado = True
+    comprobante.fecha_uso = timezone.localdate()
+    comprobante.save()
+
+    messages.success(request, f"Factura generada correctamente con NCF {comprobante.ncf}.")
+
+    return redirect("facturacion")
+
+from decimal import Decimal
+from django.db import transaction
+
+def facturacion(request):
+    empresas = Empresa.objects.all()
+    productos = ProductoFacturacion.objects.all().order_by("id")
+    comprobantes = ComprobanteFiscal.objects.all().order_by("ncf")
+    comprobantes_disponibles = ComprobanteFiscal.objects.filter(usado=False).order_by("ncf")
+    facturas = Factura.objects.select_related("empresa", "comprobante").all().order_by("-fecha_factura", "-id")
+
+    total_facturado = facturas.exclude(estado="anulada").aggregate(total=Sum("total"))["total"] or 0
+    total_itbis = facturas.exclude(estado="anulada").aggregate(total=Sum("itbis"))["total"] or 0
+
+    return render(request, "facturacion.html", {
+        "empresas": empresas,
+        "productos": productos,
+        "comprobantes": comprobantes,
+        "comprobantes_disponibles": comprobantes_disponibles,
+        "facturas": facturas,
+        "total_facturado": total_facturado,
+        "total_itbis": total_itbis,
+    })
+def formato_monto(valor):
+    if valor is None:
+        valor = 0
+    return f"{valor:,.2f}"
+
+
+def formato_cantidad(valor):
+    if valor is None:
+        return "0"
+    return str(int(valor))
+
+def formato_monto(valor):
+    if valor is None:
+        valor = 0
+    return f"{valor:,.2f}"
+
+
+def formato_cantidad(valor):
+    if valor is None:
+        return "0"
+    return str(int(valor))
+
+
+def fecha_larga_es(fecha):
+    meses = {
+        1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
+        5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
+        9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre",
+    }
+    return f"{fecha.day:02d} de {meses[fecha.month]} de {fecha.year}"
+
+
+def pdf_factura(request, factura_id):
+    factura = get_object_or_404(
+        Factura.objects.select_related("empresa", "comprobante"),
+        id=factura_id
+    )
+
+    detalles = factura.detalles.all().order_by("id")
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    empresa = factura.empresa
+    comprobante = factura.comprobante
+
+    # Márgenes centrados
+    margin_left = 58
+    margin_right = 58
+    content_width = width - margin_left - margin_right
+
+    x_left = margin_left
+    x_right = 382
+
+    # ==========================
+    # ENCABEZADO EMPRESA
+    # ==========================
+    y = 710
+
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(x_left, y, (empresa.nombre or "").upper())
+
+    y -= 12
+    pdf.drawString(x_left, y, empresa.direccion or "")
+
+    y -= 12
+    pdf.drawString(x_left, y, f"Ciudad {empresa.ciudad or ''}")
+
+    y -= 12
+    pdf.drawString(x_left, y, f"Teléfono  {empresa.telefono or ''}")
+
+    y -= 12
+    pdf.drawString(x_left, y, f"RNC-{empresa.rnc or ''}")
+
+    y -= 12
+    pdf.drawString(x_left, y, f"FECHA: {factura.fecha_factura.strftime('%d/%m/%Y')}")
+
+    # ==========================
+    # ENCABEZADO DERECHO
+    # ==========================
+    y_right = 710
+
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(x_right, y_right, "FACTURA GUBERNAMENTAL")
+
+    pdf.setFont("Helvetica-Bold", 7)
+    y_right -= 14
+    pdf.drawString(x_right, y_right, f"NCF_{comprobante.ncf if comprobante else ''}")
+
+    y_right -= 12
+    pdf.drawString(
+        x_right,
+        y_right,
+        f"VALIDO HASTA: {comprobante.fecha_validez.strftime('%d/%m/%Y') if comprobante else ''}"
+    )
+
+    # ==========================
+    # CLIENTE
+    # ==========================
+    y = 575
+
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.drawString(x_left, y, "CLIENTE :")
+    pdf.drawString(x_left, y - 13, "RNC")
+
+    pdf.drawString(160, y, factura.cliente_nombre.upper())
+    pdf.drawString(160, y - 13, factura.cliente_rnc)
+
+    # ==========================
+    # PERÍODO
+    # ==========================
+    y = 505
+
+    pdf.setFont("Helvetica", 7)
+    pdf.drawString(x_left, y, "Periodo de factura")
+
+    periodo = (
+        f"Del {fecha_larga_es(factura.fecha_inicio)} "
+        f"al {fecha_larga_es(factura.fecha_fin)}"
+    )
+
+    pdf.drawString(150, y, periodo)
+    pdf.line(145, y - 2, 390, y - 2)
+
+    # ==========================
+    # CONDUCES Y BLOQUES
+    # ==========================
+    y -= 26
+
+    pdf.drawString(x_left, y, "Cantidad de conduces")
+    pdf.line(150, y - 2, 245, y - 2)
+    pdf.drawCentredString(197, y, str(factura.cantidad_conduces))
+
+    pdf.drawString(265, y, "del No.")
+    pdf.line(315, y - 2, 390, y - 2)
+    pdf.drawCentredString(352, y, str(factura.conduce_inicial or ""))
+
+    pdf.drawString(405, y, "al")
+    pdf.line(430, y - 2, 505, y - 2)
+    pdf.drawCentredString(467, y, str(factura.conduce_final or ""))
+
+    y -= 14
+    pdf.drawString(x_left, y, "Bloques")
+    pdf.line(95, y - 2, 145, y - 2)
+    pdf.drawCentredString(120, y, str(factura.bloques))
+
+    # ==========================
+    # TABLA PRODUCTOS
+    # ==========================
+    data = [["PRODUCTO", "CANTIDAD", "PRECIO SIN ITEBIS", "VALOR RD$"]]
+
+    for detalle in detalles:
+        data.append([
+            detalle.producto.upper(),
+            formato_cantidad(detalle.cantidad),
+            formato_monto(detalle.precio_sin_itbis),
+            formato_monto(detalle.valor),
+        ])
+
+    table_x = margin_left
+    table_top_y = 440
+
+    col_producto = 120
+    col_cantidad = 120
+    col_precio = 170
+    col_valor = content_width - col_producto - col_cantidad - col_precio
+
+    row_heights = [18] + [26] * (len(data) - 1)
+    table_height = sum(row_heights)
+    table_bottom_y = table_top_y - table_height
+
+    tabla = Table(
+        data,
+        colWidths=[col_producto, col_cantidad, col_precio, col_valor],
+        rowHeights=row_heights
+    )
+
+    tabla.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.6, colors.black),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 6.8),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), 6.8),
+        ("ALIGN", (0, 1), (1, -1), "CENTER"),
+        ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+        ("RIGHTPADDING", (2, 1), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+
+    tabla.wrapOn(pdf, width, height)
+    tabla.drawOn(pdf, table_x, table_bottom_y)
+
+    # ==========================
+    # TOTALES ALINEADOS CON VALOR RD$
+    # ==========================
+    valor_col_x = table_x + col_producto + col_cantidad + col_precio
+    valor_col_width = col_valor
+
+    total_label_x = table_x + col_producto
+    total_box_x = valor_col_x
+    total_y = table_bottom_y - 24
+    box_height = 24
+
+    totales = [
+        ("SUB-TOTAL PRODUCTOS EXENTOS", factura.subtotal_exento),
+        ("SUB-TOTAL PRODUCTOS GRAVADOS", factura.subtotal_gravado),
+        ("SUBTOTAL", factura.subtotal),
+        ("ITBIS", factura.itbis),
+        ("TOTAL", factura.total),
+    ]
+
+    for label, value in totales:
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.drawString(total_label_x, total_y + 8, label)
+
+        pdf.setFillColor(colors.lightgrey)
+        pdf.rect(total_box_x, total_y, valor_col_width, box_height, fill=1, stroke=1)
+        pdf.setFillColor(colors.black)
+
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.drawRightString(
+            total_box_x + valor_col_width - 5,
+            total_y + 8,
+            formato_monto(value)
+        )
+
+        total_y -= box_height
+
+    # ==========================
+    # FIRMA
+    # ==========================
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.drawCentredString(width / 2, 155, "FIRMA Y SELLO DE LA EMPRESA")
+
+    pdf.save()
+    buffer.seek(0)
+
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="factura_{factura.id}.pdf"'
+    return response
+
+
+@transaction.atomic
+def eliminar_factura(request, factura_id):
+    factura = get_object_or_404(Factura.objects.select_related("comprobante"), id=factura_id)
+
+    if request.method == "POST":
+        comprobante = factura.comprobante
+
+        if comprobante:
+            comprobante.usado = False
+            comprobante.fecha_uso = None
+            comprobante.save()
+
+        factura.delete()
+
+        messages.success(request, "Factura eliminada correctamente. El NCF quedó disponible nuevamente.")
+
+    return redirect("facturacion")
+def editar_producto_facturacion(request, producto_id):
+    producto = get_object_or_404(ProductoFacturacion, id=producto_id)
+
+    if request.method == "POST":
+        producto.categoria = request.POST.get("categoria")
+        producto.nombre_factura = request.POST.get("nombre_factura", "").strip()
+        producto.precio_sin_itbis = Decimal(
+            request.POST.get("precio_sin_itbis", "0").replace(",", ".")
+        )
+        producto.aplica_itbis = request.POST.get("aplica_itbis") == "on"
+        producto.porcentaje_itbis = Decimal(
+            request.POST.get("porcentaje_itbis", "18").replace(",", ".")
+        )
+        producto.activo = request.POST.get("activo") == "on"
+        producto.save()
+
+        messages.success(request, "Producto actualizado correctamente.")
+        return redirect("facturacion")
+
+    return render(request, "editar_producto_facturacion.html", {
+        "producto": producto
+    })
+
+
+def eliminar_producto_facturacion(request, producto_id):
+    producto = get_object_or_404(ProductoFacturacion, id=producto_id)
+
+    if request.method == "POST":
+        producto.delete()
+        messages.success(request, "Producto eliminado correctamente.")
+
+    return redirect("facturacion")

@@ -1,0 +1,113 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar factura</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+</head>
+
+<body>
+
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Panel principal</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
+        <a href="{% url 'mapa_centros' %}">🗺️ Mapa de centros</a>
+        <a href="{% url 'carga_menu' %}">📅 Gestión de menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+        <a href="{% url 'facturacion' %}">🧾 Gestión de facturación</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Editar factura</h1>
+                <p>Actualiza datos administrativos de la factura.</p>
+            </div>
+
+            <a href="{% url 'facturacion' %}" class="btn btn-light">Volver a facturación</a>
+        </div>
+
+        <section class="panel-card">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="form-grid">
+                    <div>
+                        <label>NCF actual</label>
+                        <input 
+                            type="text" 
+                            value="{% if factura.comprobante %}{{ factura.comprobante.ncf }}{% else %}Sin NCF{% endif %}" 
+                            disabled
+                        >
+                    </div>
+
+                    <div>
+                        <label>Cambiar NCF gubernamental</label>
+                        <select name="comprobante">
+                            <option value="">Mantener actual</option>
+
+                            {% if factura.comprobante %}
+                                <option value="{{ factura.comprobante.id }}">
+                                    {{ factura.comprobante.ncf }} - actual
+                                </option>
+                            {% endif %}
+
+                            {% for comprobante in comprobantes_disponibles %}
+                                <option value="{{ comprobante.id }}">
+                                    {{ comprobante.ncf }} - disponible
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Bloques</label>
+                        <input type="number" name="bloques" value="{{ factura.bloques }}" min="1">
+                    </div>
+
+                    <div>
+                        <label>Estado</label>
+                        <select name="estado">
+                            <option value="borrador" {% if factura.estado == "borrador" %}selected{% endif %}>Borrador</option>
+                            <option value="emitida" {% if factura.estado == "emitida" %}selected{% endif %}>Emitida</option>
+                            <option value="anulada" {% if factura.estado == "anulada" %}selected{% endif %}>Anulada</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Fecha factura</label>
+                        <input type="text" value="{{ factura.fecha_factura|date:'d/m/Y' }}" disabled>
+                    </div>
+
+                    <div>
+                        <label>Período</label>
+                        <input 
+                            type="text" 
+                            value="{{ factura.fecha_inicio|date:'d/m/Y' }} al {{ factura.fecha_fin|date:'d/m/Y' }}" 
+                            disabled
+                        >
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn">Guardar cambios</button>
+                    <a href="{% url 'facturacion' %}" class="btn btn-secondary">Cancelar</a>
+                    <a href="{% url 'pdf_factura' factura.id %}" class="btn btn-light">Ver PDF</a>
+                </div>
+            </form>
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+</html>

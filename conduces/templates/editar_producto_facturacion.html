@@ -1,0 +1,95 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar producto de facturación</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+</head>
+
+<body>
+
+<div class="main-layout">
+
+    <aside class="sidebar">
+        <h2>SaaS Panaderías</h2>
+        <p class="sidebar-subtitle">Gestión INABIE</p>
+
+        <a href="{% url 'inicio' %}">📊 Panel principal</a>
+        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
+        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
+        <a href="{% url 'mapa_centros' %}">🗺️ Mapa de centros</a>
+        <a href="{% url 'carga_menu' %}">📅 Gestión de menú diario</a>
+        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
+        <a href="{% url 'facturacion' %}">🧾 Gestión de facturación</a>
+    </aside>
+
+    <main class="content">
+
+        <div class="topbar">
+            <div>
+                <h1>Editar producto de facturación</h1>
+                <p>Actualiza nombre, precio e ITBIS del producto.</p>
+            </div>
+
+            <a href="{% url 'facturacion' %}" class="btn btn-light">Volver</a>
+        </div>
+
+        <section class="panel-card">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="form-grid">
+                    <div>
+                        <label>Categoría</label>
+                        <select name="categoria" required>
+                            <option value="PAN" {% if producto.categoria == "PAN" %}selected{% endif %}>PAN</option>
+                            <option value="PAN_CON_VEGETALES" {% if producto.categoria == "PAN_CON_VEGETALES" %}selected{% endif %}>PAN CON VEGETALES</option>
+                            <option value="GALLETA" {% if producto.categoria == "GALLETA" %}selected{% endif %}>GALLETA</option>
+                            <option value="BIZCOCHO" {% if producto.categoria == "BIZCOCHO" %}selected{% endif %}>BIZCOCHO</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Nombre en factura</label>
+                        <input type="text" name="nombre_factura" value="{{ producto.nombre_factura }}" required>
+                    </div>
+
+                    <div>
+                        <label>Precio sin ITBIS</label>
+                        <input type="text" name="precio_sin_itbis" value="{{ producto.precio_sin_itbis }}" required>
+                    </div>
+
+                    <div>
+                        <label>Porcentaje ITBIS</label>
+                        <input type="text" name="porcentaje_itbis" value="{{ producto.porcentaje_itbis }}">
+                    </div>
+
+                    <div>
+                        <label>
+                            <input type="checkbox" name="aplica_itbis" {% if producto.aplica_itbis %}checked{% endif %}>
+                            Aplica ITBIS
+                        </label>
+                    </div>
+
+                    <div>
+                        <label>
+                            <input type="checkbox" name="activo" {% if producto.activo %}checked{% endif %}>
+                            Activo
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn">Guardar cambios</button>
+                    <a href="{% url 'facturacion' %}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+</html>

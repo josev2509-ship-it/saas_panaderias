@@ -56,4 +56,20 @@ urlpatterns = [
     # ================= REPORTES =================
     path('relacion-diaria/pdf/', obtener_vista('generar_relacion_diaria_pdf'), name='generar_relacion_diaria_pdf'),
     path('relacion-general/pdf/', obtener_vista('generar_relacion_general_pdf'), name='generar_relacion_general_pdf'),
+
+    # ================= FACTURACIÓN =================
+    path('facturacion/', obtener_vista('facturacion'), name='facturacion'),
+    path('facturacion/generar/', obtener_vista('generar_factura'), name='generar_factura'),
+    path('facturacion/productos/crear/', obtener_vista('crear_producto_facturacion'), name='crear_producto_facturacion'),
+    path('facturacion/comprobantes/crear/', obtener_vista('crear_comprobante_fiscal'), name='crear_comprobante_fiscal'),
+    path('facturacion/<int:factura_id>/pdf/', obtener_vista('pdf_factura'), name='pdf_factura'),
+
+    path('facturacion/<int:factura_id>/editar/', obtener_vista('editar_factura'), name='editar_factura'),
+    path('facturacion/<int:factura_id>/anular/', obtener_vista('anular_factura'), name='anular_factura'),
+    path('facturacion/<int:factura_id>/eliminar/', obtener_vista('eliminar_factura'), name='eliminar_factura'),
+
+    path('facturacion/ncf/rango/', obtener_vista('crear_rango_ncf'), name='crear_rango_ncf'),
+    path('facturacion/productos/<int:producto_id>/editar/', obtener_vista('editar_producto_facturacion'), name='editar_producto_facturacion'),
+    path('facturacion/productos/<int:producto_id>/eliminar/', obtener_vista('eliminar_producto_facturacion'), name='eliminar_producto_facturacion'),
+
 ]
