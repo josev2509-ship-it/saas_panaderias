@@ -29,7 +29,7 @@
         <div class="topbar">
             <div>
                 <h1>Gestión de facturación</h1>
-                <p>Genera facturas gubernamentales por período, administra productos, NCF y documentos PDF.</p>
+                <p>Genera facturas, administra productos, tipos de NCF, comprobantes físicos y electrónicos.</p>
             </div>
             <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
         </div>
@@ -58,7 +58,7 @@
             <div class="kpi-card">
                 <h3>NCF disponibles</h3>
                 <p>{{ comprobantes_disponibles.count }}</p>
-                <small>Comprobantes gubernamentales sin usar</small>
+                <small>Comprobantes sin usar</small>
             </div>
 
             <div class="kpi-card">
@@ -70,8 +70,8 @@
 
         <section class="panel-card high-card">
             <div class="section-header">
-                <h3>Crear factura gubernamental</h3>
-                <p>Selecciona empresa, período, NCF y bloques del expediente.</p>
+                <h3>Crear factura</h3>
+                <p>Selecciona empresa, período, comprobante y bloques del expediente.</p>
             </div>
 
             <form method="post" action="{% url 'generar_factura' %}">
@@ -89,12 +89,12 @@
                     </div>
 
                     <div>
-                        <label>NCF gubernamental</label>
+                        <label>NCF / e-NCF disponible</label>
                         <select name="comprobante">
                             <option value="">Tomar siguiente disponible</option>
                             {% for comprobante in comprobantes_disponibles %}
                                 <option value="{{ comprobante.id }}">
-                                    {{ comprobante.ncf }} - válido hasta {{ comprobante.fecha_validez|date:"d/m/Y" }}
+                                    {{ comprobante.ncf }} - {{ comprobante.get_tipo_display }} - válido hasta {{ comprobante.fecha_validez|date:"d/m/Y" }}
                                 </option>
                             {% endfor %}
                         </select>
@@ -125,7 +125,7 @@
         <section class="panel-card high-card">
             <div class="section-header">
                 <h3>Productos de facturación</h3>
-                <p>Configura precios sin ITBIS y define cuáles productos son gravados.</p>
+                <p>Configura los productos oficiales, precios sin ITBIS y si aplican impuesto.</p>
             </div>
 
             <form method="post" action="{% url 'crear_producto_facturacion' %}">
@@ -217,8 +217,8 @@
 
         <section class="panel-card high-card">
             <div class="section-header">
-                <h3>Comprobantes gubernamentales</h3>
-                <p>Registra los NCF B15 disponibles para facturación.</p>
+                <h3>Gestión de comprobantes / NCF</h3>
+                <p>Registra comprobantes físicos B y electrónicos E. Si el comprobante inicia con E, el PDF podrá mostrar QR cuando completes los datos e-CF.</p>
             </div>
 
             <form method="post" action="{% url 'crear_comprobante_fiscal' %}">
@@ -226,8 +226,22 @@
 
                 <div class="form-grid">
                     <div>
-                        <label>NCF gubernamental individual</label>
-                        <input type="text" name="ncf" placeholder="Ej: B1500000077" required>
+                        <label>Tipo de comprobante</label>
+                        <select name="tipo" required>
+                            <option value="B01">B01 - Crédito fiscal</option>
+                            <option value="B02">B02 - Consumo</option>
+                            <option value="B14">B14 - Régimen especial</option>
+                            <option value="B15" selected>B15 - Gubernamental</option>
+                            <option value="E31">E31 - e-CF crédito fiscal</option>
+                            <option value="E32">E32 - e-CF consumo</option>
+                            <option value="E44">E44 - e-CF gubernamental</option>
+                            <option value="OTRO">Otro</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>NCF / e-NCF individual</label>
+                        <input type="text" name="ncf" placeholder="Ej: B1500000077 / E310000000001" required>
                     </div>
 
                     <div>
@@ -237,21 +251,35 @@
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn">Guardar NCF</button>
+                    <button type="submit" class="btn">Guardar comprobante</button>
                 </div>
             </form>
 
             <hr style="margin: 24px 0;">
 
             <div class="section-header">
-                <h3>Crear rango de NCF gubernamental</h3>
-                <p>Ejemplo: desde 77 hasta 100 genera B1500000077 al B1500000100.</p>
+                <h3>Crear rango de comprobantes</h3>
+                <p>Ejemplo: prefijo B15, desde 77 hasta 100 genera B1500000077 al B1500000100.</p>
             </div>
 
             <form method="post" action="{% url 'crear_rango_ncf' %}">
                 {% csrf_token %}
 
                 <div class="form-grid">
+                    <div>
+                        <label>Tipo de comprobante</label>
+                        <select name="tipo" required>
+                            <option value="B01">B01 - Crédito fiscal</option>
+                            <option value="B02">B02 - Consumo</option>
+                            <option value="B14">B14 - Régimen especial</option>
+                            <option value="B15" selected>B15 - Gubernamental</option>
+                            <option value="E31">E31 - e-CF crédito fiscal</option>
+                            <option value="E32">E32 - e-CF consumo</option>
+                            <option value="E44">E44 - e-CF gubernamental</option>
+                            <option value="OTRO">Otro</option>
+                        </select>
+                    </div>
+
                     <div>
                         <label>Prefijo</label>
                         <input type="text" name="prefijo" value="B15" required>
@@ -274,14 +302,14 @@
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn">Crear rango de NCF</button>
+                    <button type="submit" class="btn">Crear rango de comprobantes</button>
                 </div>
             </form>
 
             <table>
                 <thead>
                     <tr>
-                        <th>NCF</th>
+                        <th>NCF / e-NCF</th>
                         <th>Tipo</th>
                         <th>Validez</th>
                         <th>Estado</th>
@@ -295,7 +323,13 @@
                         <td>{{ comprobante.ncf }}</td>
                         <td>{{ comprobante.get_tipo_display }}</td>
                         <td>{{ comprobante.fecha_validez|date:"d/m/Y" }}</td>
-                        <td>{% if comprobante.usado %}Usado{% else %}Disponible{% endif %}</td>
+                        <td>
+                            {% if comprobante.usado %}
+                                <span class="status-badge status-emitida">Usado</span>
+                            {% else %}
+                                <span class="status-badge status-borrador">Disponible</span>
+                            {% endif %}
+                        </td>
                         <td>{{ comprobante.fecha_uso|date:"d/m/Y"|default:"-" }}</td>
                     </tr>
 
@@ -311,13 +345,14 @@
         <section class="table-card high-card">
             <div class="section-header">
                 <h3>Facturas generadas</h3>
-                <p>Histórico de facturación emitida.</p>
+                <p>Histórico de facturación emitida, anulada o en borrador.</p>
             </div>
 
             <table>
                 <thead>
                     <tr>
-                        <th>NCF</th>
+                        <th>NCF / e-NCF</th>
+                        <th>Tipo</th>
                         <th>Fecha factura</th>
                         <th>Período</th>
                         <th>Conduces</th>
@@ -338,6 +373,14 @@
                                 {{ factura.comprobante.ncf }}
                             {% else %}
                                 Sin NCF
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if factura.comprobante %}
+                                {{ factura.comprobante.get_tipo_display }}
+                            {% else %}
+                                -
                             {% endif %}
                         </td>
 
@@ -401,7 +444,7 @@
 
                     {% empty %}
                     <tr>
-                        <td colspan="10">No hay facturas generadas.</td>
+                        <td colspan="11">No hay facturas generadas.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

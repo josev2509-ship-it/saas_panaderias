@@ -135,28 +135,35 @@ class ProductoFacturacion(models.Model):
 
 
 # ==========================
-# COMPROBANTE GUBERNAMENTAL
+# COMPROBANTE / NCF
 # ==========================
 class ComprobanteFiscal(models.Model):
     TIPO_NCF = (
-        ("GUBERNAMENTAL", "Factura gubernamental"),
+        ("B01", "B01 - Crédito fiscal"),
+        ("B02", "B02 - Consumo"),
+        ("B14", "B14 - Régimen especial"),
+        ("B15", "B15 - Gubernamental"),
+        ("E31", "E31 - e-CF crédito fiscal"),
+        ("E32", "E32 - e-CF consumo"),
+        ("E44", "E44 - e-CF gubernamental"),
+        ("OTRO", "Otro"),
     )
 
     tipo = models.CharField(
         max_length=30,
         choices=TIPO_NCF,
-        default="GUBERNAMENTAL"
+        default="B15"
     )
 
-    ncf = models.CharField(max_length=20, unique=True)
+    ncf = models.CharField(max_length=30, unique=True)
     fecha_validez = models.DateField()
     usado = models.BooleanField(default=False)
     fecha_uso = models.DateField(blank=True, null=True)
 
     class Meta:
         ordering = ["ncf"]
-        verbose_name = "Comprobante gubernamental"
-        verbose_name_plural = "Comprobantes gubernamentales"
+        verbose_name = "Comprobante / NCF"
+        verbose_name_plural = "Comprobantes / NCF"
 
     def __str__(self):
         estado = "Usado" if self.usado else "Disponible"
@@ -164,10 +171,10 @@ class ComprobanteFiscal(models.Model):
 
 
 # ==========================
-# RANGO DE NCF GUBERNAMENTAL
+# RANGO DE COMPROBANTES / NCF
 # ==========================
 class RangoComprobanteGubernamental(models.Model):
-    prefijo = models.CharField(max_length=3, default="B15")
+    prefijo = models.CharField(max_length=5, default="B15")
     numero_desde = models.PositiveIntegerField()
     numero_hasta = models.PositiveIntegerField()
     fecha_validez = models.DateField()
@@ -175,8 +182,8 @@ class RangoComprobanteGubernamental(models.Model):
 
     class Meta:
         ordering = ["-creado_en"]
-        verbose_name = "Rango de comprobantes gubernamentales"
-        verbose_name_plural = "Rangos de comprobantes gubernamentales"
+        verbose_name = "Rango de comprobantes"
+        verbose_name_plural = "Rangos de comprobantes"
 
     def __str__(self):
         return f"{self.prefijo}{str(self.numero_desde).zfill(8)} - {self.prefijo}{str(self.numero_hasta).zfill(8)}"
@@ -224,6 +231,35 @@ class Factura(models.Model):
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     estado = models.CharField(max_length=20, choices=ESTADOS, default="borrador")
+
+    # ==========================
+    # FACTURACIÓN ELECTRÓNICA E-CF
+    # ==========================
+    es_electronica = models.BooleanField(default=False)
+    encf = models.CharField(max_length=30, blank=True, null=True)
+    codigo_seguridad = models.CharField(max_length=20, blank=True, null=True)
+    fecha_firma_digital = models.DateTimeField(blank=True, null=True)
+    url_qr = models.TextField(blank=True, null=True)
+
+    estado_dgii = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        default="pendiente"
+    )
+
+    xml_ecf = models.FileField(
+        upload_to="facturas/xml/",
+        blank=True,
+        null=True
+    )
+
+    pdf_ecf_externo = models.FileField(
+        upload_to="facturas/pdf_externo/",
+        blank=True,
+        null=True
+    )
+
     creada_en = models.DateTimeField(auto_now_add=True)
     actualizada_en = models.DateTimeField(auto_now=True)
 

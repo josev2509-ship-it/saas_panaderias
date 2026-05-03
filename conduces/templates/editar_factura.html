@@ -3,7 +3,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Editar factura</title>
+    <title>SaaS Panaderías | Editar Factura</title>
     <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
 </head>
 
@@ -29,13 +29,21 @@
         <div class="topbar">
             <div>
                 <h1>Editar factura</h1>
-                <p>Actualiza datos administrativos de la factura.</p>
+                <p>Actualiza datos administrativos, NCF y datos de facturación electrónica e-CF.</p>
             </div>
 
-            <a href="{% url 'facturacion' %}" class="btn btn-light">Volver a facturación</a>
+            <div class="form-actions">
+                <a href="{% url 'facturacion' %}" class="btn btn-light">Volver a facturación</a>
+                <a href="{% url 'pdf_factura' factura.id %}" class="btn">Ver PDF</a>
+            </div>
         </div>
 
-        <section class="panel-card">
+        <section class="panel-card high-card">
+            <div class="section-header">
+                <h3>Datos generales de la factura</h3>
+                <p>Estos datos afectan la presentación administrativa de la factura.</p>
+            </div>
+
             <form method="post">
                 {% csrf_token %}
 
@@ -50,7 +58,7 @@
                     </div>
 
                     <div>
-                        <label>Cambiar NCF gubernamental</label>
+                        <label>Cambiar NCF / e-NCF</label>
                         <select name="comprobante">
                             <option value="">Mantener actual</option>
 
@@ -69,7 +77,7 @@
                     </div>
 
                     <div>
-                        <label>Bloques</label>
+                        <label>Bloques del expediente</label>
                         <input type="number" name="bloques" value="{{ factura.bloques }}" min="1">
                     </div>
 
@@ -88,12 +96,84 @@
                     </div>
 
                     <div>
-                        <label>Período</label>
+                        <label>Período facturado</label>
                         <input 
                             type="text" 
                             value="{{ factura.fecha_inicio|date:'d/m/Y' }} al {{ factura.fecha_fin|date:'d/m/Y' }}" 
                             disabled
                         >
+                    </div>
+
+                    <div>
+                        <label>Conduces</label>
+                        <input 
+                            type="text" 
+                            value="{{ factura.conduce_inicial }} al {{ factura.conduce_final }} / Total: {{ factura.cantidad_conduces }}" 
+                            disabled
+                        >
+                    </div>
+
+                    <div>
+                        <label>Total factura</label>
+                        <input type="text" value="RD$ {{ factura.total|floatformat:2 }}" disabled>
+                    </div>
+                </div>
+
+                <hr style="margin: 28px 0;">
+
+                <div class="section-header">
+                    <h3>Facturación electrónica e-CF</h3>
+                    <p>Completa estos datos si el comprobante inicia con E y debe incluir QR en la representación impresa.</p>
+                </div>
+
+                <div class="form-grid">
+                    <div>
+                        <label>
+                            <input 
+                                type="checkbox" 
+                                name="es_electronica" 
+                                {% if factura.es_electronica %}checked{% endif %}
+                            >
+                            Esta factura es electrónica
+                        </label>
+                    </div>
+
+                    <div>
+                        <label>e-NCF</label>
+                        <input 
+                            type="text" 
+                            name="encf" 
+                            value="{{ factura.encf|default:'' }}" 
+                            placeholder="Ej: E310000000001"
+                        >
+                    </div>
+
+                    <div>
+                        <label>Código de seguridad</label>
+                        <input 
+                            type="text" 
+                            name="codigo_seguridad" 
+                            value="{{ factura.codigo_seguridad|default:'' }}" 
+                            placeholder="Ej: ABC123"
+                        >
+                    </div>
+
+                    <div>
+                        <label>Fecha de firma digital</label>
+                        <input 
+                            type="datetime-local" 
+                            name="fecha_firma_digital"
+                            value="{% if factura.fecha_firma_digital %}{{ factura.fecha_firma_digital|date:'Y-m-d\\TH:i' }}{% endif %}"
+                        >
+                    </div>
+
+                    <div style="grid-column: 1 / -1;">
+                        <label>URL QR opcional</label>
+                        <textarea 
+                            name="url_qr" 
+                            rows="3" 
+                            placeholder="Opcional. Si se deja vacío, el sistema intentará construir la URL del timbre con los datos de la factura."
+                        >{{ factura.url_qr|default:'' }}</textarea>
                     </div>
                 </div>
 
