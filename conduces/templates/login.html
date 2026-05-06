@@ -1,0 +1,407 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Iniciar sesión | SaaS Panaderías</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+       body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(16,185,129,0.12), transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(59,130,246,0.12), transparent 40%),
+        linear-gradient(135deg, #f8fafc, #ffffff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+        .login-container {
+            width: 100%;
+            max-width: 1150px;
+            min-height: 660px;
+            background: #ffffff;
+            border-radius: 30px;
+            box-shadow: 0 30px 90px rgba(15, 23, 42, 0.14);
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            overflow: hidden;
+        }
+
+        .login-left {
+    padding: 58px;
+    background: linear-gradient(160deg, #10b981, #3b82f6);
+    color: white;
+}
+
+.login-left h1 {
+    color: #ffffff;
+}
+
+.login-left p {
+    color: #e0f2fe;
+}
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 42px;
+        }
+
+        .brand-icon {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.20);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        .brand-text strong {
+            display: block;
+            font-size: 21px;
+        }
+
+        .brand-text span {
+            font-size: 13px;
+            opacity: 0.92;
+        }
+
+        .login-left h1 {
+            font-size: 42px;
+            line-height: 1.08;
+            margin: 0 0 18px;
+        }
+
+        .login-left p {
+            font-size: 16px;
+            line-height: 1.7;
+            max-width: 470px;
+        }
+
+        .feature-list {
+            margin-top: 34px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .feature {
+    padding: 15px 18px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.15);
+    font-size: 14px;
+    color: white;
+}
+
+        .stats {
+            margin-top: 38px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+
+        .stat {
+            border-radius: 18px;
+            padding: 15px;
+            background: rgba(255,255,255,0.16);
+            text-align: center;
+        }
+
+        .stat strong {
+            display: block;
+            font-size: 22px;
+        }
+
+        .stat span {
+            font-size: 12px;
+        }
+
+        .login-right {
+            padding: 70px 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .login-right h2 {
+    color: #1f2937;
+}
+
+        .subtitle {
+    color: #6b7280;
+}
+
+        .field {
+            margin-bottom: 18px;
+        }
+
+        .field label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 7px;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        .field input {
+            width: 100%;
+            padding: 15px 16px;
+            border-radius: 14px;
+            border: 1px solid #d1d5db;
+            font-size: 15px;
+            outline: none;
+            transition: 0.2s;
+            background: #ffffff;
+        }
+
+        .field input:focus {
+            border-color: #fb923c;
+            box-shadow: 0 0 0 4px rgba(251,146,60,0.18);
+        }
+
+        .btn-login {
+            width: 100%;
+            border: none;
+            border-radius: 16px;
+            padding: 15px 18px;
+            font-size: 16px;
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(135deg, #fb923c, #fdba74);
+color: #7c2d12;
+            cursor: pointer;
+            box-shadow: 0 12px 28px rgba(249, 115, 22, 0.28);
+            transition: 0.2s;
+            margin-top: 6px;
+        }
+
+       .btn-login {
+    background: linear-gradient(135deg, #3b82f6, #10b981);
+    color: white;
+}
+
+        .mini-info {
+            margin-top: 18px;
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        .links {
+            margin-top: 24px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 14px;
+        }
+
+        .links a {
+            color: #ea580c;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .footer-note {
+            margin-top: 28px;
+            padding: 16px;
+            border-radius: 18px;
+            background: #f9fafb;
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .message {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #fff7ed;
+            color: #9a3412;
+            font-size: 14px;
+            border: 1px solid #fed7aa;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .login-container {
+                grid-template-columns: 1fr;
+                margin: 20px;
+            }
+
+            .login-left,
+            .login-right {
+                padding: 38px;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .links {
+                flex-direction: column;
+            }
+        }
+        .password-wrapper {
+    position: relative;
+}
+
+.password-wrapper input {
+    width: 100%;
+    padding-right: 45px;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0.7;
+}
+
+.toggle-password:hover {
+    opacity: 1;
+}
+
+.remember {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.remember input {
+    margin-right: 6px;
+}
+    </style>
+</head>
+
+<body>
+
+<div class="login-container">
+
+    <div class="login-left">
+        <div class="brand">
+            <div class="brand-icon">🥖</div>
+            <div class="brand-text">
+                <strong>SaaS Panaderías</strong>
+                <span>Gestión inteligente para suplidores</span>
+            </div>
+        </div>
+
+        <h1>Gestiona tu empresa desde una sola plataforma</h1>
+
+        <p>
+            Organiza conduces, centros educativos, menús diarios, relaciones de entrega,
+            facturación y reportes operativos con una herramienta moderna y segura.
+        </p>
+
+        <div class="feature-list">
+            <div class="feature">✔ Genera conduces diarios, semanales o mensuales</div>
+            <div class="feature">✔ Controla matrículas, centros y cantidades entregadas</div>
+            <div class="feature">✔ Prepara relaciones diarias y generales para facturación</div>
+            <div class="feature">✔ Exporta reportes en PDF y Excel</div>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <strong>24/7</strong>
+                <span>Acceso web</span>
+            </div>
+            <div class="stat">
+                <strong>PDF</strong>
+                <span>Conduces listos</span>
+            </div>
+            <div class="stat">
+                <strong>Excel</strong>
+                <span>Reportes exportables</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-right">
+        <h2>Iniciar sesión</h2>
+
+        <p class="subtitle">
+            Accede a tu panel para administrar las operaciones de tu panadería.
+        </p>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="field">
+                <label>Usuario</label>
+                <input type="text" name="username" placeholder="Ingresa tu usuario" required>
+            </div>
+
+            <div class="field">
+    <label>Contraseña</label>
+
+    <div class="password-wrapper">
+        <input id="password" type="password" name="password" placeholder="Ingresa tu contraseña" required>
+
+        <span class="toggle-password" onclick="togglePassword()">
+            👁️
+        </span>
+    </div>
+</div>
+
+<div class="remember">
+    <label>
+        <input type="checkbox" name="remember_me">
+        Mantener sesión iniciada
+    </label>
+</div>
+
+            <button class="btn-login" type="submit">
+                Entrar al sistema
+            </button>
+        </form>
+
+        <div class="mini-info">
+            🔐 Acceso seguro | 📊 Gestión de conduces | 📄 Reportes automáticos
+        </div>
+
+        <div class="links">
+            <a href="/password-reset/">¿Olvidaste tu contraseña?</a>
+            <a href="/registro/">Crear cuenta</a>
+        </div>
+
+        <div class="footer-note">
+            Plataforma diseñada para ayudar a panaderías y suplidores a organizar sus entregas,
+            documentos y controles administrativos de manera profesional.
+        </div>
+    </div>
+
+</div>
+<script>
+function togglePassword() {
+    const input = document.getElementById("password");
+
+    if (!input) return;
+
+    if (input.type === "password") {
+        input.type = "text";
+    } else {
+        input.type = "password";
+    }
+}
+</script>
+</body>
+</html>

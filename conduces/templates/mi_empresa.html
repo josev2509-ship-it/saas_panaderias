@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Configuración de empresa</h1>
+            <p>Administra los datos que aparecerán en conduces, relaciones y facturas.</p>
+        </div>
+
+        <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Datos generales</h3>
+            <p>Estos datos se usarán en documentos PDF y reportes del sistema.</p>
+        </div>
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="company-logo-preview">
+                {% if empresa.logo %}
+                    <img src="{{ empresa.logo.url }}" alt="Logo empresa">
+                {% else %}
+                    <div class="logo-placeholder">🥖</div>
+                {% endif %}
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <label>Nombre de la empresa</label>
+                    <input type="text" name="nombre" value="{{ empresa.nombre }}" required>
+                </div>
+
+                <div>
+                    <label>RNC</label>
+                    <input type="text" name="rnc" value="{{ empresa.rnc|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Dirección</label>
+                    <input type="text" name="direccion" value="{{ empresa.direccion|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Teléfono</label>
+                    <input type="text" name="telefono" value="{{ empresa.telefono|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Ciudad</label>
+                    <input type="text" name="ciudad" value="{{ empresa.ciudad|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Correo</label>
+                    <input type="email" name="correo" value="{{ empresa.correo|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Número inicial de conduce</label>
+                    <input type="text" name="numero_inicial_conduce" value="{{ empresa.numero_inicial_conduce|default:'0001' }}">
+                </div>
+
+                <div>
+                    <label>Logo de la empresa</label>
+                    <input type="file" name="logo" accept="image/*">
+                </div>
+            </div>
+
+            <div class="section-header module-header">
+                <h3>Módulos activos</h3>
+                <p>Activa o desactiva las funciones disponibles para esta empresa.</p>
+            </div>
+
+            <div class="module-grid">
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_conduces" {% if empresa.modulo_conduces %}checked{% endif %}>
+                    <span>📄 Conduces</span>
+                </label>
+
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_centros" {% if empresa.modulo_centros %}checked{% endif %}>
+                    <span>🏫 Centros</span>
+                </label>
+
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_menu" {% if empresa.modulo_menu %}checked{% endif %}>
+                    <span>📅 Menú diario</span>
+                </label>
+
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_facturacion" {% if empresa.modulo_facturacion %}checked{% endif %}>
+                    <span>🧾 Facturación</span>
+                </label>
+
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_reportes" {% if empresa.modulo_reportes %}checked{% endif %}>
+                    <span>📊 Reportes</span>
+                </label>
+
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_rutas" {% if empresa.modulo_rutas %}checked{% endif %}>
+                    <span>🚚 Rutas</span>
+                </label>
+
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_nomina" {% if empresa.modulo_nomina %}checked{% endif %}>
+                    <span>👥 Nómina</span>
+                </label>
+
+                <label class="module-card">
+                    <input type="checkbox" name="modulo_inventario" {% if empresa.modulo_inventario %}checked{% endif %}>
+                    <span>📦 Inventario</span>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Guardar configuración</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Crear usuario de la empresa</h3>
+            <p>Permite que otras personas accedan a la plataforma según su rol.</p>
+        </div>
+
+        <form method="post" action="{% url 'crear_usuario_empresa' %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Nombre</label>
+                    <input type="text" name="nombre" required>
+                </div>
+
+                <div>
+                    <label>Apellido</label>
+                    <input type="text" name="apellido">
+                </div>
+
+                <div>
+                    <label>Correo</label>
+                    <input type="email" name="correo" required>
+                </div>
+
+                <div>
+                    <label>Contraseña temporal</label>
+                    <input type="password" name="password" required>
+                </div>
+
+                <div>
+                    <label>Rol</label>
+                    <select name="rol" required>
+                        <option value="admin_empresa">Administrador de empresa</option>
+                        <option value="facturacion">Facturación</option>
+                        <option value="operaciones">Operaciones</option>
+                        <option value="chofer">Chofer</option>
+                        <option value="consulta">Consulta</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Crear usuario</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Usuarios registrados</h3>
+            <p>Usuarios asociados a esta empresa.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Correo</th>
+                        <th>Rol</th>
+                        <th>Activo</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in usuarios %}
+                    <tr>
+                        <td>{{ item.user.first_name }} {{ item.user.last_name }}</td>
+                        <td>{{ item.user.email }}</td>
+                        <td>{{ item.get_rol_display }}</td>
+                        <td>{% if item.activo %}Sí{% else %}No{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4">No hay usuarios registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

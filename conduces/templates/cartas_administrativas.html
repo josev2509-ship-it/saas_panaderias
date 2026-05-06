@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Cartas administrativas</h1>
+            <p>Genera comunicaciones formales con los datos y logo de la empresa.</p>
+        </div>
+
+        <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Crear carta</h3>
+            <p>Completa los datos y genera un PDF formal.</p>
+        </div>
+
+        <form method="post" action="{% url 'generar_carta_pdf' %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Destinatario</label>
+                    <input type="text" name="destinatario" placeholder="Ej: Instituto Nacional de Bienestar Estudiantil" required>
+                </div>
+
+                <div>
+                    <label>Institución / Departamento</label>
+                    <input type="text" name="institucion" placeholder="Ej: Comité de Compras y Contrataciones">
+                </div>
+
+                <div>
+                    <label>Asunto</label>
+                    <input type="text" name="asunto" placeholder="Ej: Remisión de documentación" required>
+                </div>
+
+                <div>
+                    <label>Ciudad</label>
+                    <input type="text" name="ciudad" value="{{ empresa.ciudad|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Firmante</label>
+                    <input type="text" name="firmante" placeholder="Nombre de quien firma">
+                </div>
+
+                <div>
+                    <label>Cargo</label>
+                    <input type="text" name="cargo" placeholder="Ej: Gerente General">
+                </div>
+            </div>
+
+            <div style="margin-top: 18px;">
+                <label>Contenido de la carta</label>
+                <textarea 
+                    name="contenido" 
+                    rows="10" 
+                    placeholder="Escriba aquí el contenido de la comunicación..."
+                    required
+                ></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Generar PDF</button>
+            </div>
+        </form>
+    </section>
+
+</div>
+
+{% endblock %}

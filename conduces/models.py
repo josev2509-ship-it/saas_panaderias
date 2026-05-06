@@ -1,10 +1,21 @@
 from django.db import models
-
+from django.utils import timezone
+from django.contrib.auth.models import User
+from datetime import timedelta
+import random
 
 # ==========================
 # EMPRESA
 # ==========================
 class Empresa(models.Model):
+    usuario = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="empresa_principal"
+    )
+
     nombre = models.CharField(max_length=255)
     rnc = models.CharField(max_length=20, blank=True, null=True)
     direccion = models.CharField(max_length=255, blank=True, null=True)
@@ -14,6 +25,24 @@ class Empresa(models.Model):
 
     numero_inicial_conduce = models.CharField(max_length=20, default="0001")
 
+    # Módulos personalizados por empresa
+    modulo_conduces = models.BooleanField(default=True)
+    modulo_centros = models.BooleanField(default=True)
+    modulo_menu = models.BooleanField(default=True)
+    modulo_facturacion = models.BooleanField(default=True)
+    modulo_reportes = models.BooleanField(default=True)
+    modulo_rutas = models.BooleanField(default=False)
+    modulo_nomina = models.BooleanField(default=False)
+    modulo_inventario = models.BooleanField(default=False)
+
+    activa = models.BooleanField(default=True)
+
+    logo = models.ImageField(
+    upload_to="empresas/logos/",
+    blank=True,
+    null=True
+)
+
     def __str__(self):
         return self.nombre
 
@@ -22,7 +51,13 @@ class Empresa(models.Model):
 # CENTRO EDUCATIVO
 # ==========================
 class CentroEducativo(models.Model):
-    codigo = models.CharField(max_length=20, unique=True)
+    empresa = models.ForeignKey(
+    Empresa,
+    on_delete=models.CASCADE,
+    blank=True,
+    null=True
+)
+    codigo = models.CharField(max_length=20)
     nombre = models.CharField(max_length=255)
     director = models.CharField(max_length=255, blank=True, null=True)
     telefono = models.CharField(max_length=50, blank=True, null=True)
@@ -46,11 +81,19 @@ class CentroEducativo(models.Model):
 # MENÚ DIARIO
 # ==========================
 class MenuDiario(models.Model):
-    fecha = models.DateField(unique=True)
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True
+    )
+
+    fecha = models.DateField()
     producto = models.CharField(max_length=255)
 
     class Meta:
         ordering = ["-fecha"]
+        unique_together = ("empresa", "fecha")
 
     def __str__(self):
         return f"{self.fecha} - {self.producto}"
@@ -113,6 +156,12 @@ class Conduce(models.Model):
 # PRODUCTOS DE FACTURACIÓN
 # ==========================
 class ProductoFacturacion(models.Model):
+    empresa = models.ForeignKey(
+    Empresa,
+    on_delete=models.CASCADE,
+    blank=True,
+    null=True
+)
     CATEGORIAS = (
         ("PAN", "PAN"),
         ("PAN_CON_VEGETALES", "PAN CON VEGETALES"),
@@ -120,7 +169,7 @@ class ProductoFacturacion(models.Model):
         ("BIZCOCHO", "BIZCOCHO"),
     )
 
-    categoria = models.CharField(max_length=50, choices=CATEGORIAS, unique=True)
+    categoria = models.CharField(max_length=50, choices=CATEGORIAS)
     nombre_factura = models.CharField(max_length=100)
     precio_sin_itbis = models.DecimalField(max_digits=12, decimal_places=2)
     aplica_itbis = models.BooleanField(default=True)
@@ -128,7 +177,8 @@ class ProductoFacturacion(models.Model):
     activo = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ["id"]
+          ordering = ["id"]
+          unique_together = ("empresa", "categoria")
 
     def __str__(self):
         return f"{self.nombre_factura} - RD$ {self.precio_sin_itbis}"
@@ -138,6 +188,12 @@ class ProductoFacturacion(models.Model):
 # COMPROBANTE / NCF
 # ==========================
 class ComprobanteFiscal(models.Model):
+    empresa = models.ForeignKey(
+    Empresa,
+    on_delete=models.CASCADE,
+    blank=True,
+    null=True
+)
     TIPO_NCF = (
         ("B01", "B01 - Crédito fiscal"),
         ("B02", "B02 - Consumo"),
@@ -155,7 +211,7 @@ class ComprobanteFiscal(models.Model):
         default="B15"
     )
 
-    ncf = models.CharField(max_length=30, unique=True)
+    ncf = models.CharField(max_length=30)
     fecha_validez = models.DateField()
     usado = models.BooleanField(default=False)
     fecha_uso = models.DateField(blank=True, null=True)
@@ -164,6 +220,7 @@ class ComprobanteFiscal(models.Model):
         ordering = ["ncf"]
         verbose_name = "Comprobante / NCF"
         verbose_name_plural = "Comprobantes / NCF"
+        unique_together = ("empresa", "ncf")
 
     def __str__(self):
         estado = "Usado" if self.usado else "Disponible"
@@ -293,3 +350,115 @@ class DetalleFactura(models.Model):
 
     def __str__(self):
         return f"{self.producto} - {self.cantidad}"
+    
+
+# ==========================
+# PLANES
+# ==========================
+class Plan(models.Model):
+    nombre = models.CharField(max_length=100)
+    precio = models.DecimalField(max_digits=10, decimal_places=2)
+
+    limite_conduces = models.IntegerField(default=500)
+    limite_usuarios = models.IntegerField(default=3)
+    almacenamiento_gb = models.IntegerField(default=1)
+
+    incluye_contabilidad = models.BooleanField(default=False)
+    incluye_nomina = models.BooleanField(default=False)
+    incluye_rutas = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.nombre
+
+
+# ==========================
+# EMPRESA (CUENTA SaaS)
+# ==========================
+class EmpresaSaaS(models.Model):
+    nombre = models.CharField(max_length=255)
+    rnc = models.CharField(max_length=20)
+    correo = models.EmailField(unique=True)
+
+    activa = models.BooleanField(default=True)
+
+    creada_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.nombre
+
+
+# ==========================
+# SUSCRIPCIÓN
+# ==========================
+class Suscripcion(models.Model):
+    ESTADOS = (
+        ("prueba", "Prueba"),
+        ("activa", "Activa"),
+        ("vencida", "Vencida"),
+        ("bloqueada", "Bloqueada"),
+    )
+
+    empresa = models.OneToOneField(EmpresaSaaS, on_delete=models.CASCADE)
+    plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True)
+
+    estado = models.CharField(max_length=20, choices=ESTADOS, default="prueba")
+
+    fecha_inicio = models.DateField(default=timezone.now)
+    fecha_fin = models.DateField()
+
+    en_prueba = models.BooleanField(default=True)
+
+    def esta_activa(self):
+        return self.estado in ["activa", "prueba"]
+
+    def __str__(self):
+        return f"{self.empresa.nombre} - {self.plan.nombre if self.plan else 'Sin plan'}"
+    
+
+
+class PerfilUsuario(models.Model):
+    ROLES = (
+        ("admin_empresa", "Administrador de empresa"),
+        ("facturacion", "Facturación"),
+        ("operaciones", "Operaciones"),
+        ("chofer", "Chofer"),
+        ("consulta", "Consulta"),
+    )
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    empresa = models.ForeignKey(EmpresaSaaS, on_delete=models.CASCADE, null=True, blank=True)
+    rol = models.CharField(max_length=30, choices=ROLES, default="admin_empresa")
+    correo_validado = models.BooleanField(default=False)
+    activo = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.rol}"
+
+
+class CodigoValidacion(models.Model):
+    TIPOS = (
+        ("correo", "Validación de correo"),
+        ("password", "Recuperación de contraseña"),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    tipo = models.CharField(max_length=20, choices=TIPOS)
+    codigo = models.CharField(max_length=6)
+    usado = models.BooleanField(default=False)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    expira_en = models.DateTimeField()
+
+    def save(self, *args, **kwargs):
+        if not self.codigo:
+            self.codigo = str(random.randint(100000, 999999))
+
+        if not self.expira_en:
+            self.expira_en = timezone.now() + timedelta(minutes=15)
+
+        super().save(*args, **kwargs)
+
+    def esta_vigente(self):
+        return not self.usado and timezone.now() <= self.expira_en
+
+    def __str__(self):
+        return f"{self.user.email} - {self.tipo} - {self.codigo}"

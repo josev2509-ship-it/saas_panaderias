@@ -1,0 +1,71 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SaaS Panaderías</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+
+    <aside class="app-sidebar">
+        <div class="empresa-box">
+            <div class="brand-logo">
+                {% if empresa.logo %}
+                    <img src="{{ empresa.logo.url }}" class="empresa-logo">
+                {% else %}
+                    <span>🥖</span>
+                {% endif %}
+            </div>
+
+            <div>
+                <h2>{{ empresa.nombre|default:"SaaS Panaderías" }}</h2>
+                <p>Gestión inteligente PAE</p>
+            </div>
+        </div>
+
+        <nav class="app-menu">
+            <a href="{% url 'inicio' %}">📊 <span>Panel principal</span></a>
+            <a href="{% url 'mi_empresa' %}">⚙️ Configuración empresa</a>
+            <a href="{% url 'cartas_administrativas' %}">✉️ <span>Cartas administrativas</span></a>
+
+            {% if empresa.modulo_conduces %}
+                <a href="{% url 'buscar_conduces' %}">📄 <span>Gestión de conduces</span></a>
+                <a href="{% url 'generar_conduces' %}">➕ <span>Generar conduces</span></a>
+            {% endif %}
+
+            {% if empresa.modulo_centros %}
+                <a href="{% url 'carga_centros' %}">🏫 <span>Gestión de centros</span></a>
+                <a href="{% url 'mapa_centros' %}">🗺️ <span>Mapa de centros</span></a>
+            {% endif %}
+
+            {% if empresa.modulo_menu %}
+                <a href="{% url 'carga_menu' %}">📅 <span>Menú diario</span></a>
+            {% endif %}
+
+            {% if empresa.modulo_facturacion %}
+                <a href="{% url 'facturacion' %}">🧾 <span>Facturación</span></a>
+            {% endif %}
+
+            {% if empresa.modulo_reportes %}
+                <a href="#">📊 <span>Reportes</span></a>
+            {% endif %}
+        </nav>
+
+        <div class="sidebar-footer">
+            <small>SaaS Panaderías</small>
+            <strong>Versión operativa</strong>
+        </div>
+    </aside>
+
+    <main class="app-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block extra_scripts %}{% endblock %}
+
+</body>
+</html>

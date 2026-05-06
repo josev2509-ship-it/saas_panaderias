@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Verificar correo | SaaS Panaderías</title>
+    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+</head>
+<body>
+
+<div class="auth-page">
+    <div class="auth-card">
+        <h1>Verifica tu correo</h1>
+        <p>Enviamos un código de 6 dígitos a:</p>
+        <strong>{{ correo }}</strong>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+
+            <label>Código de validación</label>
+            <input type="text" name="codigo" maxlength="6" required>
+
+            <button type="submit" class="btn">Validar cuenta</button>
+        </form>
+
+        <p class="auth-link">
+            ¿No recibiste el código?
+            <a href="{% url 'reenviar_codigo_correo' %}">Reenviar código</a>
+        </p>
+    </div>
+</div>
+
+</body>
+</html>

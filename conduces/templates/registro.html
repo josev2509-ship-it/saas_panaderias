@@ -1,0 +1,300 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Crear cuenta | SaaS Panaderías</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(16,185,129,0.12), transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(59,130,246,0.12), transparent 40%),
+                linear-gradient(135deg, #f8fafc, #ffffff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1150px;
+            min-height: 680px;
+            background: #ffffff;
+            border-radius: 30px;
+            box-shadow: 0 30px 90px rgba(15, 23, 42, 0.14);
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            overflow: hidden;
+        }
+
+        .left {
+            padding: 58px;
+            background: linear-gradient(160deg, #10b981, #3b82f6);
+            color: white;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 42px;
+        }
+
+        .brand-icon {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        .brand-text strong {
+            display: block;
+            font-size: 21px;
+        }
+
+        .brand-text span {
+            font-size: 13px;
+            opacity: 0.92;
+        }
+
+        .left h1 {
+            font-size: 42px;
+            line-height: 1.08;
+            margin: 0 0 18px;
+        }
+
+        .left p {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #e0f2fe;
+            max-width: 470px;
+        }
+
+        .feature-list {
+            margin-top: 34px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .feature {
+            padding: 15px 18px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.15);
+            font-size: 14px;
+            color: white;
+        }
+
+        .right {
+            padding: 55px 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .right h2 {
+            margin: 0;
+            color: #1f2937;
+            font-size: 33px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            margin: 12px 0 28px;
+            line-height: 1.6;
+        }
+
+        form p {
+            margin-bottom: 16px;
+        }
+
+        form label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 7px;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        form input {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid #d1d5db;
+            font-size: 15px;
+            outline: none;
+        }
+
+        form input:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 4px rgba(16,185,129,0.16);
+        }
+
+        .btn {
+            width: 100%;
+            border: none;
+            border-radius: 16px;
+            padding: 15px 18px;
+            font-size: 16px;
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(135deg, #3b82f6, #10b981);
+            cursor: pointer;
+            box-shadow: 0 12px 28px rgba(59,130,246,0.25);
+            margin-top: 8px;
+        }
+
+        .login-link {
+            margin-top: 22px;
+            text-align: center;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .login-link a {
+            color: #2563eb;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .message {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #ecfdf5;
+            color: #065f46;
+            font-size: 14px;
+            border: 1px solid #a7f3d0;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+                margin: 20px;
+            }
+
+            .left,
+            .right {
+                padding: 38px;
+            }
+        }
+
+        .field {
+    margin-bottom: 16px;
+}
+
+.field label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 7px;
+    color: #374151;
+    font-size: 14px;
+}
+
+.field input {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid #d1d5db;
+    font-size: 15px;
+    outline: none;
+    background: #ffffff;
+}
+
+.field input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 4px rgba(16,185,129,0.16);
+}
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="left">
+        <div class="brand">
+            <div class="brand-icon">🥖</div>
+            <div class="brand-text">
+                <strong>SaaS Panaderías</strong>
+                <span>Gestión inteligente para suplidores</span>
+            </div>
+        </div>
+
+        <h1>Crea tu cuenta y organiza tu operación</h1>
+
+        <p>
+            Registra tu empresa y comienza a controlar conduces, centros educativos,
+            menús diarios, relaciones de entrega y reportes administrativos.
+        </p>
+
+        <div class="feature-list">
+            <div class="feature">✔ Configura tu empresa suplidora</div>
+            <div class="feature">✔ Administra centros y matrículas</div>
+            <div class="feature">✔ Genera conduces y reportes en PDF</div>
+            <div class="feature">✔ Controla tu operación desde un panel moderno</div>
+        </div>
+    </div>
+
+    <div class="right">
+        <h2>Crear cuenta</h2>
+
+        <p class="subtitle">
+            Completa tus datos para iniciar la configuración de tu empresa.
+        </p>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+    {% csrf_token %}
+
+    <div class="field">
+        <label>Nombre de usuario</label>
+        <input type="text" name="username" placeholder="Ej. panaderia_abinai" required>
+    </div>
+
+    <div class="field">
+        <label>Correo electrónico</label>
+        <input type="email" name="email" placeholder="correo@empresa.com" required>
+    </div>
+
+    <div class="field">
+        <label>Contraseña</label>
+        <input type="password" name="password1" placeholder="Crea una contraseña segura" required>
+    </div>
+
+    <div class="field">
+        <label>Confirmar contraseña</label>
+        <input type="password" name="password2" placeholder="Repite la contraseña" required>
+    </div>
+
+    <button class="btn" type="submit">
+        Crear cuenta
+    </button>
+</form>
+
+        <div class="login-link">
+            ¿Ya tienes una cuenta?
+            <a href="/login/">Iniciar sesión</a>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

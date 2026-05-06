@@ -1,109 +1,66 @@
+{% extends "base.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>SaaS Panaderías | Generar conduces</title>
 
-    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
-</head>
+{% block content %}
+<div class="app-page">
 
-<body>
-
-<div class="main-layout">
-
-    <aside class="sidebar">
-        <h2>SaaS Panaderías</h2>
-        <p class="sidebar-subtitle">Gestión INABIE</p>
-
-        <a href="{% url 'inicio' %}">📊 Dashboard</a>
-        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
-        <a href="{% url 'carga_centros' %}">🏫 Centros educativos</a>
-        <a href="{% url 'carga_menu' %}">📅 Menú diario</a>
-        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
-        <a href="{% url 'facturacion' %}">🧾 Gestión de facturación</a>
-    </aside>
-
-    <main class="content">
-
-        <div class="topbar">
-            <div>
-                <h1>Generar conduces automáticos</h1>
-                <p>Crea conduces por empresa, rango de fechas y menú diario cargado.</p>
-            </div>
-
-            <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+    <div class="topbar">
+        <div>
+            <h1>Generar conduces automáticos</h1>
+            <p>Crea conduces por rango de fechas usando el menú diario cargado.</p>
         </div>
 
-        {% if messages %}
-            <div class="messages">
-                {% for message in messages %}
-                    <div class="message {{ message.tags }}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
+        <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Datos de generación</h3>
+            <p>Indica el rango de fechas y, si deseas, el número inicial de conduce.</p>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Número inicial de conduce</label>
+                    <input type="text" name="numero_inicial" placeholder="Opcional. Ejemplo: 0001, 0100">
+                </div>
+
+                <div>
+                    <label>Fecha desde</label>
+                    <input type="date" name="fecha_desde" required>
+                </div>
+
+                <div>
+                    <label>Fecha hasta</label>
+                    <input type="date" name="fecha_hasta" required>
+                </div>
             </div>
-        {% endif %}
 
-        <section class="form-card">
+            <div class="info-box">
+                <strong>Observación:</strong>
+                <p>
+                    Si dejas el número inicial vacío, el sistema usará el número configurado para tu empresa.
+                    Si ya existen conduces, continuará desde el último número creado.
+                </p>
+            </div>
 
-            <form method="post">
-                {% csrf_token %}
-
-                <div class="form-grid">
-
-                    <div>
-                        <label>Empresa</label>
-                        <select name="empresa" required>
-                            <option value="">Seleccione una empresa</option>
-                            {% for empresa in empresas %}
-                                <option value="{{ empresa.id }}">{{ empresa.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label>Número inicial de conduce</label>
-                        <input 
-                            type="text" 
-                            name="numero_inicial" 
-                            placeholder="Opcional. Ejemplo: 0001, 0100"
-                        >
-                    </div>
-
-                    <div>
-                        <label>Fecha desde</label>
-                        <input type="date" name="fecha_desde" required>
-                    </div>
-
-                    <div>
-                        <label>Fecha hasta</label>
-                        <input type="date" name="fecha_hasta" required>
-                    </div>
-
-                </div>
-
-                <div class="info-box">
-                    <strong>Observación:</strong>
-                    <p>
-                        Si dejas el número inicial vacío, el sistema iniciará en <strong>1</strong>
-                        si no existen conduces previos. Si ya existen conduces, continuará
-                        automáticamente desde el último número creado para la empresa seleccionada.
-                    </p>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn">Generar conduces</button>
-                    <a href="{% url 'buscar_conduces' %}" class="btn btn-secondary">Ver conduces</a>
-                </div>
-
-            </form>
-
-        </section>
-
-    </main>
+            <div class="form-actions">
+                <button type="submit" class="btn">Generar conduces</button>
+                <a href="{% url 'buscar_conduces' %}" class="btn btn-secondary">Ver conduces</a>
+            </div>
+        </form>
+    </section>
 
 </div>
-
-</body>
-</html>
+{% endblock %}

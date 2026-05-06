@@ -1,175 +1,156 @@
+{% extends "base.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>SaaS Panaderías | Gestión de Facturación</title>
-    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
-</head>
 
-<body>
+{% block content %}
 
-<div class="main-layout">
+<div class="app-page">
 
-    <aside class="sidebar">
-        <h2>SaaS Panaderías</h2>
-        <p class="sidebar-subtitle">Gestión INABIE</p>
-
-        <a href="{% url 'inicio' %}">📊 Panel principal</a>
-        <a href="{% url 'buscar_conduces' %}">📄 Gestión de conduces</a>
-        <a href="{% url 'carga_centros' %}">🏫 Gestión de centros</a>
-        <a href="{% url 'mapa_centros' %}">🗺️ Mapa de centros</a>
-        <a href="{% url 'carga_menu' %}">📅 Gestión de menú diario</a>
-        <a href="{% url 'generar_conduces' %}">➕ Generar conduces</a>
-        <a href="{% url 'facturacion' %}">🧾 Gestión de facturación</a>
-    </aside>
-
-    <main class="content">
-
-        <div class="topbar">
-            <div>
-                <h1>Gestión de facturación</h1>
-                <p>Genera facturas, administra productos, tipos de NCF, comprobantes físicos y electrónicos.</p>
-            </div>
-            <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+    <div class="topbar">
+        <div>
+            <h1>Gestión de facturación</h1>
+            <p>Genera facturas, administra productos, NCF físicos y comprobantes electrónicos.</p>
         </div>
 
-        {% if messages %}
-            <div class="messages">
-                {% for message in messages %}
-                    <div class="message {{ message.tags }}">{{ message }}</div>
-                {% endfor %}
-            </div>
-        {% endif %}
+        <a href="{% url 'inicio' %}" class="btn btn-light">Volver al inicio</a>
+    </div>
 
-        <section class="kpi-grid">
-            <div class="kpi-card">
-                <h3>Total facturado</h3>
-                <p>RD$ {{ total_facturado|floatformat:2 }}</p>
-                <small>Facturas no anuladas</small>
-            </div>
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
 
-            <div class="kpi-card">
-                <h3>ITBIS generado</h3>
-                <p>RD$ {{ total_itbis|floatformat:2 }}</p>
-                <small>Sobre productos gravados</small>
-            </div>
+    <section class="kpi-grid">
+        <div class="kpi-card">
+            <h3>Total facturado</h3>
+            <p>RD$ {{ total_facturado|floatformat:2 }}</p>
+            <small>Facturas no anuladas</small>
+        </div>
 
-            <div class="kpi-card">
-                <h3>NCF disponibles</h3>
-                <p>{{ comprobantes_disponibles.count }}</p>
-                <small>Comprobantes sin usar</small>
-            </div>
+        <div class="kpi-card">
+            <h3>ITBIS generado</h3>
+            <p>RD$ {{ total_itbis|floatformat:2 }}</p>
+            <small>Sobre productos gravados</small>
+        </div>
 
-            <div class="kpi-card">
-                <h3>Facturas emitidas</h3>
-                <p>{{ facturas.count }}</p>
-                <small>Histórico registrado</small>
-            </div>
-        </section>
+        <div class="kpi-card">
+            <h3>NCF disponibles</h3>
+            <p>{{ comprobantes_disponibles.count }}</p>
+            <small>Comprobantes sin usar</small>
+        </div>
 
-        <section class="panel-card high-card">
-            <div class="section-header">
-                <h3>Crear factura</h3>
-                <p>Selecciona empresa, período, comprobante y bloques del expediente.</p>
-            </div>
+        <div class="kpi-card">
+            <h3>Facturas emitidas</h3>
+            <p>{{ facturas.count }}</p>
+            <small>Histórico registrado</small>
+        </div>
+    </section>
 
-            <form method="post" action="{% url 'generar_factura' %}">
-                {% csrf_token %}
+    <section class="card">
+        <div class="section-header">
+            <h3>Crear factura</h3>
+            <p>Selecciona período, comprobante y bloques del expediente.</p>
+        </div>
 
-                <div class="form-grid">
-                    <div>
-                        <label>Empresa</label>
-                        <select name="empresa" required>
-                            <option value="">Seleccione empresa</option>
-                            {% for empresa in empresas %}
-                                <option value="{{ empresa.id }}">{{ empresa.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+        <form method="post" action="{% url 'generar_factura' %}">
+            {% csrf_token %}
 
-                    <div>
-                        <label>NCF / e-NCF disponible</label>
-                        <select name="comprobante">
-                            <option value="">Tomar siguiente disponible</option>
-                            {% for comprobante in comprobantes_disponibles %}
-                                <option value="{{ comprobante.id }}">
-                                    {{ comprobante.ncf }} - {{ comprobante.get_tipo_display }} - válido hasta {{ comprobante.fecha_validez|date:"d/m/Y" }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label>Fecha desde</label>
-                        <input type="date" name="fecha_inicio" required>
-                    </div>
-
-                    <div>
-                        <label>Fecha hasta</label>
-                        <input type="date" name="fecha_fin" required>
-                    </div>
-
-                    <div>
-                        <label>Bloques del expediente</label>
-                        <input type="number" name="bloques" min="1" value="1">
-                    </div>
+            <div class="form-grid">
+                <div>
+                    <label>Empresa</label>
+                    <select name="empresa" required>
+                        <option value="">Seleccione empresa</option>
+                        {% for empresa_item in empresas %}
+                            <option value="{{ empresa_item.id }}">{{ empresa_item.nombre }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn">Generar factura</button>
+                <div>
+                    <label>NCF / e-NCF disponible</label>
+                    <select name="comprobante">
+                        <option value="">Tomar siguiente disponible</option>
+                        {% for comprobante in comprobantes_disponibles %}
+                            <option value="{{ comprobante.id }}">
+                                {{ comprobante.ncf }} - {{ comprobante.get_tipo_display }} - válido hasta {{ comprobante.fecha_validez|date:"d/m/Y" }}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
-            </form>
-        </section>
 
-        <section class="panel-card high-card">
-            <div class="section-header">
-                <h3>Productos de facturación</h3>
-                <p>Configura los productos oficiales, precios sin ITBIS y si aplican impuesto.</p>
+                <div>
+                    <label>Fecha desde</label>
+                    <input type="date" name="fecha_inicio" required>
+                </div>
+
+                <div>
+                    <label>Fecha hasta</label>
+                    <input type="date" name="fecha_fin" required>
+                </div>
+
+                <div>
+                    <label>Bloques del expediente</label>
+                    <input type="number" name="bloques" min="1" value="1">
+                </div>
             </div>
 
-            <form method="post" action="{% url 'crear_producto_facturacion' %}">
-                {% csrf_token %}
+            <div class="form-actions">
+                <button type="submit" class="btn">Generar factura</button>
+            </div>
+        </form>
+    </section>
 
-                <div class="form-grid">
-                    <div>
-                        <label>Categoría</label>
-                        <select name="categoria" required>
-                            <option value="PAN">PAN</option>
-                            <option value="PAN_CON_VEGETALES">PAN CON VEGETALES</option>
-                            <option value="GALLETA">GALLETA</option>
-                            <option value="BIZCOCHO">BIZCOCHO</option>
-                        </select>
-                    </div>
+    <section class="card">
+        <div class="section-header">
+            <h3>Productos de facturación</h3>
+            <p>Configura productos oficiales, precios sin ITBIS y aplicación de impuestos.</p>
+        </div>
 
-                    <div>
-                        <label>Nombre en factura</label>
-                        <input type="text" name="nombre" placeholder="Ej: PAN" required>
-                    </div>
+        <form method="post" action="{% url 'crear_producto_facturacion' %}">
+            {% csrf_token %}
 
-                    <div>
-                        <label>Precio sin ITBIS</label>
-                        <input type="text" name="precio_sin_itbis" placeholder="Ej: 7.61" required>
-                    </div>
-
-                    <div>
-                        <label>Porcentaje ITBIS</label>
-                        <input type="text" name="porcentaje_itbis" value="18.00">
-                    </div>
-
-                    <div>
-                        <label>
-                            <input type="checkbox" name="aplica_itbis">
-                            Aplica ITBIS
-                        </label>
-                    </div>
+            <div class="form-grid">
+                <div>
+                    <label>Categoría</label>
+                    <select name="categoria" required>
+                        <option value="PAN">PAN</option>
+                        <option value="PAN_CON_VEGETALES">PAN CON VEGETALES</option>
+                        <option value="GALLETA">GALLETA</option>
+                        <option value="BIZCOCHO">BIZCOCHO</option>
+                    </select>
                 </div>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn">Guardar producto</button>
+                <div>
+                    <label>Nombre en factura</label>
+                    <input type="text" name="nombre" placeholder="Ej: PAN" required>
                 </div>
-            </form>
 
+                <div>
+                    <label>Precio sin ITBIS</label>
+                    <input type="text" name="precio_sin_itbis" placeholder="Ej: 7.61" required>
+                </div>
+
+                <div>
+                    <label>Porcentaje ITBIS</label>
+                    <input type="text" name="porcentaje_itbis" value="18.00">
+                </div>
+
+                <div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="aplica_itbis">
+                        Aplica ITBIS
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Guardar producto</button>
+            </div>
+        </form>
+
+        <div class="table-responsive">
             <table>
                 <thead>
                     <tr>
@@ -192,20 +173,15 @@
                         <td>{{ producto.porcentaje_itbis|floatformat:2 }}%</td>
                         <td>
                             <div class="row-actions">
-                                <a href="{% url 'editar_producto_facturacion' producto.id %}" class="btn btn-small btn-secondary">
-                                    Editar
-                                </a>
+                                <a href="{% url 'editar_producto_facturacion' producto.id %}" class="btn btn-small btn-secondary">Editar</a>
 
                                 <form method="post" action="{% url 'eliminar_producto_facturacion' producto.id %}" onsubmit="return confirm('¿Seguro que deseas eliminar este producto?');">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-small btn-danger">
-                                        Eliminar
-                                    </button>
+                                    <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
-
                     {% empty %}
                     <tr>
                         <td colspan="6">No hay productos configurados.</td>
@@ -213,99 +189,108 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </section>
+        </div>
+    </section>
 
-        <section class="panel-card high-card">
-            <div class="section-header">
-                <h3>Gestión de comprobantes / NCF</h3>
-                <p>Registra comprobantes físicos B y electrónicos E. Si el comprobante inicia con E, el PDF podrá mostrar QR cuando completes los datos e-CF.</p>
+    <section class="card">
+        <div class="section-header">
+            <h3>Registrar comprobante / NCF</h3>
+            <p>Registra comprobantes físicos B o electrónicos E individualmente.</p>
+        </div>
+
+        <form method="post" action="{% url 'crear_comprobante_fiscal' %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Tipo de comprobante</label>
+                    <select name="tipo" required>
+                        <option value="B01">B01 - Crédito fiscal</option>
+                        <option value="B02">B02 - Consumo</option>
+                        <option value="B14">B14 - Régimen especial</option>
+                        <option value="B15" selected>B15 - Gubernamental</option>
+                        <option value="E31">E31 - e-CF crédito fiscal</option>
+                        <option value="E32">E32 - e-CF consumo</option>
+                        <option value="E44">E44 - e-CF gubernamental</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>NCF / e-NCF individual</label>
+                    <input type="text" name="ncf" placeholder="Ej: B1500000077 / E440000000001" required>
+                </div>
+
+                <div>
+                    <label>Fecha de validez</label>
+                    <input type="date" name="fecha_validez" required>
+                </div>
             </div>
 
-            <form method="post" action="{% url 'crear_comprobante_fiscal' %}">
-                {% csrf_token %}
+            <div class="form-actions">
+                <button type="submit" class="btn">Guardar comprobante</button>
+            </div>
+        </form>
+    </section>
 
-                <div class="form-grid">
-                    <div>
-                        <label>Tipo de comprobante</label>
-                        <select name="tipo" required>
-                            <option value="B01">B01 - Crédito fiscal</option>
-                            <option value="B02">B02 - Consumo</option>
-                            <option value="B14">B14 - Régimen especial</option>
-                            <option value="B15" selected>B15 - Gubernamental</option>
-                            <option value="E31">E31 - e-CF crédito fiscal</option>
-                            <option value="E32">E32 - e-CF consumo</option>
-                            <option value="E44">E44 - e-CF gubernamental</option>
-                            <option value="OTRO">Otro</option>
-                        </select>
-                    </div>
+    <section class="card">
+        <div class="section-header">
+            <h3>Crear rango de comprobantes</h3>
+            <p>Ejemplo: prefijo B15, desde 77 hasta 100 genera B1500000077 al B1500000100.</p>
+        </div>
 
-                    <div>
-                        <label>NCF / e-NCF individual</label>
-                        <input type="text" name="ncf" placeholder="Ej: B1500000077 / E310000000001" required>
-                    </div>
+        <form method="post" action="{% url 'crear_rango_ncf' %}">
+            {% csrf_token %}
 
-                    <div>
-                        <label>Fecha de validez</label>
-                        <input type="date" name="fecha_validez" required>
-                    </div>
+            <div class="form-grid">
+                <div>
+                    <label>Tipo de comprobante</label>
+                    <select name="tipo" required>
+                        <option value="B01">B01 - Crédito fiscal</option>
+                        <option value="B02">B02 - Consumo</option>
+                        <option value="B14">B14 - Régimen especial</option>
+                        <option value="B15" selected>B15 - Gubernamental</option>
+                        <option value="E31">E31 - e-CF crédito fiscal</option>
+                        <option value="E32">E32 - e-CF consumo</option>
+                        <option value="E44">E44 - e-CF gubernamental</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
                 </div>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn">Guardar comprobante</button>
+                <div>
+                    <label>Prefijo</label>
+                    <input type="text" name="prefijo" value="B15" required>
                 </div>
-            </form>
 
-            <hr style="margin: 24px 0;">
+                <div>
+                    <label>Desde</label>
+                    <input type="number" name="desde" required>
+                </div>
 
-            <div class="section-header">
-                <h3>Crear rango de comprobantes</h3>
-                <p>Ejemplo: prefijo B15, desde 77 hasta 100 genera B1500000077 al B1500000100.</p>
+                <div>
+                    <label>Hasta</label>
+                    <input type="number" name="hasta" required>
+                </div>
+
+                <div>
+                    <label>Fecha de validez</label>
+                    <input type="date" name="fecha_validez" required>
+                </div>
             </div>
 
-            <form method="post" action="{% url 'crear_rango_ncf' %}">
-                {% csrf_token %}
+            <div class="form-actions">
+                <button type="submit" class="btn">Crear rango de comprobantes</button>
+            </div>
+        </form>
+    </section>
 
-                <div class="form-grid">
-                    <div>
-                        <label>Tipo de comprobante</label>
-                        <select name="tipo" required>
-                            <option value="B01">B01 - Crédito fiscal</option>
-                            <option value="B02">B02 - Consumo</option>
-                            <option value="B14">B14 - Régimen especial</option>
-                            <option value="B15" selected>B15 - Gubernamental</option>
-                            <option value="E31">E31 - e-CF crédito fiscal</option>
-                            <option value="E32">E32 - e-CF consumo</option>
-                            <option value="E44">E44 - e-CF gubernamental</option>
-                            <option value="OTRO">Otro</option>
-                        </select>
-                    </div>
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Comprobantes / NCF registrados</h3>
+            <p>Consulta, edita o elimina comprobantes no utilizados.</p>
+        </div>
 
-                    <div>
-                        <label>Prefijo</label>
-                        <input type="text" name="prefijo" value="B15" required>
-                    </div>
-
-                    <div>
-                        <label>Desde</label>
-                        <input type="number" name="desde" required>
-                    </div>
-
-                    <div>
-                        <label>Hasta</label>
-                        <input type="number" name="hasta" required>
-                    </div>
-
-                    <div>
-                        <label>Fecha de validez</label>
-                        <input type="date" name="fecha_validez" required>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn">Crear rango de comprobantes</button>
-                </div>
-            </form>
-
+        <div class="table-responsive">
             <table>
                 <thead>
                     <tr>
@@ -314,40 +299,93 @@
                         <th>Validez</th>
                         <th>Estado</th>
                         <th>Fecha de uso</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
 
                 <tbody>
                     {% for comprobante in comprobantes %}
                     <tr>
-                        <td>{{ comprobante.ncf }}</td>
-                        <td>{{ comprobante.get_tipo_display }}</td>
-                        <td>{{ comprobante.fecha_validez|date:"d/m/Y" }}</td>
                         <td>
                             {% if comprobante.usado %}
-                                <span class="status-badge status-emitida">Usado</span>
+                                <strong>{{ comprobante.ncf }}</strong>
                             {% else %}
-                                <span class="status-badge status-borrador">Disponible</span>
+                                <form id="editar-comprobante-{{ comprobante.id }}" method="post" action="{% url 'editar_comprobante' comprobante.id %}">
+                                    {% csrf_token %}
+                                    <input type="text" name="ncf" value="{{ comprobante.ncf }}" required>
+                                </form>
                             {% endif %}
                         </td>
-                        <td>{{ comprobante.fecha_uso|date:"d/m/Y"|default:"-" }}</td>
-                    </tr>
 
+                        <td>
+                            {% if comprobante.usado %}
+                                {{ comprobante.get_tipo_display }}
+                            {% else %}
+                                <select name="tipo" form="editar-comprobante-{{ comprobante.id }}" required>
+                                    <option value="B01" {% if comprobante.tipo == "B01" %}selected{% endif %}>B01 - Crédito fiscal</option>
+                                    <option value="B02" {% if comprobante.tipo == "B02" %}selected{% endif %}>B02 - Consumo</option>
+                                    <option value="B14" {% if comprobante.tipo == "B14" %}selected{% endif %}>B14 - Régimen especial</option>
+                                    <option value="B15" {% if comprobante.tipo == "B15" %}selected{% endif %}>B15 - Gubernamental</option>
+                                    <option value="E31" {% if comprobante.tipo == "E31" %}selected{% endif %}>E31 - e-CF crédito fiscal</option>
+                                    <option value="E32" {% if comprobante.tipo == "E32" %}selected{% endif %}>E32 - e-CF consumo</option>
+                                    <option value="E44" {% if comprobante.tipo == "E44" %}selected{% endif %}>E44 - e-CF gubernamental</option>
+                                    <option value="OTRO" {% if comprobante.tipo == "OTRO" %}selected{% endif %}>Otro</option>
+                                </select>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if comprobante.usado %}
+                                {{ comprobante.fecha_validez|date:"d/m/Y" }}
+                            {% else %}
+                                <input type="date" name="fecha_validez" value="{{ comprobante.fecha_validez|date:'Y-m-d' }}" form="editar-comprobante-{{ comprobante.id }}" required>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if comprobante.usado %}
+                                <span class="status-pill status-entregado">Usado</span>
+                            {% else %}
+                                <span class="status-pill status-borrador">Disponible</span>
+                            {% endif %}
+                        </td>
+
+                        <td>{{ comprobante.fecha_uso|date:"d/m/Y"|default:"-" }}</td>
+
+                        <td>
+                            <div class="row-actions">
+                                {% if not comprobante.usado %}
+                                    <button type="submit" form="editar-comprobante-{{ comprobante.id }}" class="btn btn-small btn-secondary">
+                                        Guardar
+                                    </button>
+
+                                    <form method="post" action="{% url 'eliminar_comprobante' comprobante.id %}" onsubmit="return confirm('¿Seguro que deseas eliminar este comprobante?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-muted">No editable</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5">No hay comprobantes registrados.</td>
+                        <td colspan="6">No hay comprobantes registrados.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
-        </section>
+        </div>
+    </section>
 
-        <section class="table-card high-card">
-            <div class="section-header">
-                <h3>Facturas generadas</h3>
-                <p>Histórico de facturación emitida, anulada o en borrador.</p>
-            </div>
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Facturas generadas</h3>
+            <p>Histórico de facturación emitida, anulada o en borrador.</p>
+        </div>
 
+        <div class="table-responsive">
             <table>
                 <thead>
                     <tr>
@@ -385,36 +423,23 @@
                         </td>
 
                         <td>{{ factura.fecha_factura|date:"d/m/Y" }}</td>
-
-                        <td>
-                            {{ factura.fecha_inicio|date:"d/m/Y" }}
-                            al
-                            {{ factura.fecha_fin|date:"d/m/Y" }}
-                        </td>
-
+                        <td>{{ factura.fecha_inicio|date:"d/m/Y" }} al {{ factura.fecha_fin|date:"d/m/Y" }}</td>
                         <td>{{ factura.cantidad_conduces }}</td>
-
                         <td>{{ factura.conduce_inicial }} - {{ factura.conduce_final }}</td>
-
                         <td>RD$ {{ factura.subtotal|floatformat:2 }}</td>
                         <td>RD$ {{ factura.itbis|floatformat:2 }}</td>
                         <td><strong>RD$ {{ factura.total|floatformat:2 }}</strong></td>
 
                         <td>
-                            <span class="status-badge status-{{ factura.estado }}">
+                            <span class="status-pill status-{{ factura.estado }}">
                                 {{ factura.get_estado_display }}
                             </span>
                         </td>
 
                         <td>
                             <div class="row-actions">
-                                <a href="{% url 'pdf_factura' factura.id %}" class="btn btn-small">
-                                    PDF
-                                </a>
-
-                                <a href="{% url 'editar_factura' factura.id %}" class="btn btn-small btn-secondary">
-                                    Editar
-                                </a>
+                                <a href="{% url 'pdf_factura' factura.id %}" class="btn btn-small">PDF</a>
+                                <a href="{% url 'editar_factura' factura.id %}" class="btn btn-small btn-secondary">Editar</a>
 
                                 <a 
                                     href="{% url 'generar_relacion_general_pdf' %}?fecha_inicio={{ factura.fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ factura.fecha_fin|date:'Y-m-d' }}" 
@@ -426,22 +451,17 @@
                                 {% if factura.estado != "anulada" %}
                                 <form method="post" action="{% url 'anular_factura' factura.id %}" onsubmit="return confirm('¿Seguro que deseas anular esta factura? El NCF NO se podrá reutilizar.');">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-small btn-danger">
-                                        Anular
-                                    </button>
+                                    <button type="submit" class="btn btn-small btn-danger">Anular</button>
                                 </form>
                                 {% endif %}
 
                                 <form method="post" action="{% url 'eliminar_factura' factura.id %}" onsubmit="return confirm('¿Seguro que deseas eliminar esta factura? Esta acción no se puede deshacer y el NCF quedará disponible.');">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-small btn-danger">
-                                        Eliminar
-                                    </button>
+                                    <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
-
                     {% empty %}
                     <tr>
                         <td colspan="11">No hay facturas generadas.</td>
@@ -449,11 +469,9 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </section>
-
-    </main>
+        </div>
+    </section>
 
 </div>
 
-</body>
-</html>
+{% endblock %}
