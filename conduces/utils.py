@@ -434,3 +434,38 @@ def generar_pdf_relacion_diaria(conduces):
     c.save()
     buffer.seek(0)
     return buffer
+from django.shortcuts import redirect
+from django.utils import timezone
+
+def suscripcion_vigente(perfil):
+    if not perfil or not perfil.empresa:
+        return False
+
+    suscripcion = getattr(perfil.empresa, "suscripcion", None)
+
+    if not suscripcion:
+        return False
+
+    hoy = timezone.now().date()
+
+    if suscripcion.estado == "prueba" and suscripcion.fecha_fin >= hoy:
+        return True
+
+    if suscripcion.estado == "activa" and suscripcion.fecha_fin >= hoy:
+        return True
+
+    return False
+
+
+def suscripcion_requerida(view_func):
+    def wrapper(request, *args, **kwargs):
+        from .models import PerfilUsuario
+
+        perfil = PerfilUsuario.objects.filter(user=request.user).first()
+
+        if suscripcion_vigente(perfil):
+            return view_func(request, *args, **kwargs)
+
+        return redirect("planes")
+
+    return wrapper

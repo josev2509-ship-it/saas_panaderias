@@ -4,6 +4,7 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from urllib.parse import urlencode
 
+from .utils import suscripcion_requerida 
 from django.http import HttpResponse, FileResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import transaction
@@ -60,6 +61,7 @@ from .utils import (
     generar_pdf_conduce,
     generar_pdf_conduces_masivo,
     generar_pdf_relacion_diaria,
+    suscripcion_requerida,
 )
 
 
@@ -783,6 +785,7 @@ def cargar_menu_excel(request):
 
 @login_required(login_url="login_usuario")
 @modulo_requerido("modulo_conduces")
+@suscripcion_requerida
 def generar_conduces_automaticos(request):
     empresa = obtener_empresa(request)
     empresas = Empresa.objects.filter(id=empresa.id)
@@ -1050,6 +1053,7 @@ def visualizar_pdf_conduce(request, conduce_id):
 
 @login_required(login_url="login_usuario")
 @modulo_requerido("modulo_reportes")
+@suscripcion_requerida
 def generar_relacion_diaria_pdf(request):
     empresa = obtener_empresa(request)
     fecha = request.GET.get("fecha")
@@ -1084,6 +1088,7 @@ def generar_relacion_diaria_pdf(request):
 
 @login_required(login_url="login_usuario")
 @modulo_requerido("modulo_reportes")
+@suscripcion_requerida
 def generar_relacion_general_pdf(request):
     empresa = obtener_empresa(request)
 
@@ -1483,6 +1488,7 @@ def crear_rango_ncf(request):
 @transaction.atomic
 @login_required(login_url="login_usuario")
 @modulo_requerido("modulo_facturacion")
+@suscripcion_requerida
 def generar_factura(request):
     empresa = obtener_empresa(request)
 
