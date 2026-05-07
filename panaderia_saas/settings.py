@@ -11,9 +11,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-6=wwu*%g!tf&!b7x6_v4w%6e9hn9n@8lvhsdjf$ku#$n5$+m(%'
 
 DEBUG = True
-ALLOWED_HOSTS = ["*"]
+import os
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get(
+    "ALLOWED_HOSTS",
+    "localhost,127.0.0.1,saaspanaderias-production.up.railway.app"
+).split(",")
 
 
 # Application definition
