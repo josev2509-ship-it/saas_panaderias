@@ -60,7 +60,10 @@ ROOT_URLCONF = "panaderia_saas.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [os.path.join(BASE_DIR, "panaderia_saas", "templates")],
+        "DIRS": [
+    os.path.join(BASE_DIR, "templates"),
+    os.path.join(BASE_DIR, "panaderia_saas", "templates"),
+],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
