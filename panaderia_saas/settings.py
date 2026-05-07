@@ -19,6 +19,10 @@ ALLOWED_HOSTS = os.environ.get(
     "CSRF_TRUSTED_ORIGINS",
     "https://saaspanaderias-production.up.railway.app"
 ).split(",")
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://saaspanaderias-production.up.railway.app",
+]
     "localhost,127.0.0.1,saaspanaderias-production.up.railway.app"
 ).split(",")
 
