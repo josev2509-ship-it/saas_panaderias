@@ -15,6 +15,10 @@ import os
 
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
+    CSRF_TRUSTED_ORIGINS = os.environ.get(
+    "CSRF_TRUSTED_ORIGINS",
+    "https://saaspanaderias-production.up.railway.app"
+).split(",")
     "localhost,127.0.0.1,saaspanaderias-production.up.railway.app"
 ).split(",")
 
