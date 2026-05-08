@@ -3,6 +3,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crear cuenta | SaaS Panaderías</title>
 
     <style>
@@ -21,6 +22,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 24px;
         }
 
         .container {
@@ -115,11 +117,11 @@
             line-height: 1.6;
         }
 
-        form p {
+        .field {
             margin-bottom: 16px;
         }
 
-        form label {
+        .field label {
             display: block;
             font-weight: 700;
             margin-bottom: 7px;
@@ -127,16 +129,17 @@
             font-size: 14px;
         }
 
-        form input {
+        .field input {
             width: 100%;
             padding: 14px 16px;
             border-radius: 14px;
             border: 1px solid #d1d5db;
             font-size: 15px;
             outline: none;
+            background: #ffffff;
         }
 
-        form input:focus {
+        .field input:focus {
             border-color: #10b981;
             box-shadow: 0 0 0 4px rgba(16,185,129,0.16);
         }
@@ -153,6 +156,10 @@
             cursor: pointer;
             box-shadow: 0 12px 28px rgba(59,130,246,0.25);
             margin-top: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
         }
 
         .login-link {
@@ -181,41 +188,17 @@
         @media (max-width: 900px) {
             .container {
                 grid-template-columns: 1fr;
-                margin: 20px;
             }
 
             .left,
             .right {
                 padding: 38px;
             }
+
+            .left h1 {
+                font-size: 34px;
+            }
         }
-
-        .field {
-    margin-bottom: 16px;
-}
-
-.field label {
-    display: block;
-    font-weight: 700;
-    margin-bottom: 7px;
-    color: #374151;
-    font-size: 14px;
-}
-
-.field input {
-    width: 100%;
-    padding: 14px 16px;
-    border-radius: 14px;
-    border: 1px solid #d1d5db;
-    font-size: 15px;
-    outline: none;
-    background: #ffffff;
-}
-
-.field input:focus {
-    border-color: #10b981;
-    box-shadow: 0 0 0 4px rgba(16,185,129,0.16);
-}
     </style>
 </head>
 
@@ -235,8 +218,7 @@
         <h1>Crea tu cuenta y organiza tu operación</h1>
 
         <p>
-            Registra tu empresa y comienza a controlar conduces, centros educativos,
-            menús diarios, relaciones de entrega y reportes administrativos.
+            Regístrate y luego configura los datos de tu empresa desde el panel principal.
         </p>
 
         <div class="feature-list">
@@ -251,7 +233,7 @@
         <h2>Crear cuenta</h2>
 
         <p class="subtitle">
-            Completa tus datos para iniciar la configuración de tu empresa.
+            Completa tus datos para crear tu acceso inicial.
         </p>
 
         {% if messages %}
@@ -260,37 +242,37 @@
             {% endfor %}
         {% endif %}
 
-        <form method="post">
-    {% csrf_token %}
+        <form method="post" action="{% url 'registro' %}">
+            {% csrf_token %}
 
-    <div class="field">
-        <label>Nombre de usuario</label>
-        <input type="text" name="username" placeholder="Ej. panaderia_abinai" required>
-    </div>
+            <div class="field">
+                <label>Nombre de usuario</label>
+                <input type="text" name="username" placeholder="Ej. panaderia_abinai" required>
+            </div>
 
-    <div class="field">
-        <label>Correo electrónico</label>
-        <input type="email" name="email" placeholder="correo@empresa.com" required>
-    </div>
+            <div class="field">
+                <label>Correo electrónico</label>
+                <input type="email" name="email" placeholder="correo@empresa.com" required>
+            </div>
 
-    <div class="field">
-        <label>Contraseña</label>
-        <input type="password" name="password1" placeholder="Crea una contraseña segura" required>
-    </div>
+            <div class="field">
+                <label>Contraseña</label>
+                <input type="password" name="password1" placeholder="Crea una contraseña segura" required>
+            </div>
 
-    <div class="field">
-        <label>Confirmar contraseña</label>
-        <input type="password" name="password2" placeholder="Repite la contraseña" required>
-    </div>
+            <div class="field">
+                <label>Confirmar contraseña</label>
+                <input type="password" name="password2" placeholder="Repite la contraseña" required>
+            </div>
 
-    <button class="btn" type="submit">
-        Crear cuenta
-    </button>
-</form>
+            <button class="btn" type="submit">
+                Crear cuenta
+            </button>
+        </form>
 
         <div class="login-link">
             ¿Ya tienes una cuenta?
-            <a href="/login/">Iniciar sesión</a>
+            <a href="{% url 'login_usuario' %}">Iniciar sesión</a>
         </div>
     </div>
 
