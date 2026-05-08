@@ -27,7 +27,9 @@ CSRF_TRUSTED_ORIGINS = os.environ.get(
 ).split(",")
 
 
+# =========================================================
 # Application definition
+# =========================================================
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -55,15 +57,17 @@ MIDDLEWARE = [
 ROOT_URLCONF = "panaderia_saas.urls"
 
 
+# =========================================================
 # Templates
+# =========================================================
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [
-    os.path.join(BASE_DIR, "templates"),
-    os.path.join(BASE_DIR, "panaderia_saas", "templates"),
-],
+            os.path.join(BASE_DIR, "templates"),
+            os.path.join(BASE_DIR, "panaderia_saas", "templates"),
+        ],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -76,11 +80,12 @@ TEMPLATES = [
     },
 ]
 
-
 WSGI_APPLICATION = "panaderia_saas.wsgi.application"
 
 
+# =========================================================
 # Database
+# =========================================================
 
 DATABASES = {
     "default": dj_database_url.config(
@@ -90,7 +95,9 @@ DATABASES = {
 }
 
 
+# =========================================================
 # Password validation
+# =========================================================
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -108,7 +115,9 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+# =========================================================
 # Internationalization
+# =========================================================
 
 LANGUAGE_CODE = "es-do"
 
@@ -119,29 +128,80 @@ USE_I18N = True
 USE_TZ = True
 
 
+# =========================================================
 # Static files
+# =========================================================
 
 STATIC_URL = "static/"
+
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+STATICFILES_STORAGE = (
+    "whitenoise.storage.CompressedManifestStaticFilesStorage"
+)
 
 
+# =========================================================
 # Media files
+# =========================================================
 
 MEDIA_URL = "/media/"
+
 MEDIA_ROOT = BASE_DIR / "media"
 
 
+# =========================================================
 # Login / Logout
+# =========================================================
 
 LOGIN_URL = "/login/"
+
 LOGIN_REDIRECT_URL = "/"
+
 LOGOUT_REDIRECT_URL = "/login/"
 
 
-# Email para pruebas
-# En desarrollo, Django NO envía el correo real.
-# Lo imprime en la terminal.
+# =========================================================
+# Email SMTP Gmail / Railway
+# =========================================================
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "no-reply@saaspanaderias.com"
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend"
+)
+
+EMAIL_HOST = os.environ.get(
+    "EMAIL_HOST",
+    "smtp.gmail.com"
+)
+
+EMAIL_PORT = int(
+    os.environ.get("EMAIL_PORT", 587)
+)
+
+EMAIL_USE_TLS = os.environ.get(
+    "EMAIL_USE_TLS",
+    "True"
+) == "True"
+
+EMAIL_HOST_USER = os.environ.get(
+    "EMAIL_HOST_USER",
+    ""
+)
+
+EMAIL_HOST_PASSWORD = os.environ.get(
+    "EMAIL_HOST_PASSWORD",
+    ""
+)
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "SaaS Panaderías <adminsaas16@gmail.com>"
+)
+
+
+# =========================================================
+# Default primary key field type
+# =========================================================
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
