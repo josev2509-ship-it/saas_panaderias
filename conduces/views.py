@@ -1991,143 +1991,130 @@ def eliminar_comprobante(request, comprobante_id):
 # AUTENTICACIÓN / REGISTRO / VALIDACIÓN
 # =====================================================
 
+@transaction.atomic
 def registro(request):
-
     if request.method == "POST":
-
-        nombre_empresa = request.POST.get("nombre_empresa", "").strip()
         nombre_usuario = request.POST.get("nombre_usuario", "").strip()
         correo = request.POST.get("correo", "").strip().lower()
         password = request.POST.get("password", "")
         confirmar_password = request.POST.get("confirmar_password", "")
 
-        # ============================================
-        # VALIDACIONES
-        # ============================================
-
-        if not nombre_empresa:
-            messages.error(request, "Debe indicar el nombre de la empresa.")
-            return redirect("registro")
-
+        # Compatibilidad por si el formulario usa otros nombres
         if not nombre_usuario:
-            messages.error(request, "Debe indicar el nombre del usuario.")
-            return redirect("registro")
+            nombre_usuario = request.POST.get("nombre", "").strip()
 
         if not correo:
-            messages.error(request, "Debe indicar un correo.")
+            correo = request.POST.get("email", "").strip().lower()
+
+        if not password:
+            password = request.POST.get("password1", "")
+
+        if not confirmar_password:
+            confirmar_password = request.POST.get("password2", "")
+
+        if not nombre_usuario or not correo or not password:
+            messages.error(request, "Debe completar todos los campos obligatorios.")
             return redirect("registro")
 
         if password != confirmar_password:
             messages.error(request, "Las contraseñas no coinciden.")
             return redirect("registro")
 
-        if User.objects.filter(username=correo).exists():
+        usuario_existente = User.objects.filter(username=correo).first()
 
-            usuario_existente = User.objects.get(username=correo)
-
-            # ============================================
-            # SI EXISTE PERO NO ESTÁ ACTIVO
-            # ============================================
-
+        if usuario_existente:
             if not usuario_existente.is_active:
-
                 request.session["usuario_pendiente_id"] = usuario_existente.id
 
                 try:
                     enviar_codigo_correo(usuario_existente, tipo="correo")
-
                     messages.warning(
                         request,
-                        "Ese correo ya inició registro pero aún no ha sido verificado. Te reenviamos el código."
+                        "Este correo ya inició registro. Te reenviamos el código de validación."
                     )
-
                 except Exception as e:
                     print("ERROR REENVIO CODIGO:", str(e))
-
-                    messages.error(
-                        request,
-                        "No fue posible reenviar el código de validación."
-                    )
+                    messages.error(request, "No fue posible reenviar el código.")
 
                 return redirect("verificar_correo")
 
-            # ============================================
-            # SI YA ESTÁ REGISTRADO COMPLETO
-            # ============================================
-
-            messages.error(
-                request,
-                "Ya existe una cuenta registrada con este correo."
-            )
-
+            messages.error(request, "Ya existe una cuenta registrada con este correo.")
             return redirect("registro")
 
-        # ============================================
-        # CREAR EMPRESA
-        # ============================================
-
-        empresa = Empresa.objects.create(
-            nombre=nombre_empresa
-        )
-
-        # ============================================
-        # CREAR USUARIO
-        # ============================================
-
-        user = User.objects.create_user(
-            username=correo,
-            email=correo,
-            password=password,
-            first_name=nombre_usuario,
-            is_active=False
-        )
-
-        # ============================================
-        # PERFIL
-        # ============================================
-
-        PerfilUsuario.objects.create(
-            user=user,
-            empresa=empresa,
-            rol="Administrador",
-            activo=True
-        )
-
-        # ============================================
-        # GUARDAR EN SESIÓN
-        # ============================================
-
-        request.session["usuario_pendiente_id"] = user.id
-
-        # ============================================
-        # ENVIAR CÓDIGO
-        # ============================================
-
         try:
+            plan_basico = Plan.objects.filter(nombre__iexact="Básico").first()
+
+            if not plan_basico:
+                plan_basico = Plan.objects.create(
+                    nombre="Básico",
+                    precio=1500,
+                    limite_conduces=500,
+                    limite_usuarios=3,
+                    almacenamiento_gb=1
+                )
+
+            empresa_saas = EmpresaSaaS.objects.create(
+                nombre="Mi empresa",
+                rnc="",
+                correo=correo,
+                activa=True
+            )
+
+            user = User.objects.create_user(
+                username=correo,
+                email=correo,
+                password=password,
+                first_name=nombre_usuario,
+                is_active=False
+            )
+
+            Empresa.objects.create(
+                usuario=user,
+                nombre="Mi empresa",
+                rnc="",
+                telefono="",
+                correo=correo,
+                numero_inicial_conduce="0001",
+            )
+
+            PerfilUsuario.objects.create(
+                user=user,
+                empresa=empresa_saas,
+                rol="admin_empresa",
+                correo_validado=False,
+                activo=True
+            )
+
+            Suscripcion.objects.create(
+                empresa=empresa_saas,
+                plan=plan_basico,
+                estado="prueba",
+                fecha_inicio=timezone.now().date(),
+                fecha_fin=timezone.now().date() + timedelta(days=15),
+                en_prueba=True
+            )
 
             enviar_codigo_correo(user, tipo="correo")
 
+            request.session["usuario_pendiente_id"] = user.id
+
             messages.success(
                 request,
-                "Cuenta creada correctamente. Revisa tu correo para validar la cuenta."
+                "Cuenta creada correctamente. Te enviamos un código de validación al correo."
             )
 
             return redirect("verificar_correo")
 
         except Exception as e:
+            transaction.set_rollback(True)
+            print("ERROR REGISTRO:", str(e))
 
-            print("ERROR ENVIO REGISTRO:", str(e))
-
-            # ============================================
-            # SI FALLA EL ENVÍO NO SE BORRA
-            # ============================================
-
-            messages.warning(
+            messages.error(
                 request,
-                "La cuenta fue creada, pero no fue posible enviar el correo de validación. Puedes reenviar el código."
+                "No fue posible completar el registro. Intente nuevamente."
             )
 
-            return redirect("verificar_correo")
+            return redirect("registro")
 
     return render(request, "registro.html")
 
