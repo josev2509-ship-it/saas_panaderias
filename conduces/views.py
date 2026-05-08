@@ -1991,28 +1991,68 @@ def eliminar_comprobante(request, comprobante_id):
 # AUTENTICACIÓN / REGISTRO / VALIDACIÓN
 # =====================================================
 
+def enviar_codigo_correo(user, tipo="correo"):
+    CodigoValidacion.objects.filter(
+        user=user,
+        tipo=tipo,
+        usado=False
+    ).update(usado=True)
+
+    codigo = CodigoValidacion.objects.create(
+        user=user,
+        tipo=tipo
+    )
+
+    asunto = "Código de validación - SaaS Panaderías"
+
+    mensaje = f"""
+Hola {user.first_name or user.email},
+
+Tu código de validación es:
+
+{codigo.codigo}
+
+Este código vence en 15 minutos.
+
+Si no solicitaste este código, puedes ignorar este mensaje.
+"""
+
+    send_mail(
+        asunto,
+        mensaje,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False
+    )
+
+    return codigo
+
+
 @transaction.atomic
 def registro(request):
     if request.method == "POST":
-        nombre_usuario = request.POST.get("nombre_usuario", "").strip()
-        correo = request.POST.get("correo", "").strip().lower()
-        password = request.POST.get("password", "")
-        confirmar_password = request.POST.get("confirmar_password", "")
+        nombre_usuario = (
+            request.POST.get("username", "") or
+            request.POST.get("nombre_usuario", "") or
+            request.POST.get("nombre", "")
+        ).strip()
 
-        # Compatibilidad por si el formulario usa otros nombres
-        if not nombre_usuario:
-            nombre_usuario = request.POST.get("nombre", "").strip()
+        correo = (
+            request.POST.get("email", "") or
+            request.POST.get("correo", "")
+        ).strip().lower()
 
-        if not correo:
-            correo = request.POST.get("email", "").strip().lower()
+        password = (
+            request.POST.get("password1", "") or
+            request.POST.get("password", "")
+        )
 
-        if not password:
-            password = request.POST.get("password1", "")
+        confirmar_password = (
+            request.POST.get("password2", "") or
+            request.POST.get("confirmar_password", "")
+        )
 
-        if not confirmar_password:
-            confirmar_password = request.POST.get("password2", "")
-
-        if not nombre_usuario or not correo or not password:
+        if not nombre_usuario or not correo or not password or not confirmar_password:
             messages.error(request, "Debe completar todos los campos obligatorios.")
             return redirect("registro")
 
@@ -2117,6 +2157,128 @@ def registro(request):
             return redirect("registro")
 
     return render(request, "registro.html")
+
+
+def verificar_correo(request):
+    user_id = request.session.get("usuario_pendiente_id")
+
+    if not user_id:
+        messages.error(request, "No hay usuario pendiente de validación.")
+        return redirect("login_usuario")
+
+    user = get_object_or_404(User, id=user_id)
+
+    if request.method == "POST":
+        codigo_ingresado = request.POST.get("codigo", "").strip()
+
+        codigo = CodigoValidacion.objects.filter(
+            user=user,
+            tipo="correo",
+            codigo=codigo_ingresado,
+            usado=False
+        ).order_by("-creado_en").first()
+
+        if not codigo or not codigo.esta_vigente():
+            messages.error(request, "Código inválido o vencido.")
+            return redirect("verificar_correo")
+
+        codigo.usado = True
+        codigo.save()
+
+        user.is_active = True
+        user.save()
+
+        perfil = PerfilUsuario.objects.filter(user=user).first()
+
+        if perfil:
+            perfil.correo_validado = True
+            perfil.save()
+            request.session["empresa_id"] = perfil.empresa.id if perfil.empresa else None
+
+        login(request, user)
+        request.session.pop("usuario_pendiente_id", None)
+
+        messages.success(request, "Correo validado correctamente. Bienvenido.")
+        return redirect("inicio")
+
+    return render(request, "verificar_correo.html", {"correo": user.email})
+
+
+def reenviar_codigo_correo(request):
+    user_id = request.session.get("usuario_pendiente_id")
+
+    if not user_id:
+        messages.error(request, "No hay usuario pendiente de validación.")
+        return redirect("login_usuario")
+
+    user = get_object_or_404(User, id=user_id)
+
+    try:
+        enviar_codigo_correo(user, tipo="correo")
+        messages.success(request, "Te enviamos un nuevo código de validación.")
+    except Exception as e:
+        print("ERROR REENVIO CODIGO:", str(e))
+        messages.error(request, "No fue posible reenviar el código. Intente nuevamente.")
+
+    return redirect("verificar_correo")
+
+
+def login_usuario(request):
+    if request.method == "POST":
+        correo = (
+            request.POST.get("correo", "") or
+            request.POST.get("username", "") or
+            request.POST.get("email", "")
+        ).strip().lower()
+
+        password = request.POST.get("password", "")
+        remember = request.POST.get("remember_me")
+
+        user = authenticate(request, username=correo, password=password)
+
+        if user is None:
+            messages.error(request, "Correo o contraseña incorrectos.")
+            return redirect("login_usuario")
+
+        if not user.is_active:
+            request.session["usuario_pendiente_id"] = user.id
+
+            try:
+                enviar_codigo_correo(user, tipo="correo")
+                messages.warning(
+                    request,
+                    "Debes validar tu correo. Te enviamos un nuevo código."
+                )
+            except Exception as e:
+                print("ERROR LOGIN ENVIO CODIGO:", str(e))
+                messages.warning(
+                    request,
+                    "Tu cuenta está pendiente de validación, pero no fue posible reenviar el código."
+                )
+
+            return redirect("verificar_correo")
+
+        perfil = PerfilUsuario.objects.filter(user=user).first()
+
+        if not perfil or not perfil.activo:
+            messages.error(request, "Usuario inactivo. Contacte al administrador.")
+            return redirect("login_usuario")
+
+        login(request, user)
+
+        if not remember:
+            request.session.set_expiry(0)
+
+        request.session["empresa_id"] = perfil.empresa.id if perfil.empresa else None
+
+        return redirect("inicio")
+
+    return render(request, "login.html")
+
+
+def logout_usuario(request):
+    logout(request)
+    return redirect("login_usuario")
 
 @login_required(login_url="login_usuario")
 def mi_empresa(request):
