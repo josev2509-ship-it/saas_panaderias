@@ -136,9 +136,7 @@ STATIC_URL = "static/"
 
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
-STATICFILES_STORAGE = (
-    "whitenoise.storage.CompressedManifestStaticFilesStorage"
-)
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 
 # =========================================================
@@ -162,42 +160,24 @@ LOGOUT_REDIRECT_URL = "/login/"
 
 
 # =========================================================
-# Email SMTP Gmail / Railway
+# Email SMTP Resend / Railway
 # =========================================================
 
-EMAIL_BACKEND = os.environ.get(
-    "EMAIL_BACKEND",
-    "django.core.mail.backends.console.EmailBackend"
-)
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
-EMAIL_HOST = os.environ.get(
-    "EMAIL_HOST",
-    "smtp.gmail.com"
-)
+EMAIL_HOST = "smtp.resend.com"
 
-EMAIL_PORT = int(
-    os.environ.get("EMAIL_PORT", 587)
-)
+EMAIL_PORT = 587
 
-EMAIL_USE_TLS = os.environ.get(
-    "EMAIL_USE_TLS",
-    "True"
-) == "True"
+EMAIL_USE_TLS = True
 
-EMAIL_HOST_USER = os.environ.get(
-    "EMAIL_HOST_USER",
-    ""
-)
+EMAIL_HOST_USER = "resend"
 
-EMAIL_HOST_PASSWORD = os.environ.get(
-    "EMAIL_HOST_PASSWORD",
-    ""
-)
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 
-DEFAULT_FROM_EMAIL = os.environ.get(
-    "DEFAULT_FROM_EMAIL",
-    "SaaS Panaderías <adminsaas16@gmail.com>"
-)
+DEFAULT_FROM_EMAIL = "SaaS Panaderías <onboarding@resend.dev>"
+
+EMAIL_TIMEOUT = 20
 
 
 # =========================================================
@@ -205,9 +185,11 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 # =========================================================
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-# Mostrar errores SMTP en Railway
 
-EMAIL_TIMEOUT = 20
+
+# =========================================================
+# Logging para Railway
+# =========================================================
 
 LOGGING = {
     "version": 1,
@@ -220,7 +202,7 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
     },
 }
