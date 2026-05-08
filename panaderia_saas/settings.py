@@ -205,3 +205,22 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 # =========================================================
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# Mostrar errores SMTP en Railway
+
+EMAIL_TIMEOUT = 20
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+        },
+    },
+}
