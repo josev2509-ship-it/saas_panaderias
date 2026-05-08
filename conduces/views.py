@@ -1992,6 +1992,9 @@ def eliminar_comprobante(request, comprobante_id):
 # =====================================================
 
 def enviar_codigo_correo(user, tipo="correo"):
+    import urllib.request
+    import urllib.error
+
     CodigoValidacion.objects.filter(
         user=user,
         tipo=tipo,
@@ -2003,29 +2006,57 @@ def enviar_codigo_correo(user, tipo="correo"):
         tipo=tipo
     )
 
+    api_key = os.environ.get("RESEND_API_KEY") or os.environ.get("EMAIL_HOST_PASSWORD")
+
+    if not api_key:
+        raise Exception("No existe RESEND_API_KEY configurada en Railway.")
+
     asunto = "Código de validación - SaaS Panaderías"
 
-    mensaje = f"""
-Hola {user.first_name or user.email},
+    mensaje_html = f"""
+    <div style="font-family: Arial, sans-serif; color:#0f172a; padding:24px;">
+        <h2>SaaS Panaderías</h2>
+        <p>Hola {user.first_name or user.email},</p>
+        <p>Tu código de validación es:</p>
+        <h1 style="letter-spacing:4px; color:#2563eb;">{codigo.codigo}</h1>
+        <p>Este código vence en 15 minutos.</p>
+        <p>Si no solicitaste este código, puedes ignorar este mensaje.</p>
+    </div>
+    """
 
-Tu código de validación es:
+    payload = {
+        "from": "SaaS Panaderías <onboarding@resend.dev>",
+        "to": [user.email],
+        "subject": asunto,
+        "html": mensaje_html,
+    }
 
-{codigo.codigo}
+    data = json.dumps(payload).encode("utf-8")
 
-Este código vence en 15 minutos.
-
-Si no solicitaste este código, puedes ignorar este mensaje.
-"""
-
-    send_mail(
-        asunto,
-        mensaje,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=False
+    request_api = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=data,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
     )
 
-    return codigo
+    try:
+        with urllib.request.urlopen(request_api, timeout=20) as response:
+            respuesta = response.read().decode("utf-8")
+            print("RESEND OK:", respuesta)
+            return codigo
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        print("RESEND HTTP ERROR:", error_body)
+        raise Exception(error_body)
+
+    except Exception as e:
+        print("RESEND ERROR:", str(e))
+        raise
 
 
 @transaction.atomic
