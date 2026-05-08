@@ -1991,210 +1991,145 @@ def eliminar_comprobante(request, comprobante_id):
 # AUTENTICACIÓN / REGISTRO / VALIDACIÓN
 # =====================================================
 
-@transaction.atomic
 def registro(request):
 
     if request.method == "POST":
 
-        nombre = request.POST.get("nombre", "").strip()
-        apellido = request.POST.get("apellido", "").strip()
-
+        nombre_empresa = request.POST.get("nombre_empresa", "").strip()
+        nombre_usuario = request.POST.get("nombre_usuario", "").strip()
         correo = request.POST.get("correo", "").strip().lower()
-
         password = request.POST.get("password", "")
         confirmar_password = request.POST.get("confirmar_password", "")
 
-        empresa_nombre = request.POST.get("empresa_nombre", "").strip()
-        empresa_rnc = request.POST.get("empresa_rnc", "").strip()
-        empresa_telefono = request.POST.get("empresa_telefono", "").strip()
+        # ============================================
+        # VALIDACIONES
+        # ============================================
 
-        # =====================================================
-        # Compatibilidad con formularios anteriores
-        # =====================================================
+        if not nombre_empresa:
+            messages.error(request, "Debe indicar el nombre de la empresa.")
+            return redirect("registro")
+
+        if not nombre_usuario:
+            messages.error(request, "Debe indicar el nombre del usuario.")
+            return redirect("registro")
 
         if not correo:
-            correo = request.POST.get("email", "").strip().lower()
-
-        if not password:
-            password = request.POST.get("password1", "")
-
-        if not confirmar_password:
-            confirmar_password = request.POST.get("password2", "")
-
-        if not nombre:
-            nombre = request.POST.get("username", "").strip()
-
-        if not empresa_nombre:
-            empresa_nombre = "Mi empresa"
-
-        # =====================================================
-        # Validaciones
-        # =====================================================
-
-        if not nombre or not correo or not password:
-            messages.error(
-                request,
-                "Debe completar los campos obligatorios."
-            )
+            messages.error(request, "Debe indicar un correo.")
             return redirect("registro")
 
         if password != confirmar_password:
-            messages.error(
-                request,
-                "Las contraseñas no coinciden."
-            )
+            messages.error(request, "Las contraseñas no coinciden.")
             return redirect("registro")
 
-        if (
-            User.objects.filter(username=correo).exists()
-            or
-            User.objects.filter(email=correo).exists()
-        ):
+        if User.objects.filter(username=correo).exists():
+
+            usuario_existente = User.objects.get(username=correo)
+
+            # ============================================
+            # SI EXISTE PERO NO ESTÁ ACTIVO
+            # ============================================
+
+            if not usuario_existente.is_active:
+
+                request.session["usuario_pendiente_id"] = usuario_existente.id
+
+                try:
+                    enviar_codigo_correo(usuario_existente, tipo="correo")
+
+                    messages.warning(
+                        request,
+                        "Ese correo ya inició registro pero aún no ha sido verificado. Te reenviamos el código."
+                    )
+
+                except Exception as e:
+                    print("ERROR REENVIO CODIGO:", str(e))
+
+                    messages.error(
+                        request,
+                        "No fue posible reenviar el código de validación."
+                    )
+
+                return redirect("verificar_correo")
+
+            # ============================================
+            # SI YA ESTÁ REGISTRADO COMPLETO
+            # ============================================
+
             messages.error(
                 request,
-                "Ya existe una cuenta registrada con ese correo."
+                "Ya existe una cuenta registrada con este correo."
             )
+
             return redirect("registro")
+
+        # ============================================
+        # CREAR EMPRESA
+        # ============================================
+
+        empresa = Empresa.objects.create(
+            nombre=nombre_empresa
+        )
+
+        # ============================================
+        # CREAR USUARIO
+        # ============================================
+
+        user = User.objects.create_user(
+            username=correo,
+            email=correo,
+            password=password,
+            first_name=nombre_usuario,
+            is_active=False
+        )
+
+        # ============================================
+        # PERFIL
+        # ============================================
+
+        PerfilUsuario.objects.create(
+            user=user,
+            empresa=empresa,
+            rol="Administrador",
+            activo=True
+        )
+
+        # ============================================
+        # GUARDAR EN SESIÓN
+        # ============================================
+
+        request.session["usuario_pendiente_id"] = user.id
+
+        # ============================================
+        # ENVIAR CÓDIGO
+        # ============================================
 
         try:
 
-            # =====================================================
-            # PLAN BÁSICO
-            # =====================================================
-
-            plan_basico = Plan.objects.filter(
-                nombre__iexact="Básico"
-            ).first()
-
-            if not plan_basico:
-
-                plan_basico = Plan.objects.create(
-                    nombre="Básico",
-                    precio=1500,
-                    limite_conduces=500,
-                    limite_usuarios=3,
-                    almacenamiento_gb=1
-                )
-
-            # =====================================================
-            # EMPRESA SAAS
-            # =====================================================
-
-            empresa_saas = EmpresaSaaS.objects.create(
-                nombre=empresa_nombre,
-                rnc=empresa_rnc or "",
-                correo=correo,
-                activa=True
-            )
-
-            # =====================================================
-            # USUARIO
-            # =====================================================
-
-            user = User.objects.create(
-                username=correo,
-                email=correo,
-                first_name=nombre,
-                last_name=apellido,
-                password=make_password(password),
-
-                # IMPORTANTE:
-                # EL USUARIO INICIA INACTIVO
-                is_active=False
-            )
-
-            # =====================================================
-            # EMPRESA OPERATIVA
-            # =====================================================
-
-            Empresa.objects.create(
-                usuario=user,
-                nombre=empresa_nombre,
-                rnc=empresa_rnc or "",
-                telefono=empresa_telefono or "",
-                correo=correo,
-                numero_inicial_conduce="0001",
-            )
-
-            # =====================================================
-            # PERFIL
-            # =====================================================
-
-            PerfilUsuario.objects.create(
-                user=user,
-                empresa=empresa_saas,
-                rol="admin_empresa",
-                correo_validado=False,
-                activo=True
-            )
-
-            # =====================================================
-            # SUSCRIPCIÓN
-            # =====================================================
-
-            Suscripcion.objects.create(
-                empresa=empresa_saas,
-                plan=plan_basico,
-                estado="prueba",
-
-                fecha_inicio=timezone.now().date(),
-
-                fecha_fin=(
-                    timezone.now().date()
-                    + timedelta(days=15)
-                ),
-
-                en_prueba=True
-            )
-
-            # =====================================================
-            # ENVÍO DEL CÓDIGO
-            # =====================================================
-
-            # SI FALLA AQUÍ:
-            # TODA LA TRANSACCIÓN SE REVERSA
-
-            enviar_codigo_correo(
-                user,
-                tipo="correo"
-            )
-
-            # =====================================================
-            # SESSION
-            # =====================================================
-
-            request.session["usuario_pendiente_id"] = user.id
+            enviar_codigo_correo(user, tipo="correo")
 
             messages.success(
                 request,
-                "Cuenta creada correctamente. "
-                "Te enviamos un código de validación al correo."
+                "Cuenta creada correctamente. Revisa tu correo para validar la cuenta."
             )
 
             return redirect("verificar_correo")
 
         except Exception as e:
 
-            # =====================================================
-            # REVERSIÓN AUTOMÁTICA
-            # =====================================================
+            print("ERROR ENVIO REGISTRO:", str(e))
 
-            transaction.set_rollback(True)
+            # ============================================
+            # SI FALLA EL ENVÍO NO SE BORRA
+            # ============================================
 
-            print("ERROR REGISTRO:", str(e))
-
-            messages.error(
+            messages.warning(
                 request,
-                "No fue posible enviar el correo de validación. "
-                "Intente nuevamente."
+                "La cuenta fue creada, pero no fue posible enviar el correo de validación. Puedes reenviar el código."
             )
 
-            return redirect("registro")
+            return redirect("verificar_correo")
 
-    return render(
-        request,
-        "registro.html"
-    )
+    return render(request, "registro.html")
 
 @login_required(login_url="login_usuario")
 def mi_empresa(request):
