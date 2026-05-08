@@ -31,6 +31,10 @@ from reportlab.lib.utils import ImageReader
 
 from django.contrib.auth.models import User
 from django.contrib.auth import login, authenticate, logout
+
+import os
+import json
+
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
