@@ -34,6 +34,8 @@ from django.contrib.auth import login, authenticate, logout
 
 import os
 import json
+import urllib.request
+import urllib.error
 
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
@@ -1996,9 +1998,6 @@ def eliminar_comprobante(request, comprobante_id):
 # =====================================================
 
 def enviar_codigo_correo(user, tipo="correo"):
-    import urllib.request
-    import urllib.error
-
     CodigoValidacion.objects.filter(
         user=user,
         tipo=tipo,
@@ -2010,29 +2009,29 @@ def enviar_codigo_correo(user, tipo="correo"):
         tipo=tipo
     )
 
-    api_key = os.environ.get("RESEND_API_KEY") or os.environ.get("EMAIL_HOST_PASSWORD")
+    api_key = os.environ.get("RESEND_API_KEY")
+
+    print("========== RESEND DEBUG ==========")
+    print("API KEY:", "EXISTE" if api_key else "NO EXISTE")
+    print("EMAIL:", user.email)
+    print("CODIGO:", codigo.codigo)
 
     if not api_key:
-        raise Exception("No existe RESEND_API_KEY configurada en Railway.")
-
-    asunto = "Código de validación - SaaS Panaderías"
-
-    mensaje_html = f"""
-    <div style="font-family: Arial, sans-serif; color:#0f172a; padding:24px;">
-        <h2>SaaS Panaderías</h2>
-        <p>Hola {user.first_name or user.email},</p>
-        <p>Tu código de validación es:</p>
-        <h1 style="letter-spacing:4px; color:#2563eb;">{codigo.codigo}</h1>
-        <p>Este código vence en 15 minutos.</p>
-        <p>Si no solicitaste este código, puedes ignorar este mensaje.</p>
-    </div>
-    """
+        raise Exception("RESEND_API_KEY no configurada en Railway.")
 
     payload = {
-        "from": "SaaS Panaderías <onboarding@resend.dev>",
+        "from": "onboarding@resend.dev",
         "to": [user.email],
-        "subject": asunto,
-        "html": mensaje_html,
+        "subject": "Código de verificación - SaaS Panaderías",
+        "html": f"""
+            <div style="font-family:Arial,sans-serif;padding:24px;color:#0f172a;">
+                <h2>SaaS Panaderías</h2>
+                <p>Hola {user.first_name or user.email},</p>
+                <p>Tu código de validación es:</p>
+                <h1 style="letter-spacing:4px;color:#2563eb;">{codigo.codigo}</h1>
+                <p>Este código vence en 15 minutos.</p>
+            </div>
+        """
     }
 
     data = json.dumps(payload).encode("utf-8")
@@ -2050,17 +2049,20 @@ def enviar_codigo_correo(user, tipo="correo"):
     try:
         with urllib.request.urlopen(request_api, timeout=20) as response:
             respuesta = response.read().decode("utf-8")
-            print("RESEND OK:", respuesta)
+            print("========== RESEND OK ==========")
+            print(respuesta)
             return codigo
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8")
-        print("RESEND HTTP ERROR:", error_body)
+        print("========== RESEND HTTP ERROR ==========")
+        print(error_body)
         raise Exception(error_body)
 
     except Exception as e:
-        print("RESEND ERROR:", str(e))
-        raise
+        print("========== RESEND GENERAL ERROR ==========")
+        print(str(e))
+        raise Exception(str(e))
 
 
 @transaction.atomic
@@ -2238,80 +2240,24 @@ def verificar_correo(request):
 
     return render(request, "verificar_correo.html", {"correo": user.email})
 
-def enviar_codigo_correo(user, tipo="correo"):
 
-    CodigoValidacion.objects.filter(
-        user=user,
-        tipo=tipo,
-        usado=False
-    ).update(usado=True)
+def reenviar_codigo_correo(request):
+    user_id = request.session.get("usuario_pendiente_id")
 
-    codigo = CodigoValidacion.objects.create(
-        user=user,
-        tipo=tipo
-    )
+    if not user_id:
+        messages.error(request, "No hay usuario pendiente de validación.")
+        return redirect("login_usuario")
 
-    api_key = os.environ.get("RESEND_API_KEY")
-
-    print("========== RESEND DEBUG ==========")
-    print("API KEY:", api_key)
-    print("EMAIL:", user.email)
-    print("CODIGO:", codigo.codigo)
-
-    if not api_key:
-        raise Exception("RESEND_API_KEY no configurada")
-
-    payload = {
-        "from": "onboarding@resend.dev",
-        "to": [user.email],
-        "subject": "Código de verificación - SaaS Panaderías",
-        "html": f"""
-            <div style='font-family:Arial;padding:20px'>
-                <h2>SaaS Panaderías</h2>
-                <p>Tu código es:</p>
-                <h1>{codigo.codigo}</h1>
-                <p>Válido por 15 minutos.</p>
-            </div>
-        """
-    }
-
-    data = json.dumps(payload).encode("utf-8")
-
-    request_api = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=data,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-    )
+    user = get_object_or_404(User, id=user_id)
 
     try:
-
-        with urllib.request.urlopen(request_api) as response:
-            respuesta = response.read().decode("utf-8")
-
-            print("========== RESEND OK ==========")
-            print(respuesta)
-
-    except urllib.error.HTTPError as e:
-
-        error_body = e.read().decode()
-
-        print("========== RESEND HTTP ERROR ==========")
-        print(error_body)
-
-        raise Exception(error_body)
-
+        enviar_codigo_correo(user, tipo="correo")
+        messages.success(request, "Te enviamos un nuevo código de validación.")
     except Exception as e:
+        print("ERROR REENVIO CODIGO:", str(e))
+        messages.error(request, "No fue posible reenviar el código.")
 
-        print("========== RESEND GENERAL ERROR ==========")
-        print(str(e))
-
-        raise Exception(str(e))
-
-    return codigo
+    return redirect("verificar_correo")
 
 
 def login_usuario(request):
