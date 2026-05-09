@@ -1996,8 +1996,12 @@ def eliminar_comprobante(request, comprobante_id):
 # =====================================================
 # AUTENTICACIÓN / REGISTRO / VALIDACIÓN
 # =====================================================
+from django.core.mail import send_mail
+from django.conf import settings
+
 
 def enviar_codigo_correo(user, tipo="correo"):
+
     CodigoValidacion.objects.filter(
         user=user,
         tipo=tipo,
@@ -2009,60 +2013,31 @@ def enviar_codigo_correo(user, tipo="correo"):
         tipo=tipo
     )
 
-    api_key = os.environ.get("RESEND_API_KEY")
+    asunto = "Código de validación - SaaS Panaderías"
 
-    print("========== RESEND DEBUG ==========")
-    print("API KEY:", "EXISTE" if api_key else "NO EXISTE")
-    print("EMAIL:", user.email)
-    print("CODIGO:", codigo.codigo)
+    mensaje = f"""
+Hola {user.username},
 
-    if not api_key:
-        raise Exception("RESEND_API_KEY no configurada en Railway.")
+Tu código de validación es:
 
-    payload = {
-        "from": "onboarding@resend.dev",
-        "to": [user.email],
-        "subject": "Código de verificación - SaaS Panaderías",
-        "html": f"""
-            <div style="font-family:Arial,sans-serif;padding:24px;color:#0f172a;">
-                <h2>SaaS Panaderías</h2>
-                <p>Hola {user.first_name or user.email},</p>
-                <p>Tu código de validación es:</p>
-                <h1 style="letter-spacing:4px;color:#2563eb;">{codigo.codigo}</h1>
-                <p>Este código vence en 15 minutos.</p>
-            </div>
-        """
-    }
+{codigo.codigo}
 
-    data = json.dumps(payload).encode("utf-8")
+Este código vence en 15 minutos.
 
-    request_api = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=data,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
+SaaS Panaderías
+"""
+
+    send_mail(
+        asunto,
+        mensaje,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
     )
 
-    try:
-        with urllib.request.urlopen(request_api, timeout=20) as response:
-            respuesta = response.read().decode("utf-8")
-            print("========== RESEND OK ==========")
-            print(respuesta)
-            return codigo
+    print("EMAIL ENVIADO CORRECTAMENTE:", user.email)
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8")
-        print("========== RESEND HTTP ERROR ==========")
-        print(error_body)
-        raise Exception(error_body)
-
-    except Exception as e:
-        print("========== RESEND GENERAL ERROR ==========")
-        print(str(e))
-        raise Exception(str(e))
+    return codigo
 
 
 @transaction.atomic
