@@ -2238,24 +2238,80 @@ def verificar_correo(request):
 
     return render(request, "verificar_correo.html", {"correo": user.email})
 
+def enviar_codigo_correo(user, tipo="correo"):
 
-def reenviar_codigo_correo(request):
-    user_id = request.session.get("usuario_pendiente_id")
+    CodigoValidacion.objects.filter(
+        user=user,
+        tipo=tipo,
+        usado=False
+    ).update(usado=True)
 
-    if not user_id:
-        messages.error(request, "No hay usuario pendiente de validación.")
-        return redirect("login_usuario")
+    codigo = CodigoValidacion.objects.create(
+        user=user,
+        tipo=tipo
+    )
 
-    user = get_object_or_404(User, id=user_id)
+    api_key = os.environ.get("RESEND_API_KEY")
+
+    print("========== RESEND DEBUG ==========")
+    print("API KEY:", api_key)
+    print("EMAIL:", user.email)
+    print("CODIGO:", codigo.codigo)
+
+    if not api_key:
+        raise Exception("RESEND_API_KEY no configurada")
+
+    payload = {
+        "from": "onboarding@resend.dev",
+        "to": [user.email],
+        "subject": "Código de verificación - SaaS Panaderías",
+        "html": f"""
+            <div style='font-family:Arial;padding:20px'>
+                <h2>SaaS Panaderías</h2>
+                <p>Tu código es:</p>
+                <h1>{codigo.codigo}</h1>
+                <p>Válido por 15 minutos.</p>
+            </div>
+        """
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+
+    request_api = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=data,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+    )
 
     try:
-        enviar_codigo_correo(user, tipo="correo")
-        messages.success(request, "Te enviamos un nuevo código de validación.")
-    except Exception as e:
-        print("ERROR REENVIO CODIGO:", str(e))
-        messages.error(request, "No fue posible reenviar el código. Intente nuevamente.")
 
-    return redirect("verificar_correo")
+        with urllib.request.urlopen(request_api) as response:
+            respuesta = response.read().decode("utf-8")
+
+            print("========== RESEND OK ==========")
+            print(respuesta)
+
+    except urllib.error.HTTPError as e:
+
+        error_body = e.read().decode()
+
+        print("========== RESEND HTTP ERROR ==========")
+        print(error_body)
+
+        raise Exception(error_body)
+
+    except Exception as e:
+
+        print("========== RESEND GENERAL ERROR ==========")
+        print(str(e))
+
+        raise Exception(str(e))
+
+    return codigo
 
 
 def login_usuario(request):
