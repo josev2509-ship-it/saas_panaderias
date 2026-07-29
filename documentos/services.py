@@ -6,11 +6,14 @@ from django.db import transaction
 
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
-from comercial.models import Cliente
+from comercial.models import Cliente, Pedido
 
 from .models import Documento, extension_por_contenido
 
-MODELOS_PERMITIDOS = {("comercial", "cliente"): Cliente}
+MODELOS_PERMITIDOS = {
+    ("comercial", "cliente"): Cliente,
+    ("comercial", "pedido"): Pedido,
+}
 
 
 def resolver_objeto_permitido(*, empresa, app_label, model, object_id):

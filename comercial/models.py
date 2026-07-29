@@ -7,6 +7,7 @@ from django.db import models
 from django.db.models import Q
 
 from conduces.models import Empresa
+from inventario.models import ProductoInventario
 
 
 class Cliente(models.Model):
@@ -165,3 +166,165 @@ class ContactoCliente(models.Model):
 
     def __str__(self):
         return f"{self.nombre} - {self.cliente.nombre_comercial}"
+
+
+class SecuenciaDocumento(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    tipo = models.CharField(max_length=30)
+    periodo = models.PositiveIntegerField()
+    ultimo_numero = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "tipo", "periodo"], name="com_secuencia_empresa_tipo_periodo_uniq")
+        ]
+
+
+class Pedido(models.Model):
+    class Prioridad(models.TextChoices):
+        BAJA = "BAJA", "Baja"
+        NORMAL = "NORMAL", "Normal"
+        ALTA = "ALTA", "Alta"
+        URGENTE = "URGENTE", "Urgente"
+
+    class Moneda(models.TextChoices):
+        DOP = "DOP", "DOP"
+        USD = "USD", "USD"
+
+    class Estado(models.TextChoices):
+        BORRADOR = "BORRADOR", "Borrador"
+        PENDIENTE_APROBACION = "PENDIENTE_APROBACION", "Pendiente de aprobación"
+        APROBADO = "APROBADO", "Aprobado"
+        RECHAZADO = "RECHAZADO", "Rechazado"
+        CANCELADO = "CANCELADO", "Cancelado"
+        EN_PREPARACION = "EN_PREPARACION", "En preparación"
+        LISTO_DESPACHO = "LISTO_DESPACHO", "Listo para despacho"
+        DESPACHADO = "DESPACHADO", "Despachado"
+        ENTREGADO_PARCIAL = "ENTREGADO_PARCIAL", "Entregado parcial"
+        ENTREGADO = "ENTREGADO", "Entregado"
+        FACTURADO = "FACTURADO", "Facturado"
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="pedidos")
+    numero = models.CharField(max_length=30)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="pedidos")
+    direccion_entrega = models.ForeignKey(DireccionCliente, on_delete=models.PROTECT, null=True, blank=True)
+    contacto = models.ForeignKey(ContactoCliente, on_delete=models.PROTECT, null=True, blank=True)
+    fecha_pedido = models.DateField()
+    fecha_entrega = models.DateField()
+    hora_entrega_desde = models.TimeField(null=True, blank=True)
+    hora_entrega_hasta = models.TimeField(null=True, blank=True)
+    prioridad = models.CharField(max_length=10, choices=Prioridad.choices, default=Prioridad.NORMAL)
+    condicion_pago = models.CharField(max_length=10, choices=Cliente.CondicionPago.choices)
+    dias_credito = models.PositiveIntegerField(default=0)
+    lista_precio = models.CharField(max_length=100, blank=True)
+    moneda = models.CharField(max_length=3, choices=Moneda.choices, default=Moneda.DOP)
+    subtotal = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    descuento_total = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    impuesto_total = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    total = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    observaciones_cliente = models.TextField(blank=True)
+    observaciones_internas = models.TextField(blank=True)
+    estado = models.CharField(max_length=30, choices=Estado.choices, default=Estado.BORRADOR)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos_creados")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos_actualizados")
+    aprobado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos_aprobados")
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    rechazado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos_rechazados")
+    fecha_rechazo = models.DateTimeField(null=True, blank=True)
+    motivo_rechazo = models.TextField(blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-fecha_pedido", "-id"]
+        constraints = [models.UniqueConstraint(fields=["empresa", "numero"], name="com_pedido_empresa_numero_uniq")]
+        indexes = [
+            models.Index(fields=["empresa", "estado"], name="com_ped_emp_estado_idx"),
+            models.Index(fields=["empresa", "fecha_entrega"], name="com_ped_emp_entrega_idx"),
+        ]
+        permissions = [
+            ("aprobar_pedido", "Puede aprobar pedidos"),
+            ("rechazar_pedido", "Puede rechazar pedidos"),
+            ("cancelar_pedido", "Puede cancelar pedidos"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.cliente_id and self.empresa_id and self.cliente.empresa_id != self.empresa_id:
+            errors["cliente"] = "El cliente pertenece a otra empresa."
+        if self.cliente_id and self.estado == self.Estado.BORRADOR and self.cliente.estado not in {
+            Cliente.Estado.ACTIVO, Cliente.Estado.EN_EVALUACION
+        }:
+            errors["cliente"] = "El estado del cliente no permite crear o editar borradores."
+        if self.direccion_entrega_id and self.direccion_entrega.cliente_id != self.cliente_id:
+            errors["direccion_entrega"] = "La dirección no pertenece al cliente seleccionado."
+        if self.contacto_id and self.contacto.cliente_id != self.cliente_id:
+            errors["contacto"] = "El contacto no pertenece al cliente seleccionado."
+        if self.fecha_pedido and self.fecha_entrega and self.fecha_entrega < self.fecha_pedido:
+            errors["fecha_entrega"] = "La fecha de entrega no puede ser anterior a la fecha del pedido."
+        if self.hora_entrega_desde and self.hora_entrega_hasta and self.hora_entrega_hasta <= self.hora_entrega_desde:
+            errors["hora_entrega_hasta"] = "La hora final debe ser posterior a la hora inicial."
+        if self.condicion_pago == Cliente.CondicionPago.CONTADO and self.dias_credito:
+            errors["dias_credito"] = "Los pedidos de contado deben tener cero días de crédito."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.numero} - {self.cliente.nombre_comercial}"
+
+
+class DetallePedido(models.Model):
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="detalles")
+    producto = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT)
+    descripcion = models.CharField(max_length=255)
+    cantidad = models.DecimalField(max_digits=14, decimal_places=4)
+    unidad_medida = models.CharField(max_length=30)
+    precio_unitario = models.DecimalField(max_digits=14, decimal_places=4)
+    porcentaje_descuento = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    monto_descuento = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    porcentaje_impuesto = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    monto_impuesto = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    subtotal = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    total = models.DecimalField(max_digits=16, decimal_places=2, default=0, editable=False)
+    observaciones = models.CharField(max_length=255, blank=True)
+    orden = models.PositiveIntegerField(default=0)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["orden", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["pedido", "producto"], name="com_detalle_pedido_producto_uniq"),
+            models.CheckConstraint(condition=Q(cantidad__gt=0), name="com_detalle_cantidad_positiva"),
+            models.CheckConstraint(condition=Q(precio_unitario__gte=0), name="com_detalle_precio_no_negativo"),
+            models.CheckConstraint(condition=Q(porcentaje_descuento__gte=0, porcentaje_descuento__lte=100), name="com_detalle_descuento_rango"),
+            models.CheckConstraint(condition=Q(porcentaje_impuesto__gte=0, porcentaje_impuesto__lte=100), name="com_detalle_impuesto_rango"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.producto_id and self.pedido_id and self.producto.empresa_id != self.pedido.empresa_id:
+            errors["producto"] = "El producto pertenece a otra empresa."
+        if self.cantidad is not None and self.cantidad <= 0:
+            errors["cantidad"] = "La cantidad debe ser mayor que cero."
+        if self.precio_unitario is not None and self.precio_unitario < 0:
+            errors["precio_unitario"] = "El precio no puede ser negativo."
+        if not 0 <= self.porcentaje_descuento <= 100:
+            errors["porcentaje_descuento"] = "El descuento debe estar entre 0 y 100."
+        if not 0 <= self.porcentaje_impuesto <= 100:
+            errors["porcentaje_impuesto"] = "El impuesto debe estar entre 0 y 100."
+        if errors:
+            raise ValidationError(errors)
+
+
+class HistorialEstadoPedido(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="historial_estados")
+    estado_anterior = models.CharField(max_length=30, choices=Pedido.Estado.choices)
+    estado_nuevo = models.CharField(max_length=30, choices=Pedido.Estado.choices)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    comentario = models.TextField(blank=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha"]
