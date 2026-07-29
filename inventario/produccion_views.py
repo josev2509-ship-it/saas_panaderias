@@ -27,7 +27,7 @@ from .produccion_forms import (
 )
 from .produccion_services import (
     calcular_necesidades, duplicar_receta, generar_ordenes_desde_plan,
-    generar_plan_desde_pedidos, transicionar_orden,
+    generar_plan_desde_pedidos, recalcular_necesidades_plan, transicionar_orden,
 )
 
 
@@ -153,7 +153,7 @@ def _guardar_plan(request,empresa,plan=None):
             for eliminado in formset.deleted_objects:eliminado.delete()
             for linea in lineas:
                 linea.plan=obj;linea.save()
-                if linea.receta:calcular_necesidades(cantidad=linea.cantidad_planificada,receta=linea.receta,empresa=empresa,plan=obj,fecha_requerida=linea.fecha_requerida)
+            recalcular_necesidades_plan(obj)
             registrar_evento(empresa=empresa,usuario=request.user,request=request,objeto=obj,modulo="produccion",accion=EventoAuditoria.Accion.CREAR if not plan else EventoAuditoria.Accion.EDITAR,descripcion=f"Se guardó el plan {obj.numero}.")
         return redirect("inventario:plan_detalle",pk=obj.pk)
     return render(request,"inventario/produccion_form.html",{"empresa":empresa,"form":form,"formset":formset,"titulo":"Plan de producción"})

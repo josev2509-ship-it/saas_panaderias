@@ -30,9 +30,13 @@ def receta_vigente(empresa, producto, fecha):
     ).order_by("-version").first()
 
 
-def calcular_necesidades(*, cantidad, receta, empresa, plan=None, orden=None, fecha_requerida=None):
+def calcular_necesidades(*, cantidad, receta, empresa, plan=None, orden=None, fecha_requerida=None, limpiar=True):
     if receta.empresa_id != empresa.pk or cantidad <= 0:
         raise ValidationError("Receta, cantidad o empresa inválida.")
+    if limpiar and orden is not None:
+        NecesidadMateriaPrima.objects.filter(orden=orden).delete()
+    elif limpiar and plan is not None:
+        NecesidadMateriaPrima.objects.filter(plan=plan, producto_terminado=receta.producto_terminado).delete()
     factor = Decimal(cantidad) / Decimal(receta.rendimiento_base)
     resultado = []
     for ingrediente in receta.ingredientes.select_related("materia_prima"):
@@ -52,6 +56,27 @@ def calcular_necesidades(*, cantidad, receta, empresa, plan=None, orden=None, fe
             estado=estado,
         ))
     return resultado
+
+
+def recalcular_necesidades_plan(plan):
+    NecesidadMateriaPrima.objects.filter(plan=plan).delete()
+    agrupadas = {}
+    for detalle in plan.detalles.select_related("receta").filter(receta__isnull=False):
+        clave = detalle.receta_id
+        if clave not in agrupadas:
+            agrupadas[clave] = {
+                "receta": detalle.receta,
+                "cantidad": Decimal("0"),
+                "fecha": detalle.fecha_requerida,
+            }
+        agrupadas[clave]["cantidad"] += detalle.cantidad_planificada
+        agrupadas[clave]["fecha"] = min(agrupadas[clave]["fecha"], detalle.fecha_requerida)
+    for grupo in agrupadas.values():
+        calcular_necesidades(
+            cantidad=grupo["cantidad"], receta=grupo["receta"], empresa=plan.empresa,
+            plan=plan, fecha_requerida=grupo["fecha"], limpiar=False,
+        )
+    return plan.necesidades.all()
 
 
 @transaction.atomic
@@ -106,14 +131,10 @@ def generar_plan_desde_pedidos(*, empresa, pedidos, fecha_plan, usuario, request
                 detalle_pedido_origen=linea,
                 observaciones="" if receta else "ADVERTENCIA: producto sin receta vigente.",
             )
-            if receta:
-                calcular_necesidades(
-                    cantidad=detalle.cantidad_planificada, receta=receta, empresa=empresa,
-                    plan=plan, fecha_requerida=detalle.fecha_requerida,
-                )
             creados += 1
     if not creados:
         raise ValidationError("Las líneas seleccionadas ya fueron planificadas.")
+    recalcular_necesidades_plan(plan)
     registrar_evento(
         empresa=empresa, usuario=usuario, request=request, objeto=plan, modulo="produccion",
         accion=EventoAuditoria.Accion.CREAR, descripcion=f"Se generó {plan.numero} desde pedidos aprobados.",

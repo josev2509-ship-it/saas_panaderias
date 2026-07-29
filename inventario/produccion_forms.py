@@ -1,6 +1,8 @@
 from django import forms
+from datetime import date
 from django.contrib.auth.models import User
 from django.forms import inlineformset_factory
+from django.db.models import Q
 from django.utils import timezone
 
 from comercial.models import Pedido
@@ -89,10 +91,19 @@ class OrdenProduccionForm(StyledForm, forms.ModelForm):
         widgets={"fecha_programada":forms.DateInput(attrs={"type":"date"}),"observaciones":forms.Textarea(attrs={"rows":3})}
     def __init__(self,*args,empresa=None,**kwargs):
         super().__init__(*args,**kwargs); self.aplicar_estilo()
+        if not self.instance.pk:
+            self.instance.empresa = empresa
         self.fields["plan"].queryset=PlanProduccion.objects.filter(empresa=empresa).exclude(estado=PlanProduccion.Estado.CANCELADO)
         self.fields["detalle_plan"].queryset=DetallePlanProduccion.objects.filter(plan__empresa=empresa)
         self.fields["producto_terminado"].queryset=ProductoInventario.objects.filter(empresa=empresa,activo=True,tipo="producto_terminado")
-        self.fields["receta"].queryset=RecetaProduccion.objects.filter(empresa=empresa,activa=True)
+        fecha = self.data.get("fecha_programada") if self.is_bound else getattr(self.instance, "fecha_programada", None)
+        try:
+            fecha = date.fromisoformat(str(fecha)) if fecha else timezone.localdate()
+        except ValueError:
+            fecha = timezone.localdate()
+        self.fields["receta"].queryset=RecetaProduccion.objects.filter(
+            empresa=empresa, activa=True, fecha_vigencia_desde__lte=fecha
+        ).filter(Q(fecha_vigencia_hasta__isnull=True) | Q(fecha_vigencia_hasta__gte=fecha))
         self.fields["responsable"].queryset=User.objects.filter(is_active=True)
 
 
