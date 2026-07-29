@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Preparar nota aclaratoria</h1>
+            <p>Completa los datos antes de generar la nota aclaratoria en PDF.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'buscar_conduces' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Datos de la nota</h3>
+            <p>Estos datos aparecerán en la comunicación formal.</p>
+        </div>
+
+        <form method="get" action="{% url 'generar_nota_aclaratoria_pdf' %}" target="_blank">
+
+            <input type="hidden" name="fecha_inicio" value="{{ fecha_inicio }}">
+            <input type="hidden" name="fecha_fin" value="{{ fecha_fin }}">
+
+            <div class="form-grid">
+
+                <div>
+                    <label>Fecha desde</label>
+                    <input type="date" value="{{ fecha_inicio }}" disabled>
+                </div>
+
+                <div>
+                    <label>Fecha hasta</label>
+                    <input type="date" value="{{ fecha_fin }}" disabled>
+                </div>
+
+                <div>
+                    <label>Firmante</label>
+                    <input type="text"
+                           name="firmante"
+                           placeholder="Ej.: Andrés Rodríguez Castro"
+                           required>
+                </div>
+
+                <div>
+                    <label>Cargo</label>
+                    <input type="text"
+                           name="cargo"
+                           placeholder="Ej.: Gerente"
+                           required>
+                </div>
+
+            </div>
+
+            <br>
+
+            <div>
+                <label>Información adicional</label>
+                <textarea name="comentario"
+                          rows="6"
+                          placeholder="Agrega cualquier explicación adicional que deba aparecer en la nota..."
+                          style="width:100%; border:1px solid #dbe3ef; border-radius:14px; padding:12px; resize:vertical;"></textarea>
+            </div>
+
+            <br>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">
+                    Generar nota aclaratoria PDF
+                </button>
+
+                <a href="{% url 'buscar_conduces' %}" class="btn btn-secondary">
+                    Cancelar
+                </a>
+            </div>
+
+        </form>
+    </section>
+
+</div>
+
+{% endblock %}

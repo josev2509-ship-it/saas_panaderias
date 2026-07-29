@@ -87,6 +87,38 @@ urlpatterns = [
     # ================= CARTAS ADMINISTRATIVAS =================
     path('cartas/', obtener_vista('cartas_administrativas'), name='cartas_administrativas'),
     path('cartas/generar-pdf/', obtener_vista('generar_carta_pdf'), name='generar_carta_pdf'),
+
+    # ================= NOTA ACLARATORIA =================
+    path("nota-aclaratoria/pdf/", views.generar_nota_aclaratoria_pdf, name="generar_nota_aclaratoria_pdf"),
+    path("relacion-general/pdf/", views.generar_relacion_general_pdf, name="generar_relacion_general_pdf"),
+    path(
+    "nota-aclaratoria/pdf/",
+    views.generar_nota_aclaratoria_pdf,
+    name="generar_nota_aclaratoria_pdf"
+),
+path(
+    "nota-aclaratoria/preparar/",
+    views.preparar_nota_aclaratoria,
+    name="preparar_nota_aclaratoria"
+),
+
+path(
+    "calendario-escolar/",
+    views.calendario_escolar,
+    name="calendario_escolar"
+),
+
+path(
+    "calendario-escolar/agregar/",
+    views.agregar_dia_no_docencia,
+    name="agregar_dia_no_docencia"
+),
+
+path(
+    "calendario-escolar/editar/<int:dia_id>/",
+    views.editar_dia_no_docencia,
+    name="editar_dia_no_docencia"
+),
     
     # ================= AUTENTICACIÓN =================
     path('registro/', obtener_vista('registro'), name='registro'),

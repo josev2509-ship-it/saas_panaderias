@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Producción diaria</h1>
+            <p>Genera producciones desde el menú diario y ejecuta consumo automático de inventario.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Generar producción desde menú</h3>
+            <p>El sistema tomará el menú diario, la matrícula y las recetas registradas.</p>
+        </div>
+
+        <form method="post" action="{% url 'inventario:generar_produccion_desde_menu' %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Fecha inicio</label>
+                    <input type="date" name="fecha_inicio" required>
+                </div>
+
+                <div>
+                    <label>Fecha fin</label>
+                    <input type="date" name="fecha_fin" required>
+                </div>
+            </div>
+
+            <br>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Generar producción</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Producciones registradas</h3>
+            <p>Listado de producciones programadas y ejecutadas.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th>Receta</th>
+                        <th>Cantidad</th>
+                        <th>Estado</th>
+                        <th>Ejecutada en</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for produccion in producciones %}
+                    <tr>
+                        <td>{{ produccion.fecha|date:"d/m/Y" }}</td>
+                        <td>{{ produccion.producto.nombre }}</td>
+                        <td>{{ produccion.receta.nombre }}</td>
+                        <td>{{ produccion.cantidad_unidades|floatformat:0 }}</td>
+                        <td>
+                            <span class="status-pill status-{{ produccion.estado }}">
+                                {{ produccion.get_estado_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if produccion.ejecutada_en %}
+                                {{ produccion.ejecutada_en|date:"d/m/Y h:i A" }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'inventario:detalle_produccion' produccion.id %}" class="btn btn-small">
+                                Ver
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">Todavía no hay producciones registradas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

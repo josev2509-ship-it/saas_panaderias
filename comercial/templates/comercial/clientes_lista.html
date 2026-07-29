@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "comercial/_styles.html" %}
+<div class="com-page">
+  <header class="com-hero"><div><h1>Clientes</h1><p>Gestión comercial por empresa.</p></div><a class="com-btn" href="{% url 'comercial:cliente_crear' %}">Nuevo cliente</a></header>
+  <div class="com-grid"><div class="com-card metric"><span>Total</span><strong>{{ total }}</strong></div><div class="com-card metric"><span>Activos</span><strong>{{ activos }}</strong></div><div class="com-card metric"><span>A crédito</span><strong>{{ credito }}</strong></div><div class="com-card metric"><span>Bloqueados</span><strong>{{ bloqueados }}</strong></div></div>
+  <section class="com-card">
+    <form method="get" class="filters">
+      <input class="form-control search" name="q" value="{{ q }}" placeholder="Código, nombre, RNC, cédula o teléfono">
+      <select class="form-control" name="tipo_cliente"><option value="">Todos los tipos</option>{% for value,label in tipos %}<option value="{{ value }}" {% if filtros.tipo_cliente == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <select class="form-control" name="estado"><option value="">Todos los estados</option>{% for value,label in estados %}<option value="{{ value }}" {% if filtros.estado == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <select class="form-control" name="condicion_pago"><option value="">Cualquier condición</option>{% for value,label in condiciones %}<option value="{{ value }}" {% if filtros.condicion_pago == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <button class="com-btn">Filtrar</button>
+    </form>
+  </section>
+  <section class="com-card desktop-table"><div class="table-wrap"><table><thead><tr><th>Código</th><th>Cliente</th><th>Tipo</th><th>Teléfono</th><th>Condición</th><th>Estado</th><th></th></tr></thead><tbody>
+    {% for c in pagina %}<tr><td>{{ c.codigo }}</td><td><strong>{{ c.nombre_comercial }}</strong><br><small>{{ c.razon_social }}</small></td><td>{{ c.get_tipo_cliente_display }}</td><td>{{ c.telefono|default:"—" }}</td><td>{{ c.get_condicion_pago_display }}</td><td><span class="status">{{ c.get_estado_display }}</span></td><td><a href="{% url 'comercial:cliente_detalle' c.pk %}">Ver ficha</a></td></tr>{% empty %}<tr><td colspan="7">No hay resultados.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+  <div class="mobile-list">{% for c in pagina %}<article class="com-card client-mobile"><h3>{{ c.nombre_comercial }}</h3><p class="muted">{{ c.codigo }} · {{ c.get_tipo_cliente_display }}</p><p><span class="status">{{ c.get_estado_display }}</span> · {{ c.get_condicion_pago_display }}</p><a class="com-btn secondary" href="{% url 'comercial:cliente_detalle' c.pk %}">Ver ficha</a></article>{% empty %}<div class="empty">No hay resultados.</div>{% endfor %}</div>
+  {% if pagina.has_other_pages %}<nav class="pagination">{% if pagina.has_previous %}<a href="?page={{ pagina.previous_page_number }}&q={{ q }}">Anterior</a>{% endif %}<span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>{% if pagina.has_next %}<a href="?page={{ pagina.next_page_number }}&q={{ q }}">Siguiente</a>{% endif %}</nav>{% endif %}
+</div>
+{% endblock %}

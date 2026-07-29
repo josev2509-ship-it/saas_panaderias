@@ -75,18 +75,34 @@
     <section class="card">
         <div class="section-header">
             <h3>Reportes rápidos</h3>
-            <p>Genera relaciones en PDF usando el rango de fechas seleccionado.</p>
+            <p>Genera relaciones y prepara notas aclaratorias usando el rango de fechas seleccionado.</p>
         </div>
 
         <div class="toolbar-form">
-            <a href="{% url 'generar_relacion_diaria_pdf' %}?fecha={{ fecha_desde }}" class="btn">
+            <a href="{% url 'generar_relacion_diaria_pdf' %}?fecha_inicio={{ fecha_desde }}&fecha_fin={{ fecha_hasta }}"
+               class="btn"
+               target="_blank">
                 Relación diaria PDF
             </a>
 
-            <a href="{% url 'generar_relacion_general_pdf' %}?fecha_inicio={{ fecha_desde }}&fecha_fin={{ fecha_hasta }}" class="btn btn-secondary">
+            <a href="{% url 'generar_relacion_general_pdf' %}?fecha_inicio={{ fecha_desde }}&fecha_fin={{ fecha_hasta }}"
+               class="btn btn-secondary"
+               target="_blank">
                 Relación general PDF
             </a>
         </div>
+
+        <form method="get"
+              action="{% url 'preparar_nota_aclaratoria' %}"
+              style="margin-top:18px; display:grid; gap:12px;">
+
+            <input type="hidden" name="fecha_inicio" value="{{ fecha_desde }}">
+            <input type="hidden" name="fecha_fin" value="{{ fecha_hasta }}">
+
+            <button type="submit" class="btn btn-secondary" style="width:max-content;">
+                Preparar nota aclaratoria
+            </button>
+        </form>
     </section>
 
     <section class="table-card">
@@ -95,11 +111,11 @@
             <p>Total mostrado: {{ conduces.count }} conduces.</p>
         </div>
 
-        <form method="post" action="{% url 'acciones_conduces' %}">
+        <form method="post" action="{% url 'acciones_conduces' %}" id="form-acciones-conduces">
             {% csrf_token %}
 
             <div class="toolbar-form bulk-actions">
-                <select name="accion" required>
+                <select name="accion" id="accion-conduces" required>
                     <option value="">Acción para conduces seleccionados</option>
                     <option value="pdf_ver">Ver PDF seleccionados</option>
                     <option value="pdf_descargar">Descargar PDF seleccionados</option>
@@ -119,7 +135,8 @@
                         <tr>
                             <th>
                                 <input 
-                                    type="checkbox" 
+                                    type="checkbox"
+                                    id="check-todos-conduces"
                                     onclick="document.querySelectorAll('.check-conduce').forEach(c => c.checked = this.checked)"
                                 >
                             </th>
@@ -185,5 +202,31 @@
     </section>
 
 </div>
+
+<script>
+    document.getElementById("form-acciones-conduces").addEventListener("submit", function(event) {
+        const seleccionados = document.querySelectorAll(".check-conduce:checked");
+        const accion = document.getElementById("accion-conduces").value;
+
+        if (!accion) {
+            event.preventDefault();
+            alert("Debes seleccionar una acción.");
+            return;
+        }
+
+        if (seleccionados.length === 0) {
+            event.preventDefault();
+            alert("Debes seleccionar al menos un conduce.");
+            return;
+        }
+
+        if (accion === "anular") {
+            const confirmar = confirm("¿Seguro que deseas anular los conduces seleccionados?");
+            if (!confirmar) {
+                event.preventDefault();
+            }
+        }
+    });
+</script>
 
 {% endblock %}

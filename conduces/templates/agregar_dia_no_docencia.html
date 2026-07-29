@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Agregar día no laborable</h1>
+            <p>Registra feriados, suspensión de docencia o días sin clase.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'calendario_escolar' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Fecha</label>
+                    <input type="date" name="fecha" required>
+                </div>
+
+                <div>
+                    <label>Tipo</label>
+                    <select name="tipo" required>
+                        <option value="feriado">Feriado</option>
+                        <option value="no_docencia">No docencia</option>
+                        <option value="suspension">Suspensión de clases</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Motivo</label>
+                    <input type="text" name="motivo" placeholder="Ej.: Día de Duarte" required>
+                </div>
+            </div>
+
+            <br>
+
+            <div>
+                <label>Observación</label>
+                <textarea name="observacion" rows="4" placeholder="Detalle adicional del día no laborable..."></textarea>
+            </div>
+
+            <br>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Guardar día</button>
+                <a href="{% url 'calendario_escolar' %}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </section>
+
+</div>
+
+{% endblock %}

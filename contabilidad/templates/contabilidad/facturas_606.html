@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h1>Facturas 606</h1>
+
+<a href="{% url 'contabilidad:crear_factura_606' %}">
+    Nueva factura
+</a>
+
+<table class="table">
+
+    <thead>
+        <tr>
+            <th>NCF</th>
+            <th>Proveedor</th>
+            <th>Fecha</th>
+            <th>Total</th>
+            <th>Estado</th>
+        </tr>
+    </thead>
+
+    <tbody>
+
+        {% for factura in facturas %}
+
+        <tr>
+
+            <td>
+                {{ factura.numero_comprobante }}
+            </td>
+
+            <td>
+                {{ factura.proveedor }}
+            </td>
+
+            <td>
+                {{ factura.fecha_comprobante }}
+            </td>
+
+            <td>
+                RD$ {{ factura.monto_facturado }}
+            </td>
+
+            <td>
+                {{ factura.estado }}
+            </td>
+
+        </tr>
+
+        {% endfor %}
+
+    </tbody>
+
+</table>
+
+{% endblock %}

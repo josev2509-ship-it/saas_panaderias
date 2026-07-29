@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Registrar préstamo</h1>
+            <p>Registra materia prima entregada o recibida en préstamo.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:prestamos' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Tipo</label>
+                    <select name="tipo" required>
+                        <option value="entregado">De la panadería a terceros</option>
+                        <option value="recibido">De terceros a la panadería</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Producto</label>
+                    <select name="producto_id" required>
+                        <option value="">Seleccione...</option>
+                        {% for producto in productos %}
+                            <option value="{{ producto.id }}">{{ producto.nombre }} — Stock: {{ producto.stock_actual }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Tercero</label>
+                    <input type="text" name="tercero" required>
+                </div>
+
+                <div>
+                    <label>Cantidad</label>
+                    <input type="number" name="cantidad" step="0.0001" required>
+                </div>
+
+                <div>
+                    <label>Fecha préstamo</label>
+                    <input type="date" name="fecha_prestamo">
+                </div>
+
+                <div>
+                    <label>Fecha compromiso</label>
+                    <input type="date" name="fecha_compromiso">
+                </div>
+
+                <div>
+                    <label>Responsable entrega</label>
+                    <input type="text" name="responsable_entrega">
+                </div>
+
+                <div>
+                    <label>Responsable recibe</label>
+                    <input type="text" name="responsable_recibe">
+                </div>
+            </div>
+
+            <br>
+
+            <label>Observación</label>
+            <textarea name="observacion" rows="3"></textarea>
+
+            <br><br>
+
+            <button type="submit" class="btn">Guardar préstamo</button>
+        </form>
+    </section>
+
+</div>
+
+{% endblock %}

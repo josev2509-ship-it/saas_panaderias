@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Nuevo proveedor</h1>
+            <p>Registra proveedores y prepara la consulta por RNC/Cédula.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'contabilidad:proveedores' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    <section class="card">
+
+        <div class="section-header">
+            <h3>Datos del proveedor</h3>
+            <p>Escribe el RNC/Cédula y consulta si ya existe registrado.</p>
+        </div>
+
+        <form method="POST">
+            {% csrf_token %}
+
+            <div class="form-grid">
+
+                <div>
+                    <label>RNC / Cédula</label>
+                    <input type="text" id="id_rnc" name="rnc" class="form-control">
+                </div>
+
+                <div style="display:flex; align-items:end;">
+                    <button type="button" onclick="consultarRNC()" class="btn">
+                        Consultar RNC
+                    </button>
+                </div>
+
+                <div>
+                    <label>Nombre / Razón social</label>
+                    <input type="text" id="id_nombre" name="nombre" class="form-control" required>
+                </div>
+
+                <div>
+                    <label>Nombre comercial</label>
+                    <input type="text" id="id_nombre_comercial" name="nombre_comercial" class="form-control">
+                </div>
+
+                <div>
+                    <label>Teléfono</label>
+                    <input type="text" id="id_telefono" name="telefono" class="form-control">
+                </div>
+
+                <div>
+                    <label>Correo</label>
+                    <input type="email" id="id_correo" name="correo" class="form-control">
+                </div>
+
+                <div>
+                    <label>Estado DGII</label>
+                    <input type="text" id="id_estado_dgii" name="estado_dgii" class="form-control">
+                </div>
+
+                <div>
+                    <label>Actividad económica</label>
+                    <input type="text" id="id_actividad_economica" name="actividad_economica" class="form-control">
+                </div>
+
+                <div>
+                    <label>Provincia</label>
+                    <input type="text" id="id_provincia" name="provincia" class="form-control">
+                </div>
+
+                <div>
+                    <label>Municipio</label>
+                    <input type="text" id="id_municipio" name="municipio" class="form-control">
+                </div>
+
+            </div>
+
+            <br>
+
+            <div>
+                <label>Dirección</label>
+                <textarea id="id_direccion" name="direccion" rows="3" class="form-control"></textarea>
+            </div>
+
+            <br>
+
+            <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" name="activo" checked>
+                Proveedor activo
+            </label>
+
+            <br>
+
+            <div id="resultado-rnc" style="display:none; padding:14px; border-radius:14px; background:#eef2ff; margin-bottom:16px;"></div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">
+                    Guardar proveedor
+                </button>
+
+                <a href="{% url 'contabilidad:proveedores' %}" class="btn btn-secondary">
+                    Cancelar
+                </a>
+            </div>
+
+        </form>
+
+    </section>
+
+</div>
+
+<script>
+function consultarRNC() {
+    const rnc = document.getElementById("id_rnc").value.trim();
+    const resultado = document.getElementById("resultado-rnc");
+
+    if (!rnc) {
+        alert("Debe escribir un RNC o cédula.");
+        return;
+    }
+
+    fetch(`/contabilidad/consultar-rnc/?rnc=${encodeURIComponent(rnc)}`)
+        .then(response => response.json())
+        .then(data => {
+            resultado.style.display = "block";
+
+            if (data.encontrado) {
+                document.getElementById("id_nombre").value = data.nombre || "";
+                document.getElementById("id_nombre_comercial").value = data.nombre_comercial || "";
+                document.getElementById("id_telefono").value = data.telefono || "";
+                document.getElementById("id_correo").value = data.correo || "";
+                document.getElementById("id_direccion").value = data.direccion || "";
+                document.getElementById("id_estado_dgii").value = data.estado_dgii || "";
+                document.getElementById("id_actividad_economica").value = data.actividad_economica || "";
+                document.getElementById("id_provincia").value = data.provincia || "";
+                document.getElementById("id_municipio").value = data.municipio || "";
+
+                resultado.innerHTML = "Proveedor encontrado y datos cargados.";
+            } else {
+                resultado.innerHTML = "Proveedor no encontrado en registros internos. Puede completarlo manualmente.";
+            }
+        })
+        .catch(() => {
+            resultado.style.display = "block";
+            resultado.innerHTML = "No fue posible consultar el RNC en este momento.";
+        });
+}
+</script>
+
+{% endblock %}

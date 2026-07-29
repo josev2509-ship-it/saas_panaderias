@@ -38,9 +38,15 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
 
     # Apps del sistema
     "conduces.apps.ConducesConfig",
+    "inventario",
+    "contabilidad",
+    'comercial',
+    "documentos.apps.DocumentosConfig",
+    "auditoria.apps.AuditoriaConfig",
 ]
 
 MIDDLEWARE = [
@@ -133,9 +139,7 @@ USE_TZ = True
 # =========================================================
 
 STATIC_URL = "static/"
-
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 
@@ -144,8 +148,11 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # =========================================================
 
 MEDIA_URL = "/media/"
-
 MEDIA_ROOT = BASE_DIR / "media"
+
+DOCUMENTOS_MAX_UPLOAD_SIZE = int(
+    os.environ.get("DOCUMENTOS_MAX_UPLOAD_SIZE", 10 * 1024 * 1024)
+)
 
 
 # =========================================================
@@ -153,29 +160,47 @@ MEDIA_ROOT = BASE_DIR / "media"
 # =========================================================
 
 LOGIN_URL = "/login/"
-
 LOGIN_REDIRECT_URL = "/"
-
 LOGOUT_REDIRECT_URL = "/login/"
 
 
 # =========================================================
-# Email SMTP Resend / Railway
+# Email SMTP Gmail Workspace / Railway
 # =========================================================
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend"
+)
 
-EMAIL_HOST = "smtp.resend.com"
+EMAIL_HOST = os.environ.get(
+    "EMAIL_HOST",
+    "smtp.gmail.com"
+)
 
-EMAIL_PORT = 587
+EMAIL_PORT = int(
+    os.environ.get("EMAIL_PORT", 587)
+)
 
-EMAIL_USE_TLS = True
+EMAIL_USE_TLS = os.environ.get(
+    "EMAIL_USE_TLS",
+    "True"
+) == "True"
 
-EMAIL_HOST_USER = "resend"
+EMAIL_HOST_USER = os.environ.get(
+    "EMAIL_HOST_USER",
+    "admin@saaspanaderias.com"
+)
 
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_HOST_PASSWORD = os.environ.get(
+    "EMAIL_HOST_PASSWORD",
+    ""
+)
 
-DEFAULT_FROM_EMAIL = "SaaS Panaderías <onboarding@resend.dev>"
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "SaaS Panaderías <admin@saaspanaderias.com>"
+)
 
 EMAIL_TIMEOUT = 20
 
@@ -206,3 +231,11 @@ LOGGING = {
         },
     },
 }
+
+USE_THOUSAND_SEPARATOR = True
+
+THOUSAND_SEPARATOR = ","
+
+DECIMAL_SEPARATOR = "."
+
+NUMBER_GROUPING = 3

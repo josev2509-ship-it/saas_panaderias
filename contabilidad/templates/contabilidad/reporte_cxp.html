@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Cuentas por pagar</h1>
+            <p>Reporte de proveedores, vencimientos, compromisos e ITBIS relacionado.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'contabilidad:reportes_financieros' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                    <th>Vencimiento</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for cuenta in cuentas %}
+                <tr>
+                    <td>{{ cuenta.proveedor }}</td>
+                    <td>{{ cuenta.concepto }}</td>
+                    <td>RD$ {{ cuenta.monto|floatformat:2|intcomma }}</td>
+                    <td>{{ cuenta.fecha_vencimiento|date:"d/m/Y" }}</td>
+                    <td>
+                        {% if cuenta.pagada %}
+                            Pagada
+                        {% else %}
+                            Pendiente
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5">No hay cuentas por pagar registradas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Materia prima e inventario</h1>
+            <p>Control de productos, stock, costos, mínimos y trazabilidad.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:descargar_plantilla' %}" class="btn">
+                Descargar plantilla
+            </a>
+
+            <a href="{% url 'inventario:registrar_movimiento_manual' %}" class="btn btn-secondary">
+                Registrar movimiento
+            </a>
+
+            <a href="{% url 'inventario:pdf_inventario' %}" class="btn btn-light" target="_blank">
+                PDF inventario
+            </a>
+
+            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Cargar inventario desde Excel</h3>
+            <p>Sube materias primas, empaques, consumibles, activos y otros productos.</p>
+        </div>
+
+        <form method="post"
+              action="{% url 'inventario:cargar_excel' %}"
+              enctype="multipart/form-data">
+
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Archivo Excel</label>
+                    <input type="file" name="archivo" accept=".xlsx" required>
+                </div>
+            </div>
+
+            <br>
+
+            <button type="submit" class="btn">
+                Subir inventario
+            </button>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Productos registrados</h3>
+            <p>Total mostrado: {{ productos.count }} productos.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Tipo</th>
+                        <th>Unidad base</th>
+                        <th>Existencia</th>
+                        <th>Stock mínimo</th>
+                        <th>Costo empaque</th>
+                        <th>ITBIS</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for producto in productos %}
+                    <tr>
+                        <td>{{ producto.codigo|default:"-" }}</td>
+                        <td><strong>{{ producto.nombre }}</strong></td>
+                        <td>{{ producto.get_tipo_display }}</td>
+                        <td>{{ producto.get_unidad_medida_display }}</td>
+                        <td>{{ producto.existencia_formateada }}</td>
+                        <td>{{ producto.stock_minimo|floatformat:2|intcomma }}</td>
+                        <td>RD$ {{ producto.precio_unitario_compra|floatformat:2|intcomma }}</td>
+                        <td>{{ producto.porcentaje_itbis|floatformat:2 }}%</td>
+                        <td>
+                            {% if not producto.activo %}
+                                <span class="status-pill status-anulado">Inactivo</span>
+                            {% elif producto.esta_bajo_minimo %}
+                                <span class="status-pill status-anulado">Bajo mínimo</span>
+                            {% else %}
+                                <span class="status-pill status-generado">Normal</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="row-actions">
+                                <a href="{% url 'inventario:editar_producto_inventario' producto.id %}"
+                                   class="btn btn-small">
+                                    Editar
+                                </a>
+
+                                <a href="{% url 'inventario:kardex_producto' producto.id %}"
+                                   class="btn btn-secondary btn-small">
+                                    Kardex
+                                </a>
+
+                                {% if producto.activo %}
+                                <a href="{% url 'inventario:desactivar_producto_inventario' producto.id %}"
+                                   class="btn btn-danger btn-small"
+                                   onclick="return confirm('¿Seguro que deseas desactivar este producto?');">
+                                    Desactivar
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10">Todavía no tienes productos registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

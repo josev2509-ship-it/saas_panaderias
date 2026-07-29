@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+
+<style>
+    .finance-hero {
+        background: #fff;
+        border-radius: 28px;
+        padding: 34px 38px;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+        margin-bottom: 28px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .finance-hero h1 {
+        font-size: 42px;
+        margin: 0;
+        color: #07142f;
+    }
+
+    .finance-hero p {
+        color: #64748b;
+        margin-top: 8px;
+    }
+
+    .finance-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 18px;
+        margin-bottom: 24px;
+    }
+
+    .finance-card {
+        background: #fff;
+        border-radius: 24px;
+        padding: 24px;
+        box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+        min-height: 145px;
+    }
+
+    .finance-card span {
+        color: #64748b;
+        font-size: 14px;
+    }
+
+    .finance-card strong {
+        display: block;
+        margin-top: 12px;
+        font-size: 28px;
+        color: #0f172a;
+    }
+
+    .finance-card small {
+        display: block;
+        margin-top: 8px;
+        color: #2563eb;
+        font-weight: 700;
+    }
+
+    .finance-alert {
+        background: linear-gradient(135deg, #0f172a, #1d4ed8);
+        color: white;
+        border-radius: 28px;
+        padding: 28px;
+        margin-bottom: 24px;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+    }
+
+    .finance-alert h3 {
+        margin: 0 0 8px 0;
+        color: white;
+    }
+
+    .quick-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+</style>
+
+<div class="app-page">
+
+    <div class="finance-hero">
+        <div>
+            <h1>Dashboard contable</h1>
+            <p>Control financiero, factoring, cuentas por pagar, cuentas por cobrar y reportes.</p>
+        </div>
+
+        <div class="quick-actions">
+            <a href="{% url 'contabilidad:reportes_financieros' %}" class="btn">Reportes financieros</a>
+            <a href="{% url 'contabilidad:gastos' %}" class="btn btn-light">Gastos / 606</a>
+        </div>
+    </div>
+
+    <div class="finance-grid">
+        <div class="finance-card">
+            <span>Gastos del mes</span>
+            <strong>RD$ {{ total_gastos_mes|floatformat:2|intcomma }}</strong>
+            <small>Facturas registradas del mes</small>
+        </div>
+
+        <div class="finance-card">
+            <span>Cuentas por pagar</span>
+            <strong>RD$ {{ total_cxp|floatformat:2|intcomma }}</strong>
+            <small>Compromisos pendientes</small>
+        </div>
+
+        <div class="finance-card">
+            <span>Cuentas por cobrar</span>
+            <strong>RD$ {{ total_cxc|floatformat:2|intcomma }}</strong>
+            <small>Valores pendientes de cobro</small>
+        </div>
+
+        <div class="finance-card">
+            <span>Flujo estimado</span>
+            <strong>RD$ {{ flujo_estimado|floatformat:2|intcomma }}</strong>
+            <small>CxC menos CxP</small>
+        </div>
+
+        <div class="finance-card">
+            <span>Factoring pendiente</span>
+            <strong>RD$ {{ total_factoring|floatformat:2|intcomma }}</strong>
+            <small>Facturas cedidas / en proceso</small>
+        </div>
+
+        <div class="finance-card">
+            <span>Pagos factoring recibidos</span>
+            <strong>RD$ {{ pagos_factoring|floatformat:2|intcomma }}</strong>
+            <small>Pagos registrados</small>
+        </div>
+
+        <div class="finance-card">
+            <span>Cuentas vencidas</span>
+            <strong>{{ cuentas_vencidas|length }}</strong>
+            <small>Requieren atención</small>
+        </div>
+
+        <div class="finance-card">
+            <span>Socios activos</span>
+            <strong>{{ total_socios }}</strong>
+            <small>Aportes y deudas internas</small>
+        </div>
+    </div>
+
+    <section class="finance-alert">
+        <h3>Alertas financieras</h3>
+        <p>Pagos próximos, vencidos y cuentas por cobrar atrasadas.</p>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Cuentas por pagar vencidas</h3>
+            <p>Compromisos que ya pasaron su fecha de vencimiento.</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                    <th>Vencimiento</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cuenta in cuentas_vencidas %}
+                <tr>
+                    <td>{{ cuenta.proveedor }}</td>
+                    <td>{{ cuenta.concepto }}</td>
+                    <td>RD$ {{ cuenta.monto|floatformat:2|intcomma }}</td>
+                    <td>{{ cuenta.fecha_vencimiento|date:"d/m/Y" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4">No hay cuentas vencidas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Pagos próximos a vencer</h3>
+            <p>Compromisos con vencimiento dentro de los próximos 7 días.</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                    <th>Vencimiento</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cuenta in cuentas_por_vencer %}
+                <tr>
+                    <td>{{ cuenta.proveedor }}</td>
+                    <td>{{ cuenta.concepto }}</td>
+                    <td>RD$ {{ cuenta.monto|floatformat:2|intcomma }}</td>
+                    <td>{{ cuenta.fecha_vencimiento|date:"d/m/Y" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4">No hay pagos próximos.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+</div>
+
+{% endblock %}

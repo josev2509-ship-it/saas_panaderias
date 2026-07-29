@@ -1,4 +1,5 @@
 from django.contrib import admin
+from .models import DiaNoDocencia
 
 from .models import (
     Empresa,
@@ -123,3 +124,29 @@ class DetalleFacturaAdmin(admin.ModelAdmin):
         "valor",
     )
     search_fields = ("producto", "categoria")
+
+    # =========================================
+# DÍAS NO DOCENCIA / CALENDARIO ESCOLAR
+# =========================================
+@admin.register(DiaNoDocencia)
+class DiaNoDocenciaAdmin(admin.ModelAdmin):
+    list_display = (
+        "fecha",
+        "motivo",
+        "tipo",
+        "empresa",
+        "activo",
+    )
+
+    list_filter = (
+        "tipo",
+        "activo",
+        "empresa",
+    )
+
+    search_fields = (
+        "motivo",
+        "observacion",
+    )
+
+    ordering = ("fecha",)

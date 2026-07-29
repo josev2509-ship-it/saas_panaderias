@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Reportes financieros</h1>
+            <p>Estados financieros, cuentas por cobrar, cuentas por pagar, ITBIS y flujo de efectivo.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'contabilidad:dashboard' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <div class="finance-grid">
+        <a class="finance-card" href="{% url 'contabilidad:estado_resultados' %}">
+            <span>Estado de resultados</span>
+            <strong>Ingresos vs gastos</strong>
+            <small>Utilidad o pérdida</small>
+        </a>
+
+        <a class="finance-card" href="{% url 'contabilidad:balance_general' %}">
+            <span>Balance general</span>
+            <strong>Activos y pasivos</strong>
+            <small>Patrimonio estimado</small>
+        </a>
+
+        <a class="finance-card" href="{% url 'contabilidad:flujo_efectivo' %}">
+            <span>Flujo de efectivo</span>
+            <strong>Entradas y salidas</strong>
+            <small>Liquidez operativa</small>
+        </a>
+
+        <a class="finance-card" href="{% url 'contabilidad:reporte_cuentas_por_cobrar' %}">
+            <span>Cuentas por cobrar</span>
+            <strong>CxC</strong>
+            <small>Clientes pendientes</small>
+        </a>
+
+        <a class="finance-card" href="{% url 'contabilidad:reporte_cuentas_por_pagar' %}">
+            <span>Cuentas por pagar</span>
+            <strong>CxP</strong>
+            <small>Proveedores pendientes</small>
+        </a>
+
+        <a class="finance-card" href="{% url 'contabilidad:gastos' %}">
+            <span>Reporte 606 / Gastos</span>
+            <strong>ITBIS compras</strong>
+            <small>Facturas de suplidores</small>
+        </a>
+    </div>
+
+</div>
+
+{% endblock %}

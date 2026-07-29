@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Cuentas por cobrar</h1>
+            <p>Reporte de clientes, vencimientos y balances pendientes.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'contabilidad:reportes_financieros' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                    <th>Vencimiento</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for cuenta in cuentas %}
+                <tr>
+                    <td>{{ cuenta.cliente }}</td>
+                    <td>{{ cuenta.concepto }}</td>
+                    <td>RD$ {{ cuenta.monto|floatformat:2|intcomma }}</td>
+                    <td>{{ cuenta.fecha_vencimiento|date:"d/m/Y" }}</td>
+                    <td>
+                        {% if cuenta.cobrada %}
+                            Cobrada
+                        {% else %}
+                            Pendiente
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5">No hay cuentas por cobrar registradas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+</div>
+
+{% endblock %}

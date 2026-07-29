@@ -61,6 +61,7 @@ from .models import (
     Suscripcion,
     PerfilUsuario,
     CodigoValidacion,
+    DiaNoDocencia,
 )
 
 from .utils import (
@@ -987,8 +988,21 @@ def acciones_conduces(request):
     empresa = obtener_empresa(request)
 
     if request.method == "POST":
-        ids = request.POST.getlist("conduces")
+        ids_raw = request.POST.getlist("conduces")
         accion = request.POST.get("accion")
+
+        ids = []
+
+        for valor in ids_raw:
+            valor_limpio = (
+                str(valor)
+                .replace("\xa0", "")
+                .replace(" ", "")
+                .strip()
+            )
+
+            if valor_limpio.isdigit():
+                ids.append(int(valor_limpio))
 
         if not ids:
             messages.error(request, "Debe seleccionar al menos un conduce.")
@@ -1032,7 +1046,10 @@ def acciones_conduces(request):
             return response
 
         if accion == "relacion_diaria_pdf":
-            conduces_validos = [conduce for conduce in conduces if conduce.estado != "anulado"]
+            conduces_validos = [
+                conduce for conduce in conduces
+                if conduce.estado != "anulado"
+            ]
             pdf = generar_pdf_relacion_diaria(conduces_validos)
             return FileResponse(pdf, content_type="application/pdf")
 
@@ -1060,32 +1077,500 @@ def visualizar_pdf_conduce(request, conduce_id):
 @login_required(login_url="login_usuario")
 @modulo_requerido("modulo_reportes")
 @suscripcion_requerida
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
 def generar_relacion_diaria_pdf(request):
     empresa = obtener_empresa(request)
+
     fecha = request.GET.get("fecha")
+    fecha_inicio = request.GET.get("fecha_inicio")
+    fecha_fin = request.GET.get("fecha_fin")
 
-    if not fecha:
-        return HttpResponse("Debe enviar una fecha. Ejemplo: /relacion-diaria/pdf/?fecha=2026-03-02", status=400)
+    if fecha:
+        fecha = convertir_fecha(fecha)
 
-    fecha = convertir_fecha(fecha)
+        if not fecha:
+            return HttpResponse(
+                "Formato de fecha inválido. Use el formato YYYY-MM-DD.",
+                status=400
+            )
 
-    if not fecha:
-        return HttpResponse("Formato de fecha inválido. Use el formato YYYY-MM-DD.", status=400)
+        conduces = (
+            Conduce.objects
+            .filter(empresa=empresa, fecha=fecha)
+            .exclude(estado="anulado")
+            .select_related("empresa", "centro")
+            .order_by("fecha", "numero")
+        )
 
-    conduces = (
-        Conduce.objects
-        .filter(empresa=empresa, fecha=fecha)
-        .exclude(estado="anulado")
-        .select_related("empresa", "centro")
-        .order_by("numero")
-    )
+    else:
+        fecha_inicio = convertir_fecha(fecha_inicio)
+        fecha_fin = convertir_fecha(fecha_fin)
+
+        if not fecha_inicio or not fecha_fin:
+            return HttpResponse(
+                "Debe seleccionar fecha inicio y fecha final.",
+                status=400
+            )
+
+        if fecha_inicio > fecha_fin:
+            return HttpResponse(
+                "La fecha de inicio no puede ser mayor que la fecha final.",
+                status=400
+            )
+
+        conduces = (
+            Conduce.objects
+            .filter(empresa=empresa, fecha__range=[fecha_inicio, fecha_fin])
+            .exclude(estado="anulado")
+            .select_related("empresa", "centro")
+            .order_by("fecha", "numero")
+        )
 
     if not conduces.exists():
-        return HttpResponse("No hay conduces válidos para esa fecha.", status=404)
+        return HttpResponse(
+            "No hay conduces válidos para esa fecha o rango seleccionado.",
+            status=404
+        )
 
     pdf = generar_pdf_relacion_diaria(conduces)
 
-    return FileResponse(pdf, content_type="application/pdf", filename="relacion_diaria.pdf")
+    return FileResponse(
+        pdf,
+        content_type="application/pdf",
+        filename="relacion_diaria.pdf"
+    )
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def preparar_nota_aclaratoria(request):
+    empresa = obtener_empresa(request)
+
+    fecha_inicio = request.GET.get("fecha_inicio", "")
+    fecha_fin = request.GET.get("fecha_fin", "")
+
+    return render(request, "preparar_nota_aclaratoria.html", {
+        "empresa": empresa,
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "firmante": "",
+        "cargo": "",
+        "comentario": "",
+    })
+
+# =====================================================
+# NOTA ACLARATORIA
+# =====================================================
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def generar_nota_aclaratoria_pdf(request):
+    empresa = obtener_empresa(request)
+
+    fecha_inicio = convertir_fecha(request.GET.get("fecha_inicio"))
+    fecha_fin = convertir_fecha(request.GET.get("fecha_fin"))
+
+    comentario = request.GET.get("comentario", "").strip()
+    firmante = request.GET.get("firmante", "").strip() or empresa.nombre
+    cargo = request.GET.get("cargo", "").strip() or "Representante autorizado"
+
+    if not fecha_inicio or not fecha_fin:
+        return HttpResponse("Debe seleccionar fecha inicio y fecha final.", status=400)
+
+    if fecha_inicio > fecha_fin:
+        return HttpResponse("La fecha de inicio no puede ser mayor que la fecha final.", status=400)
+
+    conduces = (
+        Conduce.objects
+        .filter(
+            empresa=empresa,
+            fecha__range=[fecha_inicio, fecha_fin],
+            estado="anulado"
+        )
+        .select_related("centro", "empresa")
+        .order_by("fecha", "numero")
+    )
+
+    dias_no_docencia = DiaNoDocencia.objects.filter(
+        empresa=empresa,
+        fecha__range=[fecha_inicio, fecha_fin],
+        activo=True
+    ).order_by("fecha")
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+
+    width, height = letter
+    margen_x = 55
+    ancho_texto = width - (margen_x * 2)
+
+    dias_semana = {
+        0: "Lunes",
+        1: "Martes",
+        2: "Miércoles",
+        3: "Jueves",
+        4: "Viernes",
+        5: "Sábado",
+        6: "Domingo",
+    }
+
+    meses_texto = {
+        1: "enero",
+        2: "febrero",
+        3: "marzo",
+        4: "abril",
+        5: "mayo",
+        6: "junio",
+        7: "julio",
+        8: "agosto",
+        9: "septiembre",
+        10: "octubre",
+        11: "noviembre",
+        12: "diciembre",
+    }
+
+    estilo_texto = ParagraphStyle(
+        name="TextoNota",
+        fontName="Helvetica",
+        fontSize=8.2,
+        leading=12,
+        alignment=TA_LEFT,
+    )
+
+    estilo_centro = ParagraphStyle(
+        name="CentroNota",
+        fontName="Helvetica",
+        fontSize=5.7,
+        leading=6.6,
+        alignment=TA_LEFT,
+    )
+
+    def fecha_larga(fecha):
+        return f"{fecha.day} de {meses_texto[fecha.month]} de {fecha.year}"
+
+    def dibujar_pagina():
+        pdf.setFont("Helvetica", 7)
+        pdf.drawCentredString(
+            width / 2,
+            25,
+            f"Página {pdf.getPageNumber()}"
+        )
+
+    def dibujar_encabezado():
+        y = 745
+
+        if empresa.logo:
+            try:
+                logo = ImageReader(empresa.logo.path)
+                pdf.drawImage(
+                    logo,
+                    width / 2 - 45,
+                    704,
+                    width=90,
+                    height=52,
+                    preserveAspectRatio=True,
+                    mask="auto"
+                )
+                y = 698
+            except Exception:
+                pass
+
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawCentredString(width / 2, y, (empresa.nombre or "").upper())
+
+        y -= 12
+        pdf.setFont("Helvetica", 7)
+        pdf.drawCentredString(width / 2, y, empresa.direccion or "")
+
+        y -= 10
+        pdf.drawCentredString(width / 2, y, f"Teléfono.: {empresa.telefono or ''}")
+
+        y -= 10
+        pdf.drawCentredString(width / 2, y, f"RNC.: {empresa.rnc or ''}")
+
+        return y - 30
+
+    def nueva_pagina_con_encabezado():
+        dibujar_pagina()
+        pdf.showPage()
+        return dibujar_encabezado()
+
+    y = dibujar_encabezado()
+
+    ciudad = empresa.ciudad or "Santo Domingo Este"
+
+    pdf.setFont("Helvetica", 8)
+    pdf.drawRightString(width - margen_x, y, ciudad)
+
+    y -= 11
+    pdf.drawRightString(width - margen_x, y, fecha_larga(timezone.localdate()))
+
+    y -= 30
+
+    pdf.setFont("Helvetica-Bold", 8.2)
+    pdf.drawString(margen_x, y, "Señores:")
+
+    y -= 12
+    pdf.drawString(margen_x, y, "Instituto Nacional de Bienestar Estudiantil (INABIE)")
+
+    y -= 12
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(margen_x, y, "Su despacho.-")
+
+    y -= 36
+
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(margen_x, y, "NOTA ACLARATORIA")
+
+    y -= 35
+
+    pdf.setFont("Helvetica", 8.2)
+    pdf.drawString(margen_x, y, "Estimados señores:")
+
+    y -= 24
+
+    if conduces.exists():
+        texto_intro = (
+            "Por medio de la presente, dejamos constancia de que los centros educativos "
+            "que se detallan a continuación no recibieron el suministro de alimentos sólidos "
+            "en las fechas indicadas, debido a la suspensión de la docencia."
+        )
+    elif dias_no_docencia.exists():
+        texto_intro = (
+            "Por medio de la presente, dejamos constancia de los días no laborables, "
+            "feriados o de no docencia registrados para el período indicado."
+        )
+    else:
+        texto_intro = (
+            "Por medio de la presente, dejamos constancia de que no se registran conduces "
+            "anulados ni días no laborables para el período indicado."
+        )
+
+    parrafo_intro = Paragraph(texto_intro, estilo_texto)
+    _, alto_intro = parrafo_intro.wrap(ancho_texto, 90)
+    parrafo_intro.drawOn(pdf, margen_x, y - alto_intro)
+
+    y = y - alto_intro - 16
+
+    col_widths = [39, 49, 58, 210, 40, 50, 40, 40]
+
+    def crear_tabla(tabla_data):
+        tabla = Table(tabla_data, colWidths=col_widths, repeatRows=1)
+
+        tabla.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.black),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 4.9),
+            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 1), (-1, -1), 5.5),
+            ("ALIGN", (0, 1), (2, -1), "CENTER"),
+            ("ALIGN", (4, 1), (-1, -1), "CENTER"),
+
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.black),
+
+            ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
+            ("TOPPADDING", (0, 0), (-1, -1), 1),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ]))
+
+        return tabla
+
+    if conduces.exists():
+        data = [[
+            "FECHA",
+            "NO. DE\nCONDUCE",
+            "CÓDIGO DEL\nCENTRO\nEDUCATIVO",
+            "NOMBRE DEL CENTRO EDUCATIVO",
+            "PAN",
+            "PAN CON\nVEGETALES",
+            "GALLETA",
+            "BIZCOCHO",
+        ]]
+
+        total_pan = 0
+        total_pan_vegetales = 0
+        total_galleta = 0
+        total_bizcocho = 0
+
+        for conduce in conduces:
+            cantidad = conduce.cantidad or 0
+            pan, pan_vegetales, galleta, bizcocho = clasificar_producto(conduce.producto, cantidad)
+
+            total_pan += pan if pan != "" else 0
+            total_pan_vegetales += pan_vegetales if pan_vegetales != "" else 0
+            total_galleta += galleta if galleta != "" else 0
+            total_bizcocho += bizcocho if bizcocho != "" else 0
+
+            data.append([
+                conduce.fecha.strftime("%d/%m/%Y"),
+                str(conduce.numero),
+                str(conduce.centro.codigo),
+                Paragraph((conduce.centro.nombre or "").upper(), estilo_centro),
+                f"{pan:,}" if pan != "" else "",
+                f"{pan_vegetales:,}" if pan_vegetales != "" else "",
+                f"{galleta:,}" if galleta != "" else "",
+                f"{bizcocho:,}" if bizcocho != "" else "",
+            ])
+
+        data.append([
+            "",
+            "",
+            "",
+            "TOTAL",
+            "-" if int(total_pan or 0) == 0 else f"{total_pan:,}",
+            "-" if int(total_pan_vegetales or 0) == 0 else f"{total_pan_vegetales:,}",
+            "-" if int(total_galleta or 0) == 0 else f"{total_galleta:,}",
+            "-" if int(total_bizcocho or 0) == 0 else f"{total_bizcocho:,}",
+        ])
+
+        encabezado_tabla = data[0]
+        filas_tabla = data[1:]
+        indice = 0
+
+        while indice < len(filas_tabla):
+            espacio_disponible = y - 80
+
+            if espacio_disponible < 90:
+                y = nueva_pagina_con_encabezado()
+                espacio_disponible = y - 80
+
+            max_filas = len(filas_tabla) - indice
+            tabla = None
+            alto_tabla = 0
+            filas_que_caben = 0
+
+            for cantidad_filas in range(max_filas, 0, -1):
+                bloque = filas_tabla[indice:indice + cantidad_filas]
+                tabla_data = [encabezado_tabla] + bloque
+                tabla_prueba = crear_tabla(tabla_data)
+
+                _, alto_prueba = tabla_prueba.wrap(0, 0)
+
+                if alto_prueba <= espacio_disponible:
+                    tabla = tabla_prueba
+                    alto_tabla = alto_prueba
+                    filas_que_caben = cantidad_filas
+                    break
+
+            if tabla is None:
+                y = nueva_pagina_con_encabezado()
+                continue
+
+            tabla.drawOn(pdf, margen_x, y - alto_tabla)
+
+            y = y - alto_tabla - 18
+            indice += filas_que_caben
+
+    if dias_no_docencia.exists():
+        texto_posterior = (
+            "En las fechas detalladas a continuación no se realizó la entrega de raciones "
+            "alimentarias a los centros educativos, debido a la suspensión oficial de la "
+            "docencia por motivo de días feriados nacionales establecidos en el calendario "
+            "laboral y escolar correspondiente."
+        )
+
+        parrafo_posterior = Paragraph(texto_posterior, estilo_texto)
+        _, alto_posterior = parrafo_posterior.wrap(ancho_texto, 90)
+
+        if y - alto_posterior < 100:
+            y = nueva_pagina_con_encabezado()
+
+        parrafo_posterior.drawOn(pdf, margen_x, y - alto_posterior)
+        y = y - alto_posterior - 20
+
+        contador = 1
+
+        for dia in dias_no_docencia:
+            fecha = dia.fecha
+
+            titulo_dia = (
+                f"{contador}. {dias_semana[fecha.weekday()]} "
+                f"{fecha.day} de {meses_texto[fecha.month]} de {fecha.year}"
+            )
+
+            detalle_dia = f"{dia.motivo}. {dia.observacion or ''}"
+
+            if y < 125:
+                y = nueva_pagina_con_encabezado()
+
+            pdf.setFont("Helvetica-Bold", 8)
+            pdf.drawString(margen_x, y, titulo_dia)
+
+            y -= 15
+
+            parrafo_dia = Paragraph(detalle_dia, estilo_texto)
+            _, alto_dia = parrafo_dia.wrap(ancho_texto, 85)
+
+            parrafo_dia.drawOn(pdf, margen_x, y - alto_dia)
+            y = y - alto_dia - 16
+
+            contador += 1
+
+    if comentario:
+        if y < 125:
+            y = nueva_pagina_con_encabezado()
+
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(margen_x, y, "Información adicional:")
+
+        y -= 14
+
+        parrafo_comentario = Paragraph(comentario, estilo_texto)
+        _, alto_comentario = parrafo_comentario.wrap(ancho_texto, 95)
+
+        parrafo_comentario.drawOn(pdf, margen_x, y - alto_comentario)
+        y = y - alto_comentario - 24
+
+    cierre = (
+        "Sin otro particular, quedamos a la orden para cualquier información adicional "
+        "que se requiera."
+    )
+
+    parrafo_cierre = Paragraph(cierre, estilo_texto)
+    _, alto_cierre = parrafo_cierre.wrap(ancho_texto, 70)
+
+    if y - alto_cierre < 135:
+        y = nueva_pagina_con_encabezado()
+
+    parrafo_cierre.drawOn(pdf, margen_x, y - alto_cierre)
+    y = y - alto_cierre - 38
+
+    if y < 130:
+        y = nueva_pagina_con_encabezado()
+
+    pdf.setFont("Helvetica", 8.2)
+    pdf.drawString(margen_x, y, "Atentamente:")
+
+    y -= 58
+
+    pdf.line(margen_x, y, margen_x + 220, y)
+
+    y -= 12
+
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.drawString(margen_x, y, firmante.upper())
+
+    y -= 10
+
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.drawString(margen_x, y, cargo.upper())
+
+    dibujar_pagina()
+
+    pdf.save()
+    buffer.seek(0)
+
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="nota_aclaratoria.pdf"'
+    return response
 
 
 # =====================================================
@@ -1127,14 +1612,30 @@ def generar_relacion_general_pdf(request):
     tabla_top_y = 600
 
     col_widths = [43, 50, 58, 210, 45, 55, 40, 39]
-    filas_por_pagina = 38
+
+    filas_por_pagina = 35
     row_height = 13
     header_height = 30
+    alto_total = 14
+    margen_inferior_seguro = 95
 
     meses_texto = nombre_mes(fecha_inicio, fecha_fin)
 
-    estilo_nombre = ParagraphStyle(name="NombreCentro", fontName="Helvetica", fontSize=5.4, leading=6, alignment=TA_LEFT)
-    estilo_header = ParagraphStyle(name="Header", fontName="Helvetica-Bold", fontSize=5.2, leading=5.8, alignment=TA_CENTER)
+    estilo_nombre = ParagraphStyle(
+        name="NombreCentro",
+        fontName="Helvetica",
+        fontSize=5.4,
+        leading=6,
+        alignment=TA_LEFT
+    )
+
+    estilo_header = ParagraphStyle(
+        name="Header",
+        fontName="Helvetica-Bold",
+        fontSize=5.2,
+        leading=5.8,
+        alignment=TA_CENTER
+    )
 
     encabezados = [
         Paragraph("FECHA", estilo_header),
@@ -1205,22 +1706,17 @@ def generar_relacion_general_pdf(request):
 
         ancho_mes = pdf.stringWidth(texto_mes, "Helvetica-Bold", 7.4)
         pdf.setLineWidth(0.5)
-        pdf.line((page_width / 2) - (ancho_mes / 2), mes_y - 3, (page_width / 2) + (ancho_mes / 2), mes_y - 3)
+        pdf.line(
+            (page_width / 2) - (ancho_mes / 2),
+            mes_y - 3,
+            (page_width / 2) + (ancho_mes / 2),
+            mes_y - 3
+        )
 
         pdf.setFont("Helvetica", 7)
         pdf.drawCentredString(page_width / 2, 55, f"{pagina_actual} DE {total_paginas}")
 
-    pagina = 1
-    indice = 0
-    ultima_y_tabla = tabla_top_y
-
-    while indice < len(filas):
-        dibujar_encabezado(pagina)
-
-        bloque = filas[indice:indice + filas_por_pagina]
-        data = [encabezados] + bloque
-        row_heights = [header_height] + [row_height] * len(bloque)
-
+    def crear_tabla_principal(data, row_heights):
         tabla = Table(data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
 
         tabla.setStyle(TableStyle([
@@ -1242,6 +1738,51 @@ def generar_relacion_general_pdf(request):
             ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
         ]))
 
+        return tabla
+
+    def crear_tabla_total():
+        total_data = [[
+            "",
+            "",
+            "",
+            "TOTAL",
+            "-" if int(total_pan or 0) == 0 else f"{total_pan:,}",
+            "-" if int(total_pan_vegetales or 0) == 0 else f"{total_pan_vegetales:,}",
+            "-" if int(total_galleta or 0) == 0 else f"{total_galleta:,}",
+            "-" if int(total_bizcocho or 0) == 0 else f"{total_bizcocho:,}",
+        ]]
+
+        tabla_total = Table(total_data, colWidths=col_widths, rowHeights=[alto_total])
+
+        tabla_total.setStyle(TableStyle([
+            ("SPAN", (0, 0), (3, 0)),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.black),
+            ("LINEABOVE", (0, 0), (-1, 0), 1.4, colors.black),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 6.5),
+            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+
+        return tabla_total
+
+    pagina = 1
+    indice = 0
+    ultima_y_tabla = tabla_top_y
+
+    while indice < len(filas):
+        dibujar_encabezado(pagina)
+
+        bloque = filas[indice:indice + filas_por_pagina]
+        data = [encabezados] + bloque
+        row_heights = [header_height] + [row_height] * len(bloque)
+
+        tabla = crear_tabla_principal(data, row_heights)
+
         ancho_tabla, alto_tabla = tabla.wrap(0, 0)
         y_tabla = tabla_top_y - alto_tabla
 
@@ -1256,46 +1797,31 @@ def generar_relacion_general_pdf(request):
 
     if not filas:
         dibujar_encabezado(pagina)
+        ultima_y_tabla = tabla_top_y
 
+    tabla_total = crear_tabla_total()
+    _, alto_tabla_total = tabla_total.wrap(0, 0)
+
+    espacio_necesario = alto_tabla_total + 48
     y_total = ultima_y_tabla - 14
 
-    if y_total < 90:
-        y_total = 90
+    if y_total < margen_inferior_seguro + espacio_necesario:
+        pdf.showPage()
+        pagina += 1
+        total_paginas += 1
+        dibujar_encabezado(pagina)
+        y_total = tabla_top_y - alto_tabla_total
 
-    total_data = [[
-        "",
-        "",
-        "",
-        "TOTAL",
-        "-" if int(total_pan or 0) == 0 else f"{total_pan:,}",
-        "-" if int(total_pan_vegetales or 0) == 0 else f"{total_pan_vegetales:,}",
-        "-" if int(total_galleta or 0) == 0 else f"{total_galleta:,}",
-        "-" if int(total_bizcocho or 0) == 0 else f"{total_bizcocho:,}",
-    ]]
-
-    tabla_total = Table(total_data, colWidths=col_widths, rowHeights=[14])
-
-    tabla_total.setStyle(TableStyle([
-        ("SPAN", (0, 0), (3, 0)),
-        ("GRID", (0, 0), (-1, -1), 0.35, colors.black),
-        ("LINEABOVE", (0, 0), (-1, 0), 1.4, colors.black),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 6.5),
-        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-    ]))
-
-    tabla_total.wrap(0, 0)
     tabla_total.drawOn(pdf, x_tabla, y_total)
 
     y_firma = y_total - 38
 
     if y_firma < 70:
-        y_firma = 70
+        pdf.showPage()
+        pagina += 1
+        total_paginas += 1
+        dibujar_encabezado(pagina)
+        y_firma = tabla_top_y - 40
 
     pdf.setFont("Helvetica-Bold", 6.5)
     pdf.line(x_tabla + 20, y_firma, x_tabla + 195, y_firma)
@@ -2524,3 +3050,81 @@ def generar_carta_pdf(request):
     response = HttpResponse(buffer, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="carta_administrativa.pdf"'
     return response
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+def calendario_escolar(request):
+    empresa = obtener_empresa(request)
+
+    dias = DiaNoDocencia.objects.filter(
+        empresa=empresa
+    ).order_by("fecha")
+
+    return render(request, "calendario_escolar.html", {
+        "dias": dias,
+    })
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+def agregar_dia_no_docencia(request):
+    empresa = obtener_empresa(request)
+
+    if request.method == "POST":
+        fecha = convertir_fecha(request.POST.get("fecha"))
+        tipo = request.POST.get("tipo")
+        motivo = request.POST.get("motivo")
+        observacion = request.POST.get("observacion")
+
+        if not fecha or not motivo:
+            messages.error(request, "Debe completar la fecha y el motivo.")
+            return redirect("agregar_dia_no_docencia")
+
+        DiaNoDocencia.objects.create(
+            empresa=empresa,
+            fecha=fecha,
+            tipo=tipo,
+            motivo=motivo,
+            observacion=observacion,
+            activo=True
+        )
+
+        messages.success(request, "Día registrado correctamente.")
+        return redirect("calendario_escolar")
+
+    return render(request, "agregar_dia_no_docencia.html")
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+def editar_dia_no_docencia(request, dia_id):
+    empresa = obtener_empresa(request)
+
+    dia = get_object_or_404(
+        DiaNoDocencia,
+        id=dia_id,
+        empresa=empresa
+    )
+
+    if request.method == "POST":
+        fecha = convertir_fecha(request.POST.get("fecha"))
+        tipo = request.POST.get("tipo")
+        motivo = request.POST.get("motivo")
+        observacion = request.POST.get("observacion")
+        activo = request.POST.get("activo") == "on"
+
+        if not fecha or not motivo:
+            messages.error(request, "Debe completar la fecha y el motivo.")
+            return redirect("editar_dia_no_docencia", dia_id=dia.id)
+
+        dia.fecha = fecha
+        dia.tipo = tipo
+        dia.motivo = motivo
+        dia.observacion = observacion
+        dia.activo = activo
+        dia.save()
+
+        messages.success(request, "Día actualizado correctamente.")
+        return redirect("calendario_escolar")
+
+    return render(request, "editar_dia_no_docencia.html", {
+        "dia": dia,
+    })

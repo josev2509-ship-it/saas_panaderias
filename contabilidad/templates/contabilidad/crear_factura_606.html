@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Nueva factura 606</h1>
+            <p>Registro de factura de gasto para control financiero y reporte DGII 606.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'contabilidad:facturas_606' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    <section class="card">
+        <form method="POST" action="{% url 'contabilidad:crear_factura_606' %}">
+            {% csrf_token %}
+
+            {{ form.as_p }}
+
+            <br>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">
+                    Guardar factura
+                </button>
+
+                <a href="{% url 'contabilidad:facturas_606' %}" class="btn btn-secondary">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </section>
+
+</div>
+
+{% endblock %}

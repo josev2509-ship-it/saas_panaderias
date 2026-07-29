@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Recetas de producción</h1>
+            <p>Gestiona las recetas base para calcular producción, consumo de inventario y órdenes de compra.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Crear producto de producción</h3>
+            <p>Primero registra el producto que se produce: pan, muffin, galleta, etc.</p>
+        </div>
+
+        <form method="post" action="{% url 'inventario:crear_producto_produccion' %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Nombre del producto</label>
+                    <input type="text" name="nombre" placeholder="Ej.: Muffin de zanahoria" required>
+                </div>
+
+                <div>
+                    <label>Tipo</label>
+                    <select name="tipo" required>
+                        <option value="pan">Pan</option>
+                        <option value="pan_vegetales">Pan con vegetales</option>
+                        <option value="bizcocho">Bizcocho / Muffin</option>
+                        <option value="galleta">Galleta nutritiva</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+            </div>
+
+            <br>
+
+            <button type="submit" class="btn">
+                Crear producto
+            </button>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Crear receta</h3>
+            <p>Define el rendimiento y el porcentaje de variación o merma.</p>
+        </div>
+
+        <form method="post" action="{% url 'inventario:crear_receta' %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Producto</label>
+                    <select name="producto_id" required>
+                        <option value="">Seleccione...</option>
+                        {% for producto in productos_produccion %}
+                            <option value="{{ producto.id }}">{{ producto.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Nombre de la receta</label>
+                    <input type="text" name="nombre" placeholder="Ej.: Receta base muffin zanahoria" required>
+                </div>
+
+                <div>
+                    <label>Rendimiento</label>
+                    <input type="number" name="rendimiento_unidades" step="0.01" placeholder="Ej.: 100" required>
+                </div>
+
+                <div>
+                    <label>% variación / merma</label>
+                    <input type="number" name="porcentaje_variacion" step="0.01" value="0">
+                </div>
+            </div>
+
+            <br>
+
+            <div>
+                <label>Observaciones</label>
+                <textarea name="observaciones" rows="3" placeholder="Notas de preparación, peso aproximado, etc."></textarea>
+            </div>
+
+            <br>
+
+            <button type="submit" class="btn">
+                Crear receta
+            </button>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Recetas registradas</h3>
+            <p>Selecciona una receta para agregar ingredientes.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Receta</th>
+                        <th>Rendimiento</th>
+                        <th>% Variación</th>
+                        <th>Estado</th>
+                        <th>Ingredientes</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for receta in recetas %}
+                    <tr>
+                        <td>{{ receta.producto.nombre }}</td>
+                        <td>{{ receta.nombre }}</td>
+                        <td>{{ receta.rendimiento_unidades|floatformat:2 }}</td>
+                        <td>{{ receta.porcentaje_variacion|floatformat:2 }}%</td>
+                        <td>
+                            {% if receta.activa %}
+                                <span class="status-pill status-generado">Activa</span>
+                            {% else %}
+                                <span class="status-pill status-anulado">Inactiva</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ receta.detalles.count }}</td>
+                        <td>
+                            <a href="{% url 'inventario:detalle_receta' receta.id %}" class="btn btn-small">
+                                Ver / Editar
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">Todavía no hay recetas registradas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

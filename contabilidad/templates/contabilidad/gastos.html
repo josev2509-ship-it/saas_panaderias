@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Gastos / Reporte 606</h1>
+            <p>Registro de facturas de gastos, ITBIS y cuentas por pagar.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'contabilidad:crear_factura_606' %}" class="btn">
+                + Registrar factura 606
+            </a>
+
+            <a href="{% url 'contabilidad:exportar_606_excel' %}" class="btn btn-light">
+                Exportar 606
+            </a>
+
+            <a href="{% url 'contabilidad:dashboard' %}" class="btn btn-secondary">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Facturas de gastos registradas</h3>
+            <p>Base imponible, ITBIS, retenciones y total pagado.</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>RNC</th>
+                    <th>NCF</th>
+                    <th>Fecha</th>
+                    <th>Base</th>
+                    <th>ITBIS</th>
+                    <th>Ret. Renta</th>
+                    <th>Ret. ITBIS</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for factura in facturas_606 %}
+                <tr>
+                    <td>{{ factura.proveedor.nombre }}</td>
+                    <td>{{ factura.proveedor.rnc }}</td>
+                    <td>{{ factura.numero_comprobante }}</td>
+                    <td>{{ factura.fecha_comprobante|date:"d/m/Y" }}</td>
+                    <td>RD$ {{ factura.monto_facturado|floatformat:2|intcomma }}</td>
+                    <td>RD$ {{ factura.itbis_facturado|floatformat:2|intcomma }}</td>
+                    <td>RD$ {{ factura.retencion_renta|floatformat:2|intcomma }}</td>
+                    <td>RD$ {{ factura.retencion_itbis|floatformat:2|intcomma }}</td>
+                    <td>RD$ {{ factura.total_pagado|floatformat:2|intcomma }}</td>
+                    <td>{{ factura.estado }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10">No hay facturas 606 registradas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Generar orden de compra sugerida</h1>
+            <p>Selecciona el rango de fechas que deseas cubrir con la compra.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:ordenes_compra' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Datos de la orden</h3>
+            <p>
+                La orden se creará en estado borrador. Luego podrás calcular productos,
+                editar cantidades, agregar productos manuales y generar el PDF.
+            </p>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Fecha inicio</label>
+                    <input type="date" name="fecha_inicio" required>
+                </div>
+
+                <div>
+                    <label>Fecha fin</label>
+                    <input type="date" name="fecha_fin" required>
+                </div>
+
+                <div>
+                    <label>Proveedor</label>
+                    <input type="text"
+                           name="proveedor"
+                           placeholder="Ej.: Cooproharina">
+                </div>
+
+                <div>
+                    <label>Ciudad</label>
+                    <input type="text"
+                           name="ciudad"
+                           placeholder="Ej.: Santo Domingo Este">
+                </div>
+
+                <div>
+                    <label>Fecha requerida</label>
+                    <input type="date" name="fecha_requerida">
+                </div>
+            </div>
+
+            <br>
+
+            <div>
+                <label>Observación</label>
+                <textarea name="observacion"
+                          rows="4"
+                          placeholder="Observación general de la orden..."></textarea>
+            </div>
+
+            <br>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">
+                    Crear orden
+                </button>
+
+                <a href="{% url 'inventario:ordenes_compra' %}" class="btn btn-secondary">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </section>
+
+</div>
+
+{% endblock %}

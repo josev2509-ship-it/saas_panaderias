@@ -462,3 +462,34 @@ class CodigoValidacion(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.tipo} - {self.codigo}"
+    # ==========================
+# CALENDARIO ESCOLAR / DÍAS NO LABORABLES
+# ==========================
+class DiaNoDocencia(models.Model):
+    TIPOS = (
+        ("feriado", "Feriado"),
+        ("no_docencia", "No docencia"),
+        ("suspension", "Suspensión de clases"),
+        ("otro", "Otro"),
+    )
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    fecha = models.DateField()
+    motivo = models.CharField(max_length=255)
+    tipo = models.CharField(max_length=30, choices=TIPOS, default="feriado")
+    observacion = models.TextField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["fecha"]
+        unique_together = ("empresa", "fecha", "motivo")
+        verbose_name = "Día no docencia"
+        verbose_name_plural = "Días no docencia"
+
+    def __str__(self):
+        return f"{self.fecha} - {self.motivo}"
+    
+    

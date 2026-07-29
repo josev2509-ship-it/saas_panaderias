@@ -1,0 +1,1 @@
+web: gunicorn panaderia_saas.wsgi

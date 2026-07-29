@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+
+<div class="app-page">
+    <div class="topbar">
+        <div>
+            <h1>Estado de resultados</h1>
+            <p>Resumen de ingresos, gastos, ITBIS y utilidad.</p>
+        </div>
+        <a href="{% url 'contabilidad:reportes_financieros' %}" class="btn btn-light">Volver</a>
+    </div>
+
+    <div class="finance-grid">
+        <div class="finance-card">
+            <span>Ingresos cobrados</span>
+            <strong>RD$ {{ total_ingresos|floatformat:2|intcomma }}</strong>
+        </div>
+
+        <div class="finance-card">
+            <span>Gastos pagados</span>
+            <strong>RD$ {{ total_gastos|floatformat:2|intcomma }}</strong>
+        </div>
+
+        <div class="finance-card">
+            <span>Utilidad estimada</span>
+            <strong>RD$ {{ utilidad|floatformat:2|intcomma }}</strong>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

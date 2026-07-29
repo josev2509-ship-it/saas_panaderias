@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Préstamos de materia prima</h1>
+            <p>Control de materia prima prestada, recibida y devuelta.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:crear_prestamo' %}" class="btn">+ Registrar préstamo</a>
+            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Préstamos registrados</h3>
+            <p>Historial de movimientos con terceros.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Producto</th>
+                        <th>Tercero</th>
+                        <th>Cantidad</th>
+                        <th>Devuelta</th>
+                        <th>Pendiente</th>
+                        <th>Estado</th>
+                        <th>Devolución</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for prestamo in prestamos %}
+                    <tr>
+                        <td>{{ prestamo.fecha_prestamo|date:"d/m/Y" }}</td>
+                        <td>{{ prestamo.get_tipo_display }}</td>
+                        <td>{{ prestamo.producto.nombre }}</td>
+                        <td>{{ prestamo.tercero }}</td>
+                        <td>{{ prestamo.cantidad|floatformat:2|intcomma }}</td>
+                        <td>{{ prestamo.cantidad_devuelta|floatformat:2|intcomma }}</td>
+                        <td>{{ prestamo.cantidad_pendiente|floatformat:2|intcomma }}</td>
+                        <td>{{ prestamo.get_estado_display }}</td>
+                        <td>
+                            {% if prestamo.estado != "cerrado" %}
+                            <form method="post" action="{% url 'inventario:registrar_devolucion_prestamo' prestamo.id %}" style="display:flex; gap:8px;">
+                                {% csrf_token %}
+                                <input type="number" name="cantidad_devuelta" step="0.0001" placeholder="Cantidad" style="width:110px;">
+                                <button type="submit" class="btn btn-small">Aplicar</button>
+                            </form>
+                            {% else %}
+                                Cerrado
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9">Todavía no hay préstamos registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

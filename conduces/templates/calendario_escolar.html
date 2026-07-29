@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Calendario escolar</h1>
+            <p>Gestión de días feriados, suspensión de docencia y días no laborables.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'agregar_dia_no_docencia' %}" class="btn">
+    Agregar día
+</a>
+        </div>
+    </div>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Días registrados</h3>
+            <p>Estos días se utilizarán automáticamente en las notas aclaratorias.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Motivo</th>
+                        <th>Observación</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for dia in dias %}
+                    <tr>
+                        <td>{{ dia.fecha|date:"d/m/Y" }}</td>
+                        <td>{{ dia.get_tipo_display }}</td>
+                        <td>{{ dia.motivo }}</td>
+                        <td>{{ dia.observacion|default:"-" }}</td>
+                        <td>
+                            {% if dia.activo %}
+                                <span class="status-pill status-generado">Activo</span>
+                            {% else %}
+                                <span class="status-pill status-anulado">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                           <a href="{% url 'editar_dia_no_docencia' dia.id %}"
+   class="btn btn-secondary btn-small">
+    Editar
+</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">No hay días registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

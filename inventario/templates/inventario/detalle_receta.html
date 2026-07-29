@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>{{ receta.nombre }}</h1>
+            <p>{{ receta.producto.nombre }} · Rendimiento: {{ receta.rendimiento_unidades|floatformat:2 }} unidades</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:recetas' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Resumen de costo</h3>
+            <p>Estos valores se usan para producción, inventario y órdenes de compra.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span>Costo total receta</span>
+                <strong>RD$ {{ costo_total|floatformat:2|intcomma }}</strong>
+            </div>
+
+            <div class="stat-card">
+                <span>Costo por unidad</span>
+                <strong>RD$ {{ costo_por_unidad|floatformat:2|intcomma }}</strong>
+            </div>
+
+            <div class="stat-card">
+                <span>Variación / merma</span>
+                <strong>{{ receta.porcentaje_variacion|floatformat:2 }}%</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Agregar ingrediente</h3>
+            <p>Agrega materia prima según la cantidad necesaria para el rendimiento de esta receta.</p>
+        </div>
+
+        <form method="post" action="{% url 'inventario:agregar_ingrediente_receta' receta.id %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Materia prima</label>
+                    <select name="materia_prima_id" required>
+                        <option value="">Seleccione...</option>
+                        {% for producto in productos_inventario %}
+                            <option value="{{ producto.id }}">
+                                {{ producto.nombre }} — {{ producto.get_unidad_medida_display }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Cantidad</label>
+                    <input type="number" name="cantidad" step="0.0001" required>
+                </div>
+
+                <div>
+                    <label>Unidad medida</label>
+                    <select name="unidad_medida">
+                        <option value="lb">Libras</option>
+                        <option value="oz">Onzas</option>
+                        <option value="g">Gramos</option>
+                        <option value="kg">Kilogramos</option>
+                        <option value="unidad">Unidad</option>
+                        <option value="galon">Galón</option>
+                        <option value="litro">Litro</option>
+                        <option value="paquete">Paquete</option>
+                        <option value="caja">Caja</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Porcentaje opcional</label>
+                    <input type="number" name="porcentaje" step="0.0001" value="0">
+                </div>
+            </div>
+
+            <br>
+
+            <button type="submit" class="btn">
+                Agregar ingrediente
+            </button>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Ingredientes de la receta</h3>
+            <p>Listado de materia prima usada para producir {{ receta.rendimiento_unidades|floatformat:2 }} unidades.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ingrediente</th>
+                        <th>Cantidad receta</th>
+                        <th>Unidad</th>
+                        <th>Cantidad por unidad</th>
+                        <th>Costo unitario inventario</th>
+                        <th>Costo ingrediente</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for detalle in detalles %}
+                    <tr>
+                        <td>{{ detalle.materia_prima.nombre }}</td>
+                        <td>{{ detalle.cantidad|floatformat:4|intcomma }}</td>
+                        <td>{{ detalle.unidad_medida }}</td>
+                        <td>{{ detalle.cantidad_por_unidad|floatformat:6|intcomma }}</td>
+                        <td>RD$ {{ detalle.materia_prima.costo_unitario|floatformat:2|intcomma }}</td>
+                        <td>
+                            RD$
+                            {% widthratio detalle.cantidad 1 detalle.materia_prima.costo_unitario %}
+                        </td>
+                        <td>
+                            <a href="{% url 'inventario:eliminar_ingrediente_receta' detalle.id %}"
+                               class="btn btn-danger btn-small"
+                               onclick="return confirm('¿Seguro que deseas eliminar este ingrediente?');">
+                                Eliminar
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">Esta receta todavía no tiene ingredientes registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}{% include "comercial/_styles.html" %}
+<div class="com-page"><header class="com-hero"><div><h1>Cargar documento</h1><p>Expediente de {{ objeto }}</p></div></header>
+<form method="post" enctype="multipart/form-data" class="com-card" novalidate>{% csrf_token %}{{ form.non_field_errors }}<div class="form-grid">{% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}</div>{% endfor %}</div><p id="archivo-seleccionado" class="muted">Ningún archivo seleccionado.</p><div class="actions"><button class="com-btn">Cargar documento</button><a class="com-btn secondary" href="{% url 'comercial:cliente_detalle' objeto.pk %}">Cancelar</a></div></form></div>
+<script>document.querySelector('input[type=file]').addEventListener('change',function(){document.getElementById('archivo-seleccionado').textContent=this.files.length?this.files[0].name:'Ningún archivo seleccionado.';});</script>
+{% endblock %}

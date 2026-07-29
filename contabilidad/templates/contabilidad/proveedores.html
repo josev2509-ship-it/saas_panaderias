@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h1>Proveedores</h1>
+
+<a href="{% url 'contabilidad:crear_proveedor' %}">
+    Nuevo proveedor
+</a>
+
+<table class="table">
+
+    <thead>
+
+        <tr>
+            <th>Nombre</th>
+            <th>RNC</th>
+            <th>Teléfono</th>
+        </tr>
+
+    </thead>
+
+    <tbody>
+
+        {% for proveedor in proveedores %}
+
+        <tr>
+
+            <td>{{ proveedor.nombre }}</td>
+            <td>{{ proveedor.rnc }}</td>
+            <td>{{ proveedor.telefono }}</td>
+
+        </tr>
+
+        {% endfor %}
+
+    </tbody>
+
+</table>
+
+{% endblock %}

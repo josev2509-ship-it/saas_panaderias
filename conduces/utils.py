@@ -172,6 +172,9 @@ def generar_pdf_conduces_masivo(conduces):
 # ======================================================
 # RELACIÓN DIARIA PDF
 # ======================================================
+# ======================================================
+# RELACIÓN DIARIA PDF
+# ======================================================
 def generar_pdf_relacion_diaria(conduces):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
@@ -213,11 +216,9 @@ def generar_pdf_relacion_diaria(conduces):
         12: "DICIEMBRE",
     }
 
-    # Tabla centrada en la hoja carta
     page_width, page_height = letter
     table_width = 540
     x_inicio = (page_width - table_width) / 2
-    x_fin = x_inicio + table_width
 
     x_fecha = x_inicio
     x_conduce = x_inicio + 45
@@ -244,10 +245,12 @@ def generar_pdf_relacion_diaria(conduces):
         x_fin,
     ]
 
+    def valor_total(valor):
+        return "-" if int(valor or 0) == 0 else f"{int(valor):,}"
+
     def dibujar_encabezado_pagina(empresa, fecha):
         mes_texto = f"{meses.get(fecha.month, '')} {fecha.year}"
 
-        # Datos empresa un poco más grandes, centrados y con margen superior
         c.setFont("Helvetica-Bold", 8.8)
         c.drawCentredString(page_width / 2, 742, empresa.nombre or "")
 
@@ -278,9 +281,13 @@ def generar_pdf_relacion_diaria(conduces):
 
         ancho_mes = c.stringWidth(texto_mes, "Helvetica-Bold", 7.4)
         c.setLineWidth(0.5)
-        c.line(page_width / 2 - ancho_mes / 2, mes_y - 2, page_width / 2 + ancho_mes / 2, mes_y - 2)
+        c.line(
+            page_width / 2 - ancho_mes / 2,
+            mes_y - 2,
+            page_width / 2 + ancho_mes / 2,
+            mes_y - 2
+        )
 
-        # Encabezado tabla
         c.setLineWidth(0.5)
         c.setFillGray(0.85)
         c.rect(x_inicio, tabla_y_actual, table_width, alto_header, fill=1, stroke=1)
@@ -360,20 +367,20 @@ def generar_pdf_relacion_diaria(conduces):
             c.setFont("Helvetica-Bold", 5.6)
 
             if "PAN DE ZANAHORIA" in producto:
-               c.drawCentredString((x_pan_veg + x_galleta) / 2, y + 5, str(cantidad))
-               total_por_producto["PAN CON VEGETALES"] += cantidad
+                c.drawCentredString((x_pan_veg + x_galleta) / 2, y + 5, str(cantidad))
+                total_por_producto["PAN CON VEGETALES"] += cantidad
 
             elif "MUFFIN" in producto or "MUFIN" in producto:
-                 c.drawCentredString((x_bizcocho + x_fin) / 2, y + 5, str(cantidad))
-                 total_por_producto["BIZCOCHO"] += cantidad
+                c.drawCentredString((x_bizcocho + x_fin) / 2, y + 5, str(cantidad))
+                total_por_producto["BIZCOCHO"] += cantidad
 
             elif "GALLETA" in producto or "GALLETAS" in producto:
-                 c.drawCentredString((x_galleta + x_bizcocho) / 2, y + 5, str(cantidad))
-                 total_por_producto["GALLETA"] += cantidad
+                c.drawCentredString((x_galleta + x_bizcocho) / 2, y + 5, str(cantidad))
+                total_por_producto["GALLETA"] += cantidad
 
             elif "BIZCOCHO" in producto or "BISCOCHO" in producto:
-                 c.drawCentredString((x_bizcocho + x_fin) / 2, y + 5, str(cantidad))
-                 total_por_producto["BIZCOCHO"] += cantidad
+                c.drawCentredString((x_bizcocho + x_fin) / 2, y + 5, str(cantidad))
+                total_por_producto["BIZCOCHO"] += cantidad
 
             else:
                 c.drawCentredString((x_pan + x_pan_veg) / 2, y + 5, str(cantidad))
@@ -385,7 +392,6 @@ def generar_pdf_relacion_diaria(conduces):
             c.showPage()
             y = dibujar_encabezado_pagina(empresa, fecha)
 
-        # TOTAL con celdas combinadas
         c.setFont("Helvetica-Bold", 6)
         c.setLineWidth(0.5)
 
@@ -396,30 +402,28 @@ def generar_pdf_relacion_diaria(conduces):
 
         c.drawCentredString((x_inicio + x_pan) / 2, y + 5, "TOTAL")
 
-        c.drawCentredString((x_pan + x_pan_veg) / 2, y + 5, f"{total_por_producto['PAN']:,}")
+        c.drawCentredString(
+            (x_pan + x_pan_veg) / 2,
+            y + 5,
+            valor_total(total_por_producto["PAN"])
+        )
 
         c.drawCentredString(
             (x_pan_veg + x_galleta) / 2,
             y + 5,
-            f"{total_por_producto['PAN CON VEGETALES']:,}"
-            if total_por_producto["PAN CON VEGETALES"]
-            else "-"
+            valor_total(total_por_producto["PAN CON VEGETALES"])
         )
 
         c.drawCentredString(
             (x_galleta + x_bizcocho) / 2,
             y + 5,
-            f"{total_por_producto['GALLETA']:,}"
-            if total_por_producto["GALLETA"]
-            else "-"
+            valor_total(total_por_producto["GALLETA"])
         )
 
         c.drawCentredString(
             (x_bizcocho + x_fin) / 2,
             y + 5,
-            f"{total_por_producto['BIZCOCHO']:,}"
-            if total_por_producto["BIZCOCHO"]
-            else "-"
+            valor_total(total_por_producto["BIZCOCHO"])
         )
 
         c.setLineWidth(1.4)
@@ -437,14 +441,15 @@ def generar_pdf_relacion_diaria(conduces):
 from django.shortcuts import redirect
 from django.utils import timezone
 
+
 def suscripcion_vigente(perfil):
     if not perfil or not perfil.empresa:
-        return False
+        return True
 
     suscripcion = getattr(perfil.empresa, "suscripcion", None)
 
     if not suscripcion:
-        return False
+        return True
 
     hoy = timezone.now().date()
 
@@ -459,13 +464,30 @@ def suscripcion_vigente(perfil):
 
 def suscripcion_requerida(view_func):
     def wrapper(request, *args, **kwargs):
+
+        rutas_permitidas = [
+            "generar-conduces",
+            "conduces/generar",
+            "relacion-diaria/pdf",
+            "relacion-general/pdf",
+            "nota-aclaratoria",
+            "facturacion/generar",
+            "factura",
+            "pdf",
+        ]
+
+        if any(ruta in request.path for ruta in rutas_permitidas):
+            return view_func(request, *args, **kwargs)
+
         from .models import PerfilUsuario
 
-        perfil = PerfilUsuario.objects.filter(user=request.user).first()
+        perfil = PerfilUsuario.objects.filter(
+            user=request.user
+        ).first()
 
         if suscripcion_vigente(perfil):
             return view_func(request, *args, **kwargs)
 
-        return redirect("planes")
+        return redirect("inicio")
 
     return wrapper

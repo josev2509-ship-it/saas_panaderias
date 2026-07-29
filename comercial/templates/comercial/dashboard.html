@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "comercial/_styles.html" %}
+<div class="com-page">
+  <header class="com-hero"><div><h1>Dashboard comercial</h1><p>Vista general de la cartera de clientes.</p></div><a class="com-btn" href="{% url 'comercial:cliente_crear' %}">Nuevo cliente</a></header>
+  <div class="com-grid">
+    <div class="com-card metric"><span>Total clientes</span><strong>{{ total }}</strong></div>
+    <div class="com-card metric"><span>Activos</span><strong>{{ activos }}</strong></div>
+    <div class="com-card metric"><span>A crédito</span><strong>{{ credito }}</strong></div>
+    <div class="com-card metric"><span>Bloqueados</span><strong>{{ bloqueados }}</strong></div>
+  </div>
+  <section class="com-card"><div class="section-title"><div><h2>Clientes recientes</h2><p class="muted">Últimos registros incorporados.</p></div><a class="com-btn secondary" href="{% url 'comercial:clientes_lista' %}">Ver clientes</a></div>
+    {% for cliente in recientes %}<p><a href="{% url 'comercial:cliente_detalle' cliente.pk %}">{{ cliente.codigo }} · {{ cliente.nombre_comercial }}</a> <span class="status">{{ cliente.get_estado_display }}</span></p>{% empty %}<div class="empty">Todavía no hay clientes registrados.</div>{% endfor %}
+  </section>
+</div>
+{% endblock %}

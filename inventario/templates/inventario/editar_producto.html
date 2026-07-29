@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Editar producto</h1>
+            <p>{{ producto.nombre }}</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:productos' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Código</label>
+                    <input type="text" name="codigo" value="{{ producto.codigo|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Nombre</label>
+                    <input type="text" name="nombre" value="{{ producto.nombre }}" required>
+                </div>
+
+                <div>
+                    <label>Tipo</label>
+                    <select name="tipo">
+                        <option value="materia_prima" {% if producto.tipo == "materia_prima" %}selected{% endif %}>Materia prima</option>
+                        <option value="producto_terminado" {% if producto.tipo == "producto_terminado" %}selected{% endif %}>Producto terminado</option>
+                        <option value="empaque" {% if producto.tipo == "empaque" %}selected{% endif %}>Empaque</option>
+                        <option value="consumible" {% if producto.tipo == "consumible" %}selected{% endif %}>Consumible</option>
+                        <option value="oficina" {% if producto.tipo == "oficina" %}selected{% endif %}>Material de oficina</option>
+                        <option value="limpieza" {% if producto.tipo == "limpieza" %}selected{% endif %}>Limpieza</option>
+                        <option value="transporte" {% if producto.tipo == "transporte" %}selected{% endif %}>Transporte</option>
+                        <option value="activo" {% if producto.tipo == "activo" %}selected{% endif %}>Activo</option>
+                        <option value="otro" {% if producto.tipo == "otro" %}selected{% endif %}>Otro</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Unidad base</label>
+                    <input type="text" name="unidad_medida" value="{{ producto.unidad_medida }}">
+                </div>
+
+                <div>
+                    <label>Unidad compra</label>
+                    <input type="text" name="unidad_compra" value="{{ producto.unidad_compra|default:'' }}">
+                </div>
+
+                <div>
+                    <label>Cantidad por empaque</label>
+                    <input type="number" step="0.0001" name="cantidad_por_empaque" value="{{ producto.cantidad_por_empaque }}">
+                </div>
+
+                <div>
+                    <label>Stock mínimo</label>
+                    <input type="number" step="0.0001" name="stock_minimo" value="{{ producto.stock_minimo }}">
+                </div>
+
+                <div>
+                    <label>Precio unitario compra</label>
+                    <input type="number" step="0.0001" name="precio_unitario_compra" value="{{ producto.precio_unitario_compra }}">
+                </div>
+
+                <div>
+                    <label>ITBIS %</label>
+                    <input type="number" step="0.01" name="porcentaje_itbis" value="{{ producto.porcentaje_itbis }}">
+                </div>
+
+                <div>
+                    <label>Proveedor</label>
+                    <input type="text" name="proveedor" value="{{ producto.proveedor|default:'' }}">
+                </div>
+            </div>
+
+            <br>
+
+            <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" name="activo" {% if producto.activo %}checked{% endif %}>
+                Producto activo
+            </label>
+
+            <br>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Guardar cambios</button>
+                <a href="{% url 'inventario:productos' %}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </section>
+
+</div>
+<div class="form-group">
+    <label>Clasificación operativa</label>
+
+    <select name="clasificacion_operativa" class="form-control">
+
+        <option value="materia_prima"
+            {% if producto.clasificacion_operativa == "materia_prima" %}selected{% endif %}>
+            Materia prima
+        </option>
+
+        <option value="empaque"
+            {% if producto.clasificacion_operativa == "empaque" %}selected{% endif %}>
+            Empaque
+        </option>
+
+        <option value="consumible"
+            {% if producto.clasificacion_operativa == "consumible" %}selected{% endif %}>
+            Consumible
+        </option>
+
+        <option value="limpieza"
+            {% if producto.clasificacion_operativa == "limpieza" %}selected{% endif %}>
+            Limpieza
+        </option>
+
+        <option value="administrativo"
+            {% if producto.clasificacion_operativa == "administrativo" %}selected{% endif %}>
+            Administrativo
+        </option>
+
+    </select>
+</div>
+
+<div class="form-group">
+    <label>
+        <input type="checkbox"
+               name="afecta_produccion"
+               {% if producto.afecta_produccion %}checked{% endif %}>
+        Afecta proyección de producción
+    </label>
+</div>
+
+{% endblock %}

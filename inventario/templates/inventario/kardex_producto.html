@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Kardex — {{ producto.nombre }}</h1>
+            <p>Historial completo de entradas, salidas y balance.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:productos' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="table-card">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Referencia</th>
+                        <th>Entrada</th>
+                        <th>Salida</th>
+                        <th>Balance</th>
+                        <th>Usuario</th>
+                        <th>Observación</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for fila in filas %}
+                    <tr>
+                        <td>{{ fila.movimiento.fecha|date:"d/m/Y" }}</td>
+                        <td>{{ fila.movimiento.get_tipo_display }}</td>
+                        <td>{{ fila.movimiento.referencia|default:"-" }}</td>
+                        <td>{{ fila.entrada|floatformat:2|intcomma }}</td>
+                        <td>{{ fila.salida|floatformat:2|intcomma }}</td>
+                        <td><strong>{{ fila.balance|floatformat:2|intcomma }}</strong></td>
+                        <td>{{ fila.movimiento.usuario|default:"-" }}</td>
+                        <td>{{ fila.movimiento.observacion|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8">No hay movimientos para este producto.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

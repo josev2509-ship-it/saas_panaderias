@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Editar día no laborable</h1>
+            <p>Actualiza feriados, suspensión de docencia o días sin clase.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'calendario_escolar' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    <section class="card">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div>
+                    <label>Fecha</label>
+                    <input type="date" name="fecha" value="{{ dia.fecha|date:'Y-m-d' }}" required>
+                </div>
+
+                <div>
+                    <label>Tipo</label>
+                    <select name="tipo" required>
+                        <option value="feriado" {% if dia.tipo == "feriado" %}selected{% endif %}>Feriado</option>
+                        <option value="no_docencia" {% if dia.tipo == "no_docencia" %}selected{% endif %}>No docencia</option>
+                        <option value="suspension" {% if dia.tipo == "suspension" %}selected{% endif %}>Suspensión de clases</option>
+                        <option value="otro" {% if dia.tipo == "otro" %}selected{% endif %}>Otro</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Motivo</label>
+                    <input type="text" name="motivo" value="{{ dia.motivo }}" required>
+                </div>
+            </div>
+
+            <br>
+
+            <div>
+                <label>Observación</label>
+                <textarea name="observacion" rows="4">{{ dia.observacion }}</textarea>
+            </div>
+
+            <br>
+
+            <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" name="activo" {% if dia.activo %}checked{% endif %}>
+                Activo
+            </label>
+
+            <br>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">Guardar cambios</button>
+                <a href="{% url 'calendario_escolar' %}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </section>
+
+</div>
+
+{% endblock %}

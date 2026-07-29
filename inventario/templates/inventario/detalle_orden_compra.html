@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Orden de compra {{ orden.numero }}</h1>
+            <p>Gestión profesional de productos solicitados.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:calcular_orden_compra' orden.id %}" class="btn">
+                Calcular productos
+            </a>
+
+            <a href="{% url 'inventario:pdf_orden_compra' orden.id %}" class="btn btn-secondary" target="_blank">
+                Ver PDF
+            </a>
+
+            <a href="{% url 'inventario:descargar_pdf_orden_compra' orden.id %}" class="btn btn-light">
+                Descargar PDF
+            </a>
+
+            <a href="{% url 'inventario:ordenes_compra' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% if orden.estado != "recibida" %}
+<a href="{% url 'inventario:recibir_orden_compra' orden.id %}"
+   class="btn btn-success">
+    Recibir orden
+</a>
+{% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Información general</h3>
+        </div>
+
+        <div class="form-grid">
+            <div>
+                <label>Número</label>
+                <input type="text" value="{{ orden.numero }}" readonly>
+            </div>
+
+            <div>
+                <label>Estado</label>
+                <input type="text" value="{{ orden.get_estado_display }}" readonly>
+            </div>
+
+            <div>
+                <label>Proveedor</label>
+                <input type="text" value="{{ orden.proveedor|default:'-' }}" readonly>
+            </div>
+
+            <div>
+                <label>Fecha</label>
+                <input type="text" value="{{ orden.fecha|date:'d/m/Y' }}" readonly>
+            </div>
+
+            <div>
+                <label>Período desde</label>
+                <input type="text" value="{{ orden.fecha_inicio|date:'d/m/Y' }}" readonly>
+            </div>
+
+            <div>
+                <label>Período hasta</label>
+                <input type="text" value="{{ orden.fecha_fin|date:'d/m/Y' }}" readonly>
+            </div>
+        </div>
+
+        <br>
+
+        <div>
+            <label>Observación</label>
+            <textarea rows="3" readonly>{{ orden.observacion }}</textarea>
+        </div>
+    </section>
+
+    <section class="card">
+    <div class="section-header">
+        <h3>Agregar producto manual</h3>
+        <p>Agrega productos adicionales no calculados por receta.</p>
+    </div>
+
+    <form method="post" action="{% url 'inventario:agregar_producto_manual_orden' orden.id %}">
+        {% csrf_token %}
+
+        <div class="form-grid">
+            <div>
+                <label>Producto</label>
+                <input type="text" name="producto_manual" placeholder="Ej.: Fundas plásticas" required>
+            </div>
+
+            <div>
+                <label>Unidad de compra</label>
+                <input type="text" name="unidad_compra" placeholder="Ej.: Paquete, caja, saco" required>
+            </div>
+
+            <div>
+                <label>Cantidad</label>
+                <input type="number" name="cantidad_compra" step="0.01" required>
+            </div>
+
+            <div>
+                <label>Precio interno</label>
+                <input type="number" name="precio_unitario_compra" step="0.01" value="0">
+            </div>
+        </div>
+
+        <br>
+
+        <div>
+            <label>Observación</label>
+            <textarea name="observacion" rows="3" placeholder="Detalle u observación del producto..."></textarea>
+        </div>
+
+        <br>
+
+        <div class="form-actions">
+            <button type="submit" class="btn">
+                Agregar producto
+            </button>
+        </div>
+    </form>
+</section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Productos de la orden</h3>
+            <p>Puedes ajustar cantidad, precio interno y observación antes de remitir la orden.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Unidad compra</th>
+                        <th>Necesario</th>
+                        <th>Disponible</th>
+                        <th>Faltante</th>
+                        <th>Cantidad compra</th>
+                        <th>Precio interno</th>
+                        <th>Observación</th>
+                        <th>Total interno</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for detalle in detalles %}
+                    <tr>
+                        <form method="post" action="{% url 'inventario:actualizar_detalle_orden' detalle.id %}">
+                            {% csrf_token %}
+
+                            <td>{{ detalle.nombre_producto }}</td>
+                            <td>{{ detalle.unidad_compra|default:"-" }}</td>
+                            <td>{{ detalle.cantidad_necesaria|floatformat:2|intcomma }}</td>
+                            <td>{{ detalle.cantidad_disponible|floatformat:2|intcomma }}</td>
+                            <td>{{ detalle.cantidad_faltante|floatformat:2|intcomma }}</td>
+
+                            <td>
+                                <input type="number"
+                                       name="cantidad_compra"
+                                       step="0.01"
+                                       value="{{ detalle.cantidad_compra|floatformat:2 }}"
+                                       style="width:95px;">
+                            </td>
+
+                            <td>
+                                <input type="number"
+                                       name="precio_unitario_compra"
+                                       step="0.01"
+                                       value="{{ detalle.precio_unitario_compra|floatformat:2 }}"
+                                       style="width:105px;">
+                            </td>
+
+                            <td>
+                                <input type="text"
+                                       name="observacion"
+                                       value="{{ detalle.observacion|default:'' }}"
+                                       style="width:160px;">
+                            </td>
+
+                            <td>
+                                RD$ {{ detalle.total|floatformat:2|intcomma }}
+                            </td>
+
+                            <td>
+                                <button type="submit" class="btn btn-small">
+                                    Guardar
+                                </button>
+
+                                <a href="{% url 'inventario:eliminar_detalle_orden' detalle.id %}"
+                                   class="btn btn-danger btn-small"
+                                   onclick="return confirm('¿Seguro que deseas eliminar este producto?');">
+                                    Eliminar
+                                </a>
+                            </td>
+                        </form>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10">Todavía no hay productos calculados o agregados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Totales internos</h3>
+            <p>Estos montos son solo para control interno; no salen en el PDF al proveedor.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span>Subtotal</span>
+                <strong>RD$ {{ orden.subtotal|floatformat:2|intcomma }}</strong>
+            </div>
+
+            <div class="stat-card">
+                <span>ITBIS</span>
+                <strong>RD$ {{ orden.itbis|floatformat:2|intcomma }}</strong>
+            </div>
+
+            <div class="stat-card">
+                <span>Total</span>
+                <strong>RD$ {{ orden.total|floatformat:2|intcomma }}</strong>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Órdenes de compra</h1>
+            <p>Historial de órdenes generadas, sugeridas y manuales.</p>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'inventario:generar_orden_compra' %}" class="btn">
+                Generar orden sugerida
+            </a>
+
+            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">
+                Volver
+            </a>
+        </div>
+    </div>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Listado de órdenes</h3>
+            <p>Total registrado: {{ ordenes.count }} órdenes.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Número</th>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Período</th>
+                        <th>Estado</th>
+                        <th>Total</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for orden in ordenes %}
+                    <tr>
+                        <td><strong>{{ orden.numero }}</strong></td>
+                        <td>{{ orden.fecha|date:"d/m/Y" }}</td>
+                        <td>{{ orden.proveedor|default:"-" }}</td>
+                        <td>
+                            {{ orden.fecha_inicio|date:"d/m/Y" }}
+                            -
+                            {{ orden.fecha_fin|date:"d/m/Y" }}
+                        </td>
+                        <td>
+                            <span class="status-pill status-{{ orden.estado }}">
+                                {{ orden.get_estado_display }}
+                            </span>
+                        </td>
+                        <td>RD$ {{ orden.total|floatformat:2 }}</td>
+                        <td>
+                            <a href="{% url 'inventario:detalle_orden_compra' orden.id %}" class="btn btn-small">
+                                Ver
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">Todavía no hay órdenes de compra registradas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}

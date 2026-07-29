@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Producción {{ produccion.producto.nombre }}</h1>
+            <p>Detalle de ingredientes, consumo proyectado y ejecución de inventario.</p>
+        </div>
+
+        <div class="form-actions">
+            {% if produccion.estado != "ejecutada" %}
+            <a href="{% url 'inventario:ejecutar_produccion' produccion.id %}"
+               class="btn"
+               onclick="return confirm('¿Seguro que deseas ejecutar esta producción y descontar inventario?');">
+                Ejecutar producción
+            </a>
+            {% endif %}
+
+            <a href="{% url 'inventario:produccion' %}" class="btn btn-light">Volver</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h3>Información general</h3>
+        </div>
+
+        <div class="form-grid">
+            <div>
+                <label>Fecha</label>
+                <input type="text" value="{{ produccion.fecha|date:'d/m/Y' }}" readonly>
+            </div>
+
+            <div>
+                <label>Producto</label>
+                <input type="text" value="{{ produccion.producto.nombre }}" readonly>
+            </div>
+
+            <div>
+                <label>Receta</label>
+                <input type="text" value="{{ produccion.receta.nombre }}" readonly>
+            </div>
+
+            <div>
+                <label>Cantidad a producir</label>
+                <input type="text" value="{{ produccion.cantidad_unidades|floatformat:0 }}" readonly>
+            </div>
+
+            <div>
+                <label>Estado</label>
+                <input type="text" value="{{ produccion.get_estado_display }}" readonly>
+            </div>
+
+            <div>
+                <label>Costo estimado</label>
+                <input type="text" value="RD$ {{ costo_estimado|floatformat:2|intcomma }}" readonly>
+            </div>
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="section-header">
+            <h3>Ingredientes requeridos</h3>
+            <p>Consumo estimado según receta, cantidad a producir y porcentaje de variación.</p>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ingrediente</th>
+                        <th>Necesario</th>
+                        <th>Stock actual</th>
+                        <th>Unidad</th>
+                        <th>Costo estimado</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in detalles %}
+                    <tr>
+                        <td>{{ item.producto.nombre }}</td>
+                        <td>{{ item.cantidad_necesaria|floatformat:2|intcomma }}</td>
+                        <td>{{ item.stock_actual|floatformat:2|intcomma }}</td>
+                        <td>{{ item.unidad }}</td>
+                        <td>RD$ {{ item.costo_estimado|floatformat:2|intcomma }}</td>
+                        <td>
+                            {% if item.stock_actual < item.cantidad_necesaria %}
+                                <span class="status-pill status-anulado">Insuficiente</span>
+                            {% else %}
+                                <span class="status-pill status-generado">Disponible</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">No hay ingredientes registrados en esta receta.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+{% endblock %}
