@@ -12,6 +12,8 @@ from .models import (
     OrdenCompra,
     DetalleOrdenCompra,
     LoteInventario,
+    RecetaProduccion, DetalleRecetaProduccion, PlanProduccion, DetallePlanProduccion,
+    OrdenProduccion, NecesidadMateriaPrima, HistorialEstadoOrdenProduccion,
 )
 
 
@@ -288,3 +290,64 @@ class LoteInventarioAdmin(admin.ModelAdmin):
         return "✅ Vigente"
 
     estado_vencimiento.short_description = "Estado"
+
+
+class IngredienteProduccionInline(admin.TabularInline):
+    model = DetalleRecetaProduccion
+    extra = 0
+
+
+@admin.register(RecetaProduccion)
+class RecetaProduccionAdmin(admin.ModelAdmin):
+    list_display = ("codigo","nombre","producto_terminado","version","rendimiento_base","activa","empresa")
+    list_filter = ("empresa","activa","version")
+    search_fields = ("codigo","nombre","producto_terminado__nombre")
+    readonly_fields = ("creado_por","actualizado_por","fecha_creacion","fecha_actualizacion")
+    inlines = (IngredienteProduccionInline,)
+    def has_delete_permission(self, request, obj=None): return False
+
+
+class DetallePlanInline(admin.TabularInline):
+    model = DetallePlanProduccion
+    extra = 0
+    readonly_fields = tuple(f.name for f in DetallePlanProduccion._meta.fields)
+    can_delete = False
+    def has_add_permission(self, request, obj=None): return False
+
+
+@admin.register(PlanProduccion)
+class PlanProduccionAdmin(admin.ModelAdmin):
+    list_display = ("numero","fecha_plan","origen","estado","empresa")
+    list_filter = ("empresa","estado","origen","fecha_plan")
+    search_fields = ("numero","observaciones")
+    readonly_fields = ("numero","estado","creado_por","actualizado_por","aprobado_por","fecha_aprobacion","fecha_creacion","fecha_actualizacion")
+    inlines = (DetallePlanInline,)
+    def has_delete_permission(self, request, obj=None): return False
+
+
+@admin.register(OrdenProduccion)
+class OrdenProduccionAdmin(admin.ModelAdmin):
+    list_display = ("numero","producto_terminado","fecha_programada","turno","estado","cantidad_planificada","empresa")
+    list_filter = ("empresa","estado","turno","prioridad","fecha_programada")
+    search_fields = ("numero","producto_terminado__nombre")
+    readonly_fields = ("numero","estado","cantidad_iniciada","cantidad_producida","cantidad_rechazada","fecha_inicio_real","fecha_fin_real","creado_por","actualizado_por","fecha_creacion","fecha_actualizacion")
+    def has_delete_permission(self, request, obj=None): return False
+
+
+@admin.register(NecesidadMateriaPrima)
+class NecesidadMateriaPrimaAdmin(admin.ModelAdmin):
+    list_display = ("materia_prima","producto_terminado","cantidad_con_merma","fecha_requerida","estado","empresa")
+    list_filter = ("empresa","estado","fecha_requerida")
+    readonly_fields = tuple(f.name for f in NecesidadMateriaPrima._meta.fields)
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
+
+
+@admin.register(HistorialEstadoOrdenProduccion)
+class HistorialEstadoOrdenAdmin(admin.ModelAdmin):
+    list_display = ("orden","estado_anterior","estado_nuevo","usuario","fecha")
+    readonly_fields = tuple(f.name for f in HistorialEstadoOrdenProduccion._meta.fields)
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False

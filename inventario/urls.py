@@ -1,9 +1,36 @@
 from django.urls import path
 from . import views
+from . import produccion_views
 
 app_name = "inventario"
 
 urlpatterns = [
+    path("produccion/dashboard/", produccion_views.produccion_dashboard, name="produccion_dashboard"),
+    path("produccion/recetas/", produccion_views.recetas_lista, name="recetas_lista"),
+    path("produccion/recetas/nueva/", produccion_views.receta_crear, name="receta_crear"),
+    path("produccion/recetas/<int:pk>/", produccion_views.receta_detalle, name="receta_detalle"),
+    path("produccion/recetas/<int:pk>/editar/", produccion_views.receta_editar, name="receta_editar"),
+    path("produccion/recetas/<int:pk>/duplicar/", produccion_views.receta_duplicar, name="receta_duplicar"),
+    path("produccion/recetas/<int:pk>/estado/", produccion_views.receta_cambiar_estado, name="receta_cambiar_estado"),
+    path("produccion/planes/", produccion_views.planes_lista, name="planes_lista"),
+    path("produccion/planes/nuevo/", produccion_views.plan_crear, name="plan_crear"),
+    path("produccion/planes/generar-pedidos/", produccion_views.plan_generar_desde_pedidos, name="plan_generar_desde_pedidos"),
+    path("produccion/planes/<int:pk>/", produccion_views.plan_detalle, name="plan_detalle"),
+    path("produccion/planes/<int:pk>/editar/", produccion_views.plan_editar, name="plan_editar"),
+    path("produccion/planes/<int:pk>/aprobar/", produccion_views.plan_aprobar, name="plan_aprobar"),
+    path("produccion/planes/<int:pk>/cancelar/", produccion_views.plan_cancelar, name="plan_cancelar"),
+    path("produccion/planes/<int:pk>/generar-ordenes/", produccion_views.plan_generar_ordenes, name="plan_generar_ordenes"),
+    path("produccion/ordenes/", produccion_views.ordenes_lista, name="ordenes_lista"),
+    path("produccion/ordenes/nueva/", produccion_views.orden_crear, name="orden_crear"),
+    path("produccion/ordenes/<int:pk>/", produccion_views.orden_detalle, name="orden_detalle"),
+    path("produccion/ordenes/<int:pk>/editar/", produccion_views.orden_editar, name="orden_editar"),
+    path("produccion/ordenes/<int:pk>/programar/", produccion_views.orden_programar, name="orden_programar"),
+    path("produccion/ordenes/<int:pk>/iniciar/", produccion_views.orden_iniciar, name="orden_iniciar"),
+    path("produccion/ordenes/<int:pk>/completar/", produccion_views.orden_completar, name="orden_completar"),
+    path("produccion/ordenes/<int:pk>/cancelar/", produccion_views.orden_cancelar, name="orden_cancelar"),
+    path("produccion/programacion/diaria/", produccion_views.produccion_programacion_diaria, name="produccion_programacion_diaria"),
+    path("produccion/programacion/semanal/", produccion_views.produccion_programacion_semanal, name="produccion_programacion_semanal"),
+    path("produccion/necesidades/", produccion_views.necesidades_materia_prima, name="necesidades_materia_prima"),
 
     # =====================================================
     # DASHBOARD

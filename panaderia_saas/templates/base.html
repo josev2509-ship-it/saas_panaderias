@@ -137,6 +137,13 @@
                 🏭 <span>Producción</span>
             </a>
 
+            <a href="{% url 'inventario:produccion_dashboard' %}"><span>Dashboard producción</span></a>
+            <a href="{% url 'inventario:recetas_lista' %}"><span>Recetas de producción</span></a>
+            <a href="{% url 'inventario:planes_lista' %}"><span>Planificación</span></a>
+            <a href="{% url 'inventario:ordenes_lista' %}"><span>Órdenes de producción</span></a>
+            <a href="{% url 'inventario:produccion_programacion_diaria' %}"><span>Programación producción</span></a>
+            <a href="{% url 'inventario:necesidades_materia_prima' %}"><span>Necesidades materia prima</span></a>
+
             <a href="{% url 'inventario:ordenes_compra' %}">
                 🛒 <span>Órdenes de compra</span>
             </a>

@@ -36,15 +36,15 @@ def recalcular_pedido(pedido):
     return pedido
 
 
-def siguiente_numero(empresa, fecha=None):
+def siguiente_numero(empresa, fecha=None, tipo="PED"):
     fecha = fecha or timezone.localdate()
     with transaction.atomic():
         secuencia, _ = SecuenciaDocumento.objects.select_for_update().get_or_create(
-            empresa=empresa, tipo="PED", periodo=fecha.year, defaults={"ultimo_numero": 0}
+            empresa=empresa, tipo=tipo, periodo=fecha.year, defaults={"ultimo_numero": 0}
         )
         secuencia.ultimo_numero += 1
         secuencia.save(update_fields=["ultimo_numero"])
-        return f"PED-{fecha.year}-{secuencia.ultimo_numero:06d}"
+        return f"{tipo}-{fecha.year}-{secuencia.ultimo_numero:06d}"
 
 
 def validar_envio(pedido):

@@ -897,3 +897,236 @@ class DetalleOrdenCompra(models.Model):
 
     def __str__(self):
         return f"{self.nombre_producto()} - {self.cantidad_compra}"
+
+
+# =====================================================
+# PLANIFICACIÓN DE PRODUCCIÓN (SPRINT PRODUCCIÓN 1)
+# =====================================================
+class RecetaProduccion(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="recetas_produccion")
+    codigo = models.CharField(max_length=40)
+    nombre = models.CharField(max_length=180)
+    producto_terminado = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT, related_name="recetas_produccion")
+    version = models.PositiveIntegerField(default=1)
+    rendimiento_base = models.DecimalField(max_digits=14, decimal_places=4)
+    unidad_rendimiento = models.CharField(max_length=30)
+    porcentaje_merma_estimada = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    tiempo_preparacion_minutos = models.PositiveIntegerField(null=True, blank=True)
+    tiempo_produccion_minutos = models.PositiveIntegerField(null=True, blank=True)
+    instrucciones = models.TextField(blank=True)
+    activa = models.BooleanField(default=False)
+    fecha_vigencia_desde = models.DateField()
+    fecha_vigencia_hasta = models.DateField(null=True, blank=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="recetas_prod_creadas")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="recetas_prod_actualizadas")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["producto_terminado__nombre", "-version"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "codigo"], name="inv_recprod_empresa_codigo_uniq"),
+            models.UniqueConstraint(fields=["empresa", "producto_terminado", "version"], name="inv_recprod_producto_version_uniq"),
+            models.CheckConstraint(condition=models.Q(rendimiento_base__gt=0), name="inv_recprod_rendimiento_positivo"),
+            models.CheckConstraint(condition=models.Q(porcentaje_merma_estimada__gte=0, porcentaje_merma_estimada__lte=100), name="inv_recprod_merma_rango"),
+        ]
+        permissions = []
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if self.producto_terminado_id:
+            if self.empresa_id and self.producto_terminado.empresa_id != self.empresa_id:
+                errors["producto_terminado"] = "El producto pertenece a otra empresa."
+            elif self.producto_terminado.tipo != "producto_terminado" or not self.producto_terminado.activo:
+                errors["producto_terminado"] = "Selecciona un producto terminado activo."
+        if self.rendimiento_base is not None and self.rendimiento_base <= 0:
+            errors["rendimiento_base"] = "El rendimiento debe ser mayor que cero."
+        if self.fecha_vigencia_hasta and self.fecha_vigencia_hasta < self.fecha_vigencia_desde:
+            errors["fecha_vigencia_hasta"] = "La fecha final no puede ser anterior a la inicial."
+        if errors: raise ValidationError(errors)
+
+    def vigente_en(self, fecha):
+        return self.activa and self.fecha_vigencia_desde <= fecha and (
+            self.fecha_vigencia_hasta is None or self.fecha_vigencia_hasta >= fecha
+        )
+
+    def __str__(self):
+        return f"{self.codigo} · {self.nombre} v{self.version}"
+
+
+class DetalleRecetaProduccion(models.Model):
+    receta = models.ForeignKey(RecetaProduccion, on_delete=models.PROTECT, related_name="ingredientes")
+    materia_prima = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT, related_name="uso_en_recetas_produccion")
+    cantidad = models.DecimalField(max_digits=14, decimal_places=4)
+    unidad_medida = models.CharField(max_length=30)
+    porcentaje_merma = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    es_opcional = models.BooleanField(default=False)
+    observaciones = models.CharField(max_length=255, blank=True)
+    orden = models.PositiveIntegerField(default=0)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["orden", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["receta", "materia_prima"], name="inv_detrecprod_materia_uniq"),
+            models.CheckConstraint(condition=models.Q(cantidad__gt=0), name="inv_detrecprod_cantidad_positiva"),
+            models.CheckConstraint(condition=models.Q(porcentaje_merma__gte=0, porcentaje_merma__lte=100), name="inv_detrecprod_merma_rango"),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if self.materia_prima_id and self.receta_id:
+            if self.materia_prima.empresa_id != self.receta.empresa_id:
+                errors["materia_prima"] = "La materia prima pertenece a otra empresa."
+            if self.materia_prima_id == self.receta.producto_terminado_id:
+                errors["materia_prima"] = "La materia prima no puede ser el producto terminado."
+            if not self.materia_prima.activo or self.materia_prima.tipo == "producto_terminado":
+                errors["materia_prima"] = "Selecciona una materia prima activa."
+        if errors: raise ValidationError(errors)
+
+
+class PlanProduccion(models.Model):
+    class Estado(models.TextChoices):
+        BORRADOR = "BORRADOR", "Borrador"
+        GENERADO = "GENERADO", "Generado"
+        EN_REVISION = "EN_REVISION", "En revisión"
+        APROBADO = "APROBADO", "Aprobado"
+        CERRADO = "CERRADO", "Cerrado"
+        CANCELADO = "CANCELADO", "Cancelado"
+    class Origen(models.TextChoices):
+        MANUAL = "MANUAL", "Manual"
+        PEDIDOS = "PEDIDOS", "Pedidos"
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="planes_produccion")
+    numero = models.CharField(max_length=30)
+    fecha_plan = models.DateField()
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.BORRADOR)
+    origen = models.CharField(max_length=10, choices=Origen.choices, default=Origen.MANUAL)
+    observaciones = models.TextField(blank=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="planes_prod_creados")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="planes_prod_actualizados")
+    aprobado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="planes_prod_aprobados")
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["-fecha_plan", "-id"]
+        constraints = [models.UniqueConstraint(fields=["empresa", "numero"], name="inv_planprod_empresa_numero_uniq")]
+        permissions = [
+            ("aprobar_planproduccion", "Puede aprobar planes de producción"),
+            ("cancelar_planproduccion", "Puede cancelar planes de producción"),
+        ]
+    def __str__(self): return self.numero
+
+
+class DetallePlanProduccion(models.Model):
+    plan = models.ForeignKey(PlanProduccion, on_delete=models.CASCADE, related_name="detalles")
+    producto_terminado = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT)
+    receta = models.ForeignKey(RecetaProduccion, on_delete=models.PROTECT, null=True, blank=True)
+    cantidad_solicitada = models.DecimalField(max_digits=14, decimal_places=4)
+    cantidad_planificada = models.DecimalField(max_digits=14, decimal_places=4)
+    unidad_medida = models.CharField(max_length=30)
+    prioridad = models.CharField(max_length=10, choices=(("BAJA","Baja"),("NORMAL","Normal"),("ALTA","Alta"),("URGENTE","Urgente")), default="NORMAL")
+    fecha_requerida = models.DateField()
+    pedido_origen = models.ForeignKey("comercial.Pedido", on_delete=models.PROTECT, null=True, blank=True)
+    detalle_pedido_origen = models.ForeignKey("comercial.DetallePedido", on_delete=models.PROTECT, null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["producto_terminado__nombre", "id"]
+        constraints = [models.CheckConstraint(condition=models.Q(cantidad_planificada__gt=0), name="inv_detplan_cantidad_positiva")]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors={}
+        if self.producto_terminado_id and self.plan_id and self.producto_terminado.empresa_id != self.plan.empresa_id: errors["producto_terminado"]="El producto pertenece a otra empresa."
+        if self.receta_id and self.receta.producto_terminado_id != self.producto_terminado_id: errors["receta"]="La receta no corresponde al producto."
+        if self.pedido_origen_id and (self.pedido_origen.empresa_id != self.plan.empresa_id or self.pedido_origen.estado != "APROBADO"): errors["pedido_origen"]="El pedido debe estar aprobado y pertenecer a la empresa."
+        if self.detalle_pedido_origen_id and (self.detalle_pedido_origen.pedido_id != self.pedido_origen_id or self.detalle_pedido_origen.producto_id != self.producto_terminado_id): errors["detalle_pedido_origen"]="La línea comercial no corresponde al pedido y producto."
+        if errors: raise ValidationError(errors)
+
+
+class OrdenProduccion(models.Model):
+    class Estado(models.TextChoices):
+        BORRADOR="BORRADOR","Borrador"; PROGRAMADA="PROGRAMADA","Programada"; LIBERADA="LIBERADA","Liberada"; EN_PROCESO="EN_PROCESO","En proceso"; PAUSADA="PAUSADA","Pausada"; COMPLETADA="COMPLETADA","Completada"; CERRADA="CERRADA","Cerrada"; CANCELADA="CANCELADA","Cancelada"
+    class Turno(models.TextChoices):
+        MANANA="MANANA","Mañana"; TARDE="TARDE","Tarde"; NOCHE="NOCHE","Noche"; UNICO="UNICO","Único"
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="ordenes_produccion")
+    numero = models.CharField(max_length=30)
+    plan = models.ForeignKey(PlanProduccion, on_delete=models.PROTECT, null=True, blank=True, related_name="ordenes")
+    detalle_plan = models.ForeignKey(DetallePlanProduccion, on_delete=models.PROTECT, null=True, blank=True, related_name="ordenes")
+    producto_terminado = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT)
+    receta = models.ForeignKey(RecetaProduccion, on_delete=models.PROTECT)
+    fecha_programada = models.DateField()
+    turno = models.CharField(max_length=10, choices=Turno.choices, default=Turno.UNICO)
+    prioridad = models.CharField(max_length=10, choices=DetallePlanProduccion._meta.get_field("prioridad").choices, default="NORMAL")
+    cantidad_planificada = models.DecimalField(max_digits=14, decimal_places=4)
+    cantidad_iniciada = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    cantidad_producida = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    cantidad_rechazada = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    unidad_medida = models.CharField(max_length=30)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.BORRADOR)
+    responsable = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="ordenes_produccion_responsable")
+    fecha_inicio_real = models.DateTimeField(null=True, blank=True)
+    fecha_fin_real = models.DateTimeField(null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="ordenes_prod_creadas")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="ordenes_prod_actualizadas")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["-fecha_programada", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa","numero"], name="inv_ordenprod_empresa_numero_uniq"),
+            models.CheckConstraint(condition=models.Q(cantidad_planificada__gt=0), name="inv_ordenprod_planificada_positiva"),
+            models.CheckConstraint(condition=models.Q(cantidad_producida__gte=0, cantidad_rechazada__gte=0), name="inv_ordenprod_cantidades_no_negativas"),
+        ]
+        permissions = [
+            ("programar_ordenproduccion","Puede programar órdenes de producción"),
+            ("iniciar_ordenproduccion","Puede iniciar órdenes de producción"),
+            ("completar_ordenproduccion","Puede completar órdenes de producción"),
+            ("cancelar_ordenproduccion","Puede cancelar órdenes de producción"),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors={}
+        if self.producto_terminado_id and self.empresa_id and self.producto_terminado.empresa_id != self.empresa_id: errors["producto_terminado"]="El producto pertenece a otra empresa."
+        if self.receta_id and (self.receta.empresa_id != self.empresa_id or self.receta.producto_terminado_id != self.producto_terminado_id): errors["receta"]="La receta no corresponde a la empresa y producto."
+        if self.plan_id and self.plan.empresa_id != self.empresa_id: errors["plan"]="El plan pertenece a otra empresa."
+        if self.detalle_plan_id and self.detalle_plan.plan_id != self.plan_id: errors["detalle_plan"]="El detalle no pertenece al plan."
+        if self.cantidad_producida + self.cantidad_rechazada > self.cantidad_iniciada: errors["cantidad_producida"]="Producida más rechazada no puede superar la iniciada."
+        if self.fecha_inicio_real and self.fecha_fin_real and self.fecha_fin_real < self.fecha_inicio_real: errors["fecha_fin_real"]="La fecha final no puede ser anterior al inicio."
+        if errors: raise ValidationError(errors)
+
+
+class NecesidadMateriaPrima(models.Model):
+    class Estado(models.TextChoices):
+        CALCULADA="CALCULADA","Calculada"; REVISADA="REVISADA","Revisada"; CUBIERTA="CUBIERTA","Cubierta"; INSUFICIENTE="INSUFICIENTE","Insuficiente"; CANCELADA="CANCELADA","Cancelada"
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    plan = models.ForeignKey(PlanProduccion, on_delete=models.CASCADE, null=True, blank=True, related_name="necesidades")
+    orden = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, null=True, blank=True, related_name="necesidades")
+    producto_terminado = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT, related_name="+")
+    materia_prima = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT, related_name="necesidades_produccion")
+    cantidad_teorica = models.DecimalField(max_digits=16, decimal_places=4)
+    unidad_medida = models.CharField(max_length=30)
+    porcentaje_merma_aplicado = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cantidad_con_merma = models.DecimalField(max_digits=16, decimal_places=4)
+    fecha_requerida = models.DateField()
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.CALCULADA)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+
+class HistorialEstadoOrdenProduccion(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    orden = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name="historial_estados")
+    estado_anterior = models.CharField(max_length=20, choices=OrdenProduccion.Estado.choices)
+    estado_nuevo = models.CharField(max_length=20, choices=OrdenProduccion.Estado.choices)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    comentario = models.TextField(blank=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+    class Meta: ordering = ["-fecha"]

@@ -7,12 +7,16 @@ from django.db import transaction
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 from comercial.models import Cliente, Pedido
+from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
 
 from .models import Documento, extension_por_contenido
 
 MODELOS_PERMITIDOS = {
     ("comercial", "cliente"): Cliente,
     ("comercial", "pedido"): Pedido,
+    ("inventario", "recetaproduccion"): RecetaProduccion,
+    ("inventario", "planproduccion"): PlanProduccion,
+    ("inventario", "ordenproduccion"): OrdenProduccion,
 }
 
 
