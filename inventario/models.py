@@ -220,6 +220,18 @@ class ProductoInventario(models.Model):
 # =====================================================
 
 class LoteInventario(models.Model):
+    class Estado(models.TextChoices):
+        DISPONIBLE = "DISPONIBLE", "Disponible"
+        AGOTADO = "AGOTADO", "Agotado"
+        BLOQUEADO = "BLOQUEADO", "Bloqueado"
+        VENCIDO = "VENCIDO", "Vencido"
+
+    class Origen(models.TextChoices):
+        INICIAL = "INICIAL", "Inicial"
+        COMPRA = "COMPRA", "Compra"
+        PRODUCCION = "PRODUCCION", "Produccion"
+        DEVOLUCION = "DEVOLUCION", "Devolucion"
+        AJUSTE = "AJUSTE", "Ajuste"
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
 
     producto = models.ForeignKey(
@@ -244,9 +256,20 @@ class LoteInventario(models.Model):
 
     cantidad_disponible = models.DecimalField(
         max_digits=14,
-        decimal_places=2,
+        decimal_places=4,
         default=0
     )
+    cantidad_reservada = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    tipo_origen = models.CharField(max_length=20, choices=Origen.choices, default=Origen.INICIAL)
+    fecha_fabricacion = models.DateField(null=True, blank=True)
+    unidad_medida = models.CharField(max_length=30, blank=True)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.DISPONIBLE)
+    referencia_origen = models.CharField(max_length=150, blank=True)
+    orden_produccion_origen = models.ForeignKey(
+        "OrdenProduccion", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="lotes_generados",
+    )
+    activo = models.BooleanField(default=True)
 
     proveedor = models.CharField(
         max_length=255,
@@ -273,9 +296,21 @@ class LoteInventario(models.Model):
     )
 
     creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_por = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="lotes_inventario_actualizados",
+    )
+    actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["fecha_vencimiento", "fecha_ingreso"]
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "producto", "lote"], name="inv_lote_empresa_producto_numero_uniq"),
+            models.CheckConstraint(condition=models.Q(cantidad_inicial__gte=0), name="inv_lote_inicial_no_negativa"),
+            models.CheckConstraint(condition=models.Q(cantidad_disponible__gte=0), name="inv_lote_disponible_no_negativa"),
+            models.CheckConstraint(condition=models.Q(cantidad_reservada__gte=0), name="inv_lote_reservada_no_negativa"),
+            models.CheckConstraint(condition=models.Q(cantidad_reservada__lte=models.F("cantidad_disponible")), name="inv_lote_reserva_no_supera_disponible"),
+        ]
 
     def __str__(self):
         return f"{self.producto.nombre} - {self.lote}"
@@ -407,8 +442,20 @@ class MovimientoInventario(models.Model):
         ("devolucion_prestamo", "Devolución préstamo"),
     )
 
+    TIPOS = TIPOS + (
+        ("consumo_produccion", "Consumo de produccion"),
+        ("merma_produccion", "Merma de produccion"),
+        ("devolucion_produccion", "Devolucion de produccion"),
+        ("entrada_producto_terminado", "Entrada de producto terminado"),
+        ("reversion_consumo", "Reversion de consumo"),
+        ("reversion_entrada", "Reversion de entrada"),
+    )
+
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     producto = models.ForeignKey(ProductoInventario, on_delete=models.PROTECT)
+    lote = models.ForeignKey(LoteInventario, on_delete=models.PROTECT, null=True, blank=True, related_name="movimientos")
+    orden_produccion = models.ForeignKey("OrdenProduccion", on_delete=models.PROTECT, null=True, blank=True, related_name="movimientos_inventario")
+    ejecucion = models.ForeignKey("EjecucionInventarioOrden", on_delete=models.PROTECT, null=True, blank=True, related_name="movimientos")
 
     tipo = models.CharField(max_length=30, choices=TIPOS)
     cantidad = models.DecimalField(max_digits=14, decimal_places=4)
@@ -426,6 +473,11 @@ class MovimientoInventario(models.Model):
     )
 
     creado_en = models.DateTimeField(auto_now_add=True)
+    saldo_anterior = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    saldo_posterior = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    clave_idempotencia = models.CharField(max_length=180, null=True, blank=True, unique=True)
+    aplicado_por_servicio = models.BooleanField(default=False, editable=False)
+    revertido_de = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="reversiones")
 
     class Meta:
         ordering = ["-fecha", "-id"]
@@ -438,7 +490,7 @@ class MovimientoInventario(models.Model):
 
         super().save(*args, **kwargs)
 
-        if nuevo:
+        if nuevo and not self.aplicado_por_servicio:
             producto = self.producto
             cantidad = self.cantidad or Decimal("0")
 
@@ -1130,3 +1182,94 @@ class HistorialEstadoOrdenProduccion(models.Model):
     comentario = models.TextField(blank=True)
     fecha = models.DateTimeField(auto_now_add=True)
     class Meta: ordering = ["-fecha"]
+
+
+class ReservaInventario(models.Model):
+    class Estado(models.TextChoices):
+        ACTIVA = "ACTIVA", "Activa"
+        PARCIAL = "PARCIAL", "Parcial"
+        CONSUMIDA = "CONSUMIDA", "Consumida"
+        LIBERADA = "LIBERADA", "Liberada"
+        CANCELADA = "CANCELADA", "Cancelada"
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="reservas_inventario")
+    numero = models.CharField(max_length=30)
+    orden = models.ForeignKey(OrdenProduccion, on_delete=models.PROTECT, related_name="reservas_inventario")
+    estado = models.CharField(max_length=15, choices=Estado.choices, default=Estado.ACTIVA)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["empresa", "numero"], name="inv_reserva_empresa_numero_uniq")]
+
+
+class DetalleReservaInventario(models.Model):
+    reserva = models.ForeignKey(ReservaInventario, on_delete=models.CASCADE, related_name="detalles")
+    necesidad = models.ForeignKey(NecesidadMateriaPrima, on_delete=models.PROTECT, related_name="reservas")
+    lote = models.ForeignKey(LoteInventario, on_delete=models.PROTECT, related_name="reservas")
+    cantidad_reservada = models.DecimalField(max_digits=14, decimal_places=4)
+    cantidad_consumida = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    cantidad_liberada = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["reserva", "necesidad", "lote"], name="inv_reserva_detalle_uniq"),
+            models.CheckConstraint(condition=models.Q(cantidad_reservada__gt=0), name="inv_reserva_detalle_positiva"),
+        ]
+    @property
+    def cantidad_pendiente(self):
+        return self.cantidad_reservada - self.cantidad_consumida - self.cantidad_liberada
+
+
+class EjecucionInventarioOrden(models.Model):
+    class Estado(models.TextChoices):
+        PREPARADA = "PREPARADA", "Preparada"
+        EN_PROCESO = "EN_PROCESO", "En proceso"
+        CERRADA = "CERRADA", "Cerrada"
+        REVERSADA = "REVERSADA", "Reversada"
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    orden = models.OneToOneField(OrdenProduccion, on_delete=models.PROTECT, related_name="ejecucion_inventario")
+    reserva = models.ForeignKey(ReservaInventario, on_delete=models.PROTECT, related_name="ejecuciones")
+    estado = models.CharField(max_length=15, choices=Estado.choices, default=Estado.PREPARADA)
+    clave_idempotencia = models.CharField(max_length=180, unique=True)
+    iniciado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    iniciado_en = models.DateTimeField(auto_now_add=True)
+    cerrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cerrado_en = models.DateTimeField(null=True, blank=True)
+    reversado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    reversado_en = models.DateTimeField(null=True, blank=True)
+
+
+class ConsumoProduccion(models.Model):
+    ejecucion = models.ForeignKey(EjecucionInventarioOrden, on_delete=models.PROTECT, related_name="consumos")
+    detalle_reserva = models.ForeignKey(DetalleReservaInventario, on_delete=models.PROTECT, related_name="consumos")
+    movimiento = models.OneToOneField(MovimientoInventario, on_delete=models.PROTECT, related_name="consumo")
+    cantidad = models.DecimalField(max_digits=14, decimal_places=4)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+
+class MermaProduccion(models.Model):
+    ejecucion = models.ForeignKey(EjecucionInventarioOrden, on_delete=models.PROTECT, related_name="mermas")
+    lote = models.ForeignKey(LoteInventario, on_delete=models.PROTECT)
+    movimiento = models.OneToOneField(MovimientoInventario, on_delete=models.PROTECT, related_name="merma_produccion")
+    cantidad = models.DecimalField(max_digits=14, decimal_places=4)
+    motivo = models.CharField(max_length=255)
+    requiere_aprobacion = models.BooleanField(default=False)
+    aprobado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+
+class DevolucionProduccion(models.Model):
+    ejecucion = models.ForeignKey(EjecucionInventarioOrden, on_delete=models.PROTECT, related_name="devoluciones")
+    lote = models.ForeignKey(LoteInventario, on_delete=models.PROTECT)
+    movimiento = models.OneToOneField(MovimientoInventario, on_delete=models.PROTECT, related_name="devolucion_produccion")
+    cantidad = models.DecimalField(max_digits=14, decimal_places=4)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+
+class LoteProduccion(models.Model):
+    ejecucion = models.OneToOneField(EjecucionInventarioOrden, on_delete=models.PROTECT, related_name="lote_produccion")
+    lote = models.OneToOneField(LoteInventario, on_delete=models.PROTECT, related_name="produccion")
+    movimiento_entrada = models.OneToOneField(MovimientoInventario, on_delete=models.PROTECT, related_name="lote_producido")
+    cantidad_neta = models.DecimalField(max_digits=14, decimal_places=4)

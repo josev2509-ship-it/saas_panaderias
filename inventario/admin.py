@@ -14,6 +14,8 @@ from .models import (
     LoteInventario,
     RecetaProduccion, DetalleRecetaProduccion, PlanProduccion, DetallePlanProduccion,
     OrdenProduccion, NecesidadMateriaPrima, HistorialEstadoOrdenProduccion,
+    ReservaInventario, DetalleReservaInventario, EjecucionInventarioOrden,
+    ConsumoProduccion, MermaProduccion, DevolucionProduccion, LoteProduccion,
 )
 
 
@@ -351,3 +353,35 @@ class HistorialEstadoOrdenAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return False
     def has_delete_permission(self, request, obj=None): return False
+
+
+class DetalleReservaInline(admin.TabularInline):
+    model = DetalleReservaInventario
+    extra = 0
+    readonly_fields = tuple(f.name for f in DetalleReservaInventario._meta.fields)
+    can_delete = False
+
+
+@admin.register(ReservaInventario)
+class ReservaInventarioAdmin(admin.ModelAdmin):
+    list_display = ("numero", "orden", "estado", "empresa", "creado_en")
+    list_filter = ("empresa", "estado")
+    search_fields = ("numero", "orden__numero")
+    readonly_fields = ("numero", "empresa", "orden", "estado", "creado_por", "creado_en", "actualizado_en")
+    inlines = (DetalleReservaInline,)
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
+
+
+@admin.register(EjecucionInventarioOrden)
+class EjecucionInventarioOrdenAdmin(admin.ModelAdmin):
+    list_display = ("orden", "estado", "empresa", "iniciado_en", "cerrado_en")
+    list_filter = ("empresa", "estado")
+    readonly_fields = tuple(f.name for f in EjecucionInventarioOrden._meta.fields)
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
+
+
+for modelo in (ConsumoProduccion, MermaProduccion, DevolucionProduccion, LoteProduccion):
+    admin.site.register(modelo)
