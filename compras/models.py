@@ -442,3 +442,83 @@ class HistorialEstadoSolicitudCompra(models.Model):
         if self.pk: raise ValidationError("El historial es inmutable.")
         super().save(*args,**kwargs)
     def delete(self,*args,**kwargs): raise ValidationError("El historial no se elimina.")
+
+
+class ExpedienteCompra(AuditMixin):
+    ESTADOS=tuple((x,x.replace("_"," ").title()) for x in ("BORRADOR","ABIERTO","PREPARANDO_RFQ","RFQ_ABIERTA","RECIBIENDO_OFERTAS","EN_EVALUACION","ADJUDICADA","DESIERTA","CANCELADA","CERRADA"))
+    RIESGOS=tuple((x,x.title()) for x in ("BAJO","MEDIO","ALTO","CRITICO"))
+    numero=models.CharField(max_length=30);titulo=models.CharField(max_length=200);descripcion=models.TextField(blank=True)
+    responsable=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name="expedientes_compra_responsable");solicitante_principal=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name="expedientes_compra_solicitante")
+    centro_costo=models.ForeignKey("catalogos.CentroCosto",on_delete=models.PROTECT);tipo_compra=models.ForeignKey("catalogos.TipoCompra",on_delete=models.PROTECT);prioridad=models.CharField(max_length=12,choices=SolicitudCompra.Prioridad.choices);moneda=models.ForeignKey("catalogos.MonedaEmpresa",on_delete=models.PROTECT)
+    presupuesto_estimado=models.DecimalField(max_digits=18,decimal_places=2,default=0);monto_aprobado_solicitudes=models.DecimalField(max_digits=18,decimal_places=2,default=0);monto_comprometido=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    estado=models.CharField(max_length=24,choices=ESTADOS,default="BORRADOR");nivel_riesgo=models.CharField(max_length=10,choices=RIESGOS,default="BAJO");indice_salud=models.DecimalField(max_digits=5,decimal_places=2,default=0)
+    fecha_apertura=models.DateTimeField(null=True,blank=True);fecha_cierre=models.DateTimeField(null=True,blank=True);motivo_cierre=models.TextField(blank=True);motivo_cancelacion=models.TextField(blank=True);observaciones=models.TextField(blank=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=["empresa","numero"],name="cmp_exp_emp_num_uniq"),models.CheckConstraint(condition=Q(presupuesto_estimado__gte=0,monto_aprobado_solicitudes__gte=0,monto_comprometido__gte=0),name="cmp_exp_montos_no_neg"),models.CheckConstraint(condition=Q(indice_salud__gte=0,indice_salud__lte=100),name="cmp_exp_salud_rango")]
+        indexes=[models.Index(fields=["empresa","estado"],name="cmp_exp_emp_estado_idx"),models.Index(fields=["empresa","nivel_riesgo"],name="cmp_exp_emp_riesgo_idx")]
+        permissions=[("abrir_expedientecompra","Puede abrir expedientes"),("cancelar_expedientecompra","Puede cancelar expedientes"),("declarar_desierto_expedientecompra","Puede declarar expedientes desiertos"),("recalcular_salud_expedientecompra","Puede recalcular salud"),("view_historial_expedientecompra","Puede ver historial de expedientes"),("exportar_expedientecompra","Puede exportar expedientes"),("administrar_expedientecompra","Puede administrar expedientes")]
+    def clean(self):
+        errors={}
+        for f in ("centro_costo","tipo_compra","moneda"):
+            o=getattr(self,f,None)
+            if o and o.empresa_id!=self.empresa_id:errors[f]="El registro pertenece a otra empresa."
+        if errors:raise ValidationError(errors)
+    def __str__(self):return f"{self.numero} · {self.titulo}"
+
+class SolicitudExpedienteCompra(models.Model):
+    TIPOS=(("ORIGEN","Origen"),("COMPLEMENTARIA","Complementaria"),("AMPLIACION","Ampliación"))
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);expediente=models.ForeignKey(ExpedienteCompra,on_delete=models.PROTECT,related_name="solicitudes_vinculadas");solicitud=models.ForeignKey(SolicitudCompra,on_delete=models.PROTECT,related_name="vinculos_expediente")
+    tipo_relacion=models.CharField(max_length=20,choices=TIPOS,default="ORIGEN");principal=models.BooleanField(default=False);monto_snapshot=models.DecimalField(max_digits=18,decimal_places=2);moneda_snapshot=models.CharField(max_length=3);estado_snapshot=models.CharField(max_length=20)
+    vinculada_por=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT);fecha_vinculacion=models.DateTimeField(auto_now_add=True);activa=models.BooleanField(default=True);observaciones=models.TextField(blank=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["empresa","solicitud"],condition=Q(activa=True),name="cmp_vexp_sol_activa_uniq"),models.UniqueConstraint(fields=["expediente"],condition=Q(principal=True,activa=True),name="cmp_vexp_principal_uniq")]
+
+class ProcesoRFQ(AuditMixin):
+    ESTADOS=tuple((x,x.replace("_"," ").title()) for x in ("BORRADOR","EN_REVISION","PUBLICADA","ABIERTA","CERRADA","EXTENDIDA","CANCELADA","DESIERTA"))
+    expediente=models.ForeignKey(ExpedienteCompra,on_delete=models.PROTECT,related_name="rfqs");numero=models.CharField(max_length=30);version=models.PositiveIntegerField(default=1);titulo=models.CharField(max_length=200);objeto=models.TextField();descripcion=models.TextField();estado=models.CharField(max_length=15,choices=ESTADOS,default="BORRADOR");moneda=models.ForeignKey("catalogos.MonedaEmpresa",on_delete=models.PROTECT)
+    fecha_publicacion=models.DateTimeField(null=True,blank=True);fecha_inicio=models.DateTimeField();fecha_limite=models.DateTimeField();fecha_apertura_ofertas=models.DateTimeField(null=True,blank=True);fecha_cierre_real=models.DateTimeField(null=True,blank=True);entrega_requerida_desde=models.DateField();entrega_requerida_hasta=models.DateField();lugar_entrega=models.TextField();almacen_destino=models.ForeignKey("catalogos.Almacen",on_delete=models.PROTECT,null=True,blank=True)
+    incoterm=models.CharField(max_length=30,blank=True);permite_oferta_parcial=models.BooleanField(default=False);permite_variantes=models.BooleanField(default=False);permite_equivalentes=models.BooleanField(default=True);requiere_garantia=models.BooleanField(default=False);requiere_muestra=models.BooleanField(default=False);requiere_visita_tecnica=models.BooleanField(default=False);confidencial=models.BooleanField(default=False);minimo_proveedores=models.PositiveIntegerField(default=3);minimo_ofertas_validas=models.PositiveIntegerField(default=2)
+    condiciones_comerciales=models.TextField();instrucciones_proveedor=models.TextField(blank=True);criterios_generales=models.TextField(blank=True);motivo_extension=models.TextField(blank=True);motivo_cancelacion=models.TextField(blank=True);publicado_por=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name="+");cerrado_por=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name="+")
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=["empresa","numero"],name="cmp_rfq_emp_num_uniq"),models.UniqueConstraint(fields=["expediente","version"],name="cmp_rfq_exp_ver_uniq"),models.CheckConstraint(condition=Q(version__gt=0),name="cmp_rfq_version_pos")]
+        indexes=[models.Index(fields=["empresa","estado","fecha_limite"],name="cmp_rfq_estado_fecha_idx")]
+        permissions=[("enviar_revision_rfq","Puede enviar RFQ a revisión"),("devolver_borrador_rfq","Puede devolver RFQ a borrador"),("publicar_rfq","Puede publicar RFQ"),("abrir_rfq","Puede abrir RFQ"),("extender_rfq","Puede extender RFQ"),("cerrar_rfq","Puede cerrar RFQ"),("cancelar_rfq","Puede cancelar RFQ"),("versionar_rfq","Puede versionar RFQ"),("gestionar_criterios_rfq","Puede gestionar criterios RFQ"),("gestionar_reglas_rfq","Puede gestionar reglas RFQ"),("gestionar_proveedores_rfq","Puede gestionar proveedores RFQ"),("exportar_rfq","Puede exportar RFQ")]
+    def clean(self):
+        if self.expediente_id and self.expediente.empresa_id!=self.empresa_id:raise ValidationError("El expediente pertenece a otra empresa.")
+        if self.fecha_limite<=self.fecha_inicio:raise ValidationError({"fecha_limite":"Debe ser posterior al inicio."})
+        if self.entrega_requerida_hasta<self.entrega_requerida_desde:raise ValidationError({"entrega_requerida_hasta":"Rango inválido."})
+    def __str__(self):return f"{self.numero} v{self.version}"
+
+class DetalleRFQ(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);rfq=models.ForeignKey(ProcesoRFQ,on_delete=models.PROTECT,related_name="lineas");linea_origen_solicitud=models.ForeignKey(DetalleSolicitudCompra,on_delete=models.PROTECT,null=True,blank=True);orden=models.PositiveIntegerField();tipo_linea=models.CharField(max_length=12,choices=DetalleSolicitudCompra.TIPOS);producto=models.ForeignKey("inventario.ProductoInventario",on_delete=models.PROTECT,null=True,blank=True);codigo_snapshot=models.CharField(max_length=50,blank=True);descripcion=models.CharField(max_length=300);especificacion_tecnica=models.TextField(blank=True);cantidad=models.DecimalField(max_digits=18,decimal_places=4);unidad_medida=models.ForeignKey("catalogos.UnidadMedida",on_delete=models.PROTECT);factor_conversion=models.DecimalField(max_digits=18,decimal_places=8,default=1);cantidad_base=models.DecimalField(max_digits=18,decimal_places=4,null=True,blank=True);fecha_entrega_requerida=models.DateField();almacen_destino=models.ForeignKey("catalogos.Almacen",on_delete=models.PROTECT,null=True,blank=True);permite_equivalente=models.BooleanField(default=True);marca_referencia=models.CharField(max_length=100,blank=True);modelo_referencia=models.CharField(max_length=100,blank=True);requisitos_documentales=models.TextField(blank=True);observaciones=models.TextField(blank=True);activo=models.BooleanField(default=True);creado_en=models.DateTimeField(auto_now_add=True);actualizado_en=models.DateTimeField(auto_now=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["rfq","orden"],name="cmp_drfq_orden_uniq"),models.UniqueConstraint(fields=["rfq","linea_origen_solicitud"],condition=Q(linea_origen_solicitud__isnull=False,activo=True),name="cmp_drfq_origen_uniq"),models.CheckConstraint(condition=Q(cantidad__gt=0),name="cmp_drfq_cantidad_pos")]
+
+class CriterioEvaluacionRFQ(models.Model):
+    CATEGORIAS=tuple((x,x.title()) for x in ("ECONOMICO","TECNICO","ENTREGA","CALIDAD","DOCUMENTAL","GARANTIA","EXPERIENCIA","RIESGO","OTRO"));METODOS=tuple((x,x.replace("_"," ").title()) for x in ("PUNTAJE","CUMPLE_NO_CUMPLE","MENOR_ES_MEJOR","MAYOR_ES_MEJOR","MANUAL"))
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);rfq=models.ForeignKey(ProcesoRFQ,on_delete=models.PROTECT,related_name="criterios");codigo=models.CharField(max_length=30);nombre=models.CharField(max_length=120);categoria=models.CharField(max_length=15,choices=CATEGORIAS);descripcion=models.TextField(blank=True);peso_porcentaje=models.DecimalField(max_digits=5,decimal_places=2);obligatorio=models.BooleanField(default=True);excluyente=models.BooleanField(default=False);metodo_evaluacion=models.CharField(max_length=20,choices=METODOS);orden=models.PositiveIntegerField(default=0);activo=models.BooleanField(default=True);creado_en=models.DateTimeField(auto_now_add=True);actualizado_en=models.DateTimeField(auto_now=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["rfq","codigo"],name="cmp_crfq_codigo_uniq"),models.CheckConstraint(condition=Q(peso_porcentaje__gte=0,peso_porcentaje__lte=100),name="cmp_crfq_peso_rango")]
+
+class InvitacionProveedorRFQ(AuditMixin):
+    ESTADOS=tuple((x,x.replace("_"," ").title()) for x in ("BORRADOR","PENDIENTE_ENVIO","INVITADA","CONFIRMADA","DECLINADA","SIN_RESPUESTA","RETIRADA"));CANALES=(("INTERNO","Interno"),("CORREO","Correo"),("PORTAL","Portal"),("MANUAL","Manual"))
+    rfq=models.ForeignKey(ProcesoRFQ,on_delete=models.PROTECT,related_name="invitaciones");proveedor=models.ForeignKey(Proveedor,on_delete=models.PROTECT,related_name="invitaciones_rfq");contacto=models.ForeignKey(ContactoProveedor,on_delete=models.PROTECT,null=True,blank=True);estado=models.CharField(max_length=20,choices=ESTADOS,default="BORRADOR");fecha_invitacion=models.DateTimeField(null=True,blank=True);fecha_limite_respuesta=models.DateTimeField(null=True,blank=True);fecha_confirmacion=models.DateTimeField(null=True,blank=True);fecha_declinacion=models.DateTimeField(null=True,blank=True);motivo_declinacion=models.TextField(blank=True);canal=models.CharField(max_length=10,choices=CANALES,default="INTERNO");observaciones=models.TextField(blank=True);invitada_por=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name="+")
+    class Meta:constraints=[models.UniqueConstraint(fields=["rfq","proveedor"],name="cmp_inv_rfq_prov_uniq")];permissions=[("gestionar_invitacionrfq","Puede gestionar invitaciones RFQ"),("marcar_enviada_invitacionrfq","Puede marcar invitación enviada"),("confirmar_participacion_rfq","Puede confirmar participación"),("registrar_declinacion_rfq","Puede registrar declinación"),("marcar_sin_respuesta_rfq","Puede marcar sin respuesta"),("retirar_proveedor_rfq","Puede retirar proveedor RFQ")]
+
+class ReglaParticipacionRFQ(models.Model):
+    TIPOS=tuple((x,x.replace("_"," ").title()) for x in ("DOCUMENTO_OBLIGATORIO","CERTIFICACION_VIGENTE","EXPERIENCIA_MINIMA","GARANTIA","MUESTRA","VISITA_TECNICA","DECLARACION","OTRO"))
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);rfq=models.ForeignKey(ProcesoRFQ,on_delete=models.PROTECT,related_name="reglas_participacion");codigo=models.CharField(max_length=30);nombre=models.CharField(max_length=120);descripcion=models.TextField(blank=True);tipo=models.CharField(max_length=30,choices=TIPOS);obligatorio=models.BooleanField(default=True);excluyente=models.BooleanField(default=False);parametro_texto=models.TextField(blank=True);parametro_decimal=models.DecimalField(max_digits=18,decimal_places=4,null=True,blank=True);parametro_entero=models.BigIntegerField(null=True,blank=True);fecha_limite=models.DateTimeField(null=True,blank=True);orden=models.PositiveIntegerField(default=0);activo=models.BooleanField(default=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["rfq","codigo"],name="cmp_rrfq_codigo_uniq")]
+
+class HistorialEstadoExpedienteCompra(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);expediente=models.ForeignKey(ExpedienteCompra,on_delete=models.PROTECT,related_name="historial");estado_anterior=models.CharField(max_length=24,blank=True);estado_nuevo=models.CharField(max_length=24);usuario=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True);comentario=models.TextField(blank=True);fecha=models.DateTimeField(auto_now_add=True);metadata_segura=models.JSONField(default=dict,blank=True)
+    class Meta:default_permissions=("view",);ordering=["fecha"]
+    def save(self,*a,**k):
+        if self.pk:raise ValidationError("El historial es inmutable.")
+        super().save(*a,**k)
+    def delete(self,*a,**k):raise ValidationError("El historial no se elimina.")
+
+class HistorialEstadoRFQ(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);rfq=models.ForeignKey(ProcesoRFQ,on_delete=models.PROTECT,related_name="historial");estado_anterior=models.CharField(max_length=15,blank=True);estado_nuevo=models.CharField(max_length=15);usuario=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True);comentario=models.TextField(blank=True);fecha=models.DateTimeField(auto_now_add=True);metadata_segura=models.JSONField(default=dict,blank=True)
+    class Meta:default_permissions=("view",);ordering=["fecha"]
+    def save(self,*a,**k):
+        if self.pk:raise ValidationError("El historial es inmutable.")
+        super().save(*a,**k)
+    def delete(self,*a,**k):raise ValidationError("El historial no se elimina.")

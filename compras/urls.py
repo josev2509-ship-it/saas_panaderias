@@ -22,4 +22,12 @@ urlpatterns=[
     path("solicitudes/<int:pk>/lineas/agregar/",views.solicitud_linea_agregar,name="solicitud_linea_agregar"),
     path("solicitudes/<int:pk>/lineas/<int:linea_id>/retirar/",views.solicitud_linea_retirar,name="solicitud_linea_retirar"),
     path("solicitudes/<int:pk>/<str:accion>/",views.solicitud_accion,name="solicitud_accion"),
+    path("expedientes/",views.expedientes_lista,name="expedientes_lista"),path("expedientes/<int:pk>/",views.expediente_detalle,name="expediente_detalle"),
+    path("rfq/",views.rfq_lista,name="rfq_lista"),path("rfq/<int:pk>/",views.rfq_detalle,name="rfq_detalle"),
+    path("p2p/dashboard/",views.p2p_dashboard,name="p2p_dashboard"),path("p2p/exportar/",views.p2p_exportar,name="p2p_exportar"),
+    path("expedientes/<int:pk>/<str:accion>/",views.expediente_accion,name="expediente_accion"),path("expedientes/<int:expediente_id>/rfq/nueva/",views.rfq_crear_view,name="rfq_crear"),
+    path("rfq/<int:pk>/accion/<str:accion>/",views.rfq_accion,name="rfq_accion"),path("invitaciones/<int:pk>/<str:accion>/",views.invitacion_accion,name="invitacion_accion"),
+    path("rfq/lineas/<int:pk>/editar/",views.rfq_linea_editar,name="rfq_linea_editar"),
+    path("solicitudes/<int:solicitud_id>/crear-expediente/",views.expediente_desde_solicitud_view,name="expediente_desde_solicitud"),path("rfq/<int:pk>/agregar/<str:tipo>/",views.rfq_agregar,name="rfq_agregar"),path("rfq/<int:pk>/extender/",views.rfq_extender_view,name="rfq_extender"),
+    path("expedientes/<int:pk>/editar/",views.expediente_editar_view,name="expediente_editar"),path("rfq/<int:pk>/editar/",views.rfq_editar_view,name="rfq_editar"),path("invitaciones/<int:pk>/contacto/",views.invitacion_contacto,name="invitacion_contacto"),
 ]

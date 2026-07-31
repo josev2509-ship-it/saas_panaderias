@@ -5,7 +5,8 @@ from inventario.models import ProductoInventario
 from .models import (
     CategoriaProveedor, ContactoProveedor, CuentaBancariaProveedor,
     DireccionProveedor, ProductoProveedor, Proveedor, ProveedorLegadoMap,
-    DetalleSolicitudCompra, SolicitudCompra,
+    DetalleSolicitudCompra, DetalleRFQ, SolicitudCompra,
+    ExpedienteCompra,ProcesoRFQ,CriterioEvaluacionRFQ,ReglaParticipacionRFQ,InvitacionProveedorRFQ,SolicitudExpedienteCompra,
 )
 
 
@@ -83,3 +84,34 @@ class DetalleSolicitudCompraForm(ScopedForm):
 class MotivoSolicitudForm(forms.Form): motivo=forms.CharField(min_length=5,widget=forms.Textarea(attrs={"rows":3,"class":"form-control"}))
 class FiltroSolicitudForm(forms.Form):
     q=forms.CharField(required=False);estado=forms.ChoiceField(required=False,choices=(("","Todos"),*SolicitudCompra.Estado.choices));prioridad=forms.ChoiceField(required=False,choices=(("","Todas"),*SolicitudCompra.Prioridad.choices));desde=forms.DateField(required=False,widget=forms.DateInput(attrs={"type":"date"}));hasta=forms.DateField(required=False,widget=forms.DateInput(attrs={"type":"date"}));urgentes=forms.BooleanField(required=False)
+
+class RFQForm(ScopedForm):
+    class Meta:
+        model=ProcesoRFQ;fields=("titulo","objeto","descripcion","fecha_inicio","fecha_limite","entrega_requerida_desde","entrega_requerida_hasta","lugar_entrega","almacen_destino","incoterm","permite_oferta_parcial","permite_variantes","permite_equivalentes","requiere_garantia","requiere_muestra","requiere_visita_tecnica","confidencial","minimo_proveedores","minimo_ofertas_validas","condiciones_comerciales","instrucciones_proveedor","criterios_generales")
+        widgets={x:forms.DateTimeInput(attrs={"type":"datetime-local"}) for x in ("fecha_inicio","fecha_limite")}
+    def __init__(self,*a,empresa=None,**k):
+        super().__init__(*a,empresa=empresa,**k);self.fields["almacen_destino"].queryset=Almacen.objects.filter(empresa=empresa,activo=True)
+class CriterioRFQForm(ScopedForm):
+    class Meta:model=CriterioEvaluacionRFQ;fields=("codigo","nombre","categoria","descripcion","peso_porcentaje","obligatorio","excluyente","metodo_evaluacion","orden")
+class DetalleRFQForm(ScopedForm):
+    class Meta:model=DetalleRFQ;fields=("descripcion","especificacion_tecnica","cantidad","unidad_medida","fecha_entrega_requerida","permite_equivalente","marca_referencia","modelo_referencia","requisitos_documentales","observaciones")
+    def __init__(self,*a,empresa=None,**k):
+        super().__init__(*a,empresa=empresa,**k);self.fields["unidad_medida"].queryset=UnidadMedida.objects.filter(empresa=empresa,activo=True)
+class ReglaRFQForm(ScopedForm):
+    class Meta:model=ReglaParticipacionRFQ;fields=("codigo","nombre","descripcion","tipo","obligatorio","excluyente","parametro_texto","parametro_decimal","parametro_entero","fecha_limite","orden")
+class InvitacionRFQForm(forms.Form):
+    proveedor=forms.ModelChoiceField(queryset=Proveedor.objects.none());contacto=forms.ModelChoiceField(queryset=ContactoProveedor.objects.none(),required=False)
+    def __init__(self,*a,empresa=None,**k):
+        super().__init__(*a,**k);self.fields["proveedor"].queryset=Proveedor.objects.filter(empresa=empresa,estado="ACTIVO",bloqueado=False);self.fields["contacto"].queryset=ContactoProveedor.objects.filter(empresa=empresa,activo=True)
+class SolicitudExpedienteForm(forms.Form):
+    solicitud=forms.ModelChoiceField(queryset=SolicitudCompra.objects.none())
+    def __init__(self,*a,empresa=None,**k):super().__init__(*a,**k);self.fields["solicitud"].queryset=SolicitudCompra.objects.filter(empresa=empresa,estado="APROBADA",vinculos_expediente__isnull=True)
+class ExtensionRFQForm(forms.Form):
+    nueva_fecha=forms.DateTimeField(widget=forms.DateTimeInput(attrs={"type":"datetime-local"}));motivo=forms.CharField(min_length=5,widget=forms.Textarea)
+class ExpedienteForm(ScopedForm):
+    class Meta:model=ExpedienteCompra;fields=("titulo","descripcion","responsable","centro_costo","tipo_compra","prioridad","observaciones")
+    def __init__(self,*a,empresa=None,**k):
+        super().__init__(*a,empresa=empresa,**k);self.fields["centro_costo"].queryset=CentroCosto.objects.filter(empresa=empresa,activo=True);self.fields["tipo_compra"].queryset=TipoCompra.objects.filter(empresa=empresa,activo=True)
+class CambioContactoForm(forms.Form):
+    contacto=forms.ModelChoiceField(queryset=ContactoProveedor.objects.none())
+    def __init__(self,*a,empresa=None,proveedor=None,**k):super().__init__(*a,**k);self.fields["contacto"].queryset=ContactoProveedor.objects.filter(empresa=empresa,proveedor=proveedor,activo=True)

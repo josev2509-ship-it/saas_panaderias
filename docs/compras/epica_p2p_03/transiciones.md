@@ -1,0 +1,2 @@
+# Transiciones
+Expediente: BORRADOR→ABIERTO→PREPARANDO_RFQ→RFQ_ABIERTA; también DESIERTA o CANCELADA. RFQ: BORRADOR↔EN_REVISION→PUBLICADA→ABIERTA↔EXTENDIDA→CERRADA; cancelación controlada desde estados no finales.

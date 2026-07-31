@@ -1,0 +1,3 @@
+# Estados
+
+Expediente opera BORRADOR, ABIERTO, PREPARANDO_RFQ, RFQ_ABIERTA, DESIERTA y CANCELADA. RFQ opera BORRADOR, EN_REVISION, PUBLICADA, ABIERTA, EXTENDIDA, CERRADA y CANCELADA. Los estados futuros no producen operaciones reales.

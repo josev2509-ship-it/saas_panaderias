@@ -5,6 +5,7 @@ from .models import (
     DireccionProveedor, HistorialEstadoProveedor, ProductoProveedor, Proveedor,
     ProveedorLegadoMap, RequisitoDocumentoProveedor, RevisionDocumentoProveedor,
     SolicitudCompra, DetalleSolicitudCompra, HistorialEstadoSolicitudCompra,
+    ExpedienteCompra,SolicitudExpedienteCompra,ProcesoRFQ,DetalleRFQ,CriterioEvaluacionRFQ,ReglaParticipacionRFQ,InvitacionProveedorRFQ,HistorialEstadoExpedienteCompra,HistorialEstadoRFQ,
 )
 
 
@@ -56,6 +57,9 @@ class HistorialEstadoSolicitudCompraAdmin(EmpresaScopedAdmin):
     def has_add_permission(self,request): return False
     def has_change_permission(self,request,obj=None): return False
     def has_delete_permission(self,request,obj=None): return False
+
+for model in (ExpedienteCompra,SolicitudExpedienteCompra,ProcesoRFQ,DetalleRFQ,CriterioEvaluacionRFQ,ReglaParticipacionRFQ,InvitacionProveedorRFQ,HistorialEstadoExpedienteCompra,HistorialEstadoRFQ):
+    admin.site.register(model,EmpresaScopedAdmin)
 
 
 for model in (CategoriaProveedor,ContactoProveedor,DireccionProveedor,ProductoProveedor,

@@ -1,0 +1,25 @@
+from core.domain.events import DomainEvent
+class ExpedienteCompraCreado(DomainEvent):pass
+class SolicitudVinculadaAExpediente(DomainEvent):pass
+class SolicitudRetiradaDeExpediente(DomainEvent):pass
+class ExpedienteCompraAbierto(DomainEvent):pass
+class ExpedienteCompraCancelado(DomainEvent):pass
+class ExpedienteCompraDeclaradoDesierto(DomainEvent):pass
+class SaludExpedienteRecalculada(DomainEvent):pass
+class RFQCreada(DomainEvent):pass
+class RFQActualizada(DomainEvent):pass
+class RFQEnviadaRevision(DomainEvent):pass
+class RFQDevueltaBorrador(DomainEvent):pass
+class RFQPublicada(DomainEvent):pass
+class RFQAbierta(DomainEvent):pass
+class RFQPlazoExtendido(DomainEvent):pass
+class RFQCerrada(DomainEvent):pass
+class RFQCancelada(DomainEvent):pass
+class RFQVersionada(DomainEvent):pass
+class ProveedorInvitadoRFQ(DomainEvent):pass
+class InvitacionRFQEnviada(DomainEvent):pass
+class ParticipacionRFQConfirmada(DomainEvent):pass
+class ParticipacionRFQDeclinada(DomainEvent):pass
+class ParticipacionRFQSinRespuesta(DomainEvent):pass
+class ProveedorRetiradoRFQ(DomainEvent):pass
+class DocumentoRFQActualizado(DomainEvent):pass

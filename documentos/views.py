@@ -117,6 +117,8 @@ def documento_descargar(request, pk):
         descripcion=f"Se descargó el documento «{documento.titulo}» (v{documento.version}).",
         datos_nuevos={"documento_id": documento.pk, "version": documento.version},
     )
+    from compras.application.expedientes_rfq import registrar_operacion_documental_p2p
+    registrar_operacion_documental_p2p(documento=documento,accion="DESCARGA",usuario=request.user,request=request,emitir=False)
     return FileResponse(documento.archivo.open("rb"), as_attachment=True, filename=documento.nombre_original)
 
 

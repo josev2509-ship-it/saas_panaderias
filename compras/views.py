@@ -1,4 +1,5 @@
 import csv
+from datetime import timedelta
 from uuid import uuid4
 
 from django.contrib import messages
@@ -10,6 +11,10 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from workflow.domain.exceptions import WorkflowError
+from compras.models import DetalleRFQ,ExpedienteCompra,ProcesoRFQ
+from compras.application.expedientes_rfq import *
+from compras.forms import RFQForm,CriterioRFQForm,ReglaRFQForm,InvitacionRFQForm,SolicitudExpedienteForm,ExtensionRFQForm,ExpedienteForm,CambioContactoForm,DetalleRFQForm
+from django.db.models import Avg,Count,F,Sum
 
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
@@ -248,3 +253,165 @@ def solicitud_accion(request,pk,accion):
 @modulo_requerido("modulo_compras","compras.exportar_solicitudescompra")
 def solicitudes_exportar(request):
     content=exportar_solicitudes_csv(context=_context(request),queryset=solicitudes_empresa(empresa=_empresa(request),usuario=request.user,filtros=request.GET));response=HttpResponse(content,content_type="text/csv; charset=utf-8");response["Content-Disposition"]='attachment; filename="solicitudes_compra.csv"';return response
+
+@login_required
+@modulo_requerido("modulo_compras","compras.view_expedientecompra")
+def expedientes_lista(request):
+    qs=ExpedienteCompra.objects.filter(empresa=_empresa(request)).select_related("responsable","centro_costo","moneda__moneda");return render(request,"compras/expedientes/lista.html",{"expedientes":qs})
+@login_required
+@modulo_requerido("modulo_compras","compras.view_expedientecompra")
+def expediente_detalle(request,pk):
+    e=get_object_or_404(ExpedienteCompra.objects.select_related("responsable","centro_costo","moneda__moneda").prefetch_related("solicitudes_vinculadas__solicitud","rfqs","historial"),pk=pk,empresa=_empresa(request));return render(request,"compras/expedientes/detalle.html",{"expediente":e,"salud":calcular_salud_expediente(expediente=e),"documentos":obtener_documentos(e,_empresa(request)),"form":ExpedienteForm(instance=e,empresa=_empresa(request))})
+@login_required
+@modulo_requerido("modulo_compras","compras.view_procesorfq")
+def rfq_lista(request):
+    return render(request,"compras/rfq/lista.html",{"rfqs":ProcesoRFQ.objects.filter(empresa=_empresa(request)).select_related("expediente","moneda__moneda")})
+@login_required
+@modulo_requerido("modulo_compras","compras.view_procesorfq")
+def rfq_detalle(request,pk):
+    r=get_object_or_404(ProcesoRFQ.objects.select_related("expediente","moneda__moneda").prefetch_related("lineas","criterios","reglas_participacion","invitaciones__proveedor","historial"),pk=pk,empresa=_empresa(request));return render(request,"compras/rfq/detalle.html",{"rfq":r,"documentos":obtener_documentos(r,_empresa(request)),"criterio_form":CriterioRFQForm(empresa=_empresa(request)),"regla_form":ReglaRFQForm(empresa=_empresa(request)),"invitacion_form":InvitacionRFQForm(empresa=_empresa(request)),"extension_form":ExtensionRFQForm()})
+
+@login_required
+@modulo_requerido("modulo_compras","compras.view_expedientecompra")
+def p2p_dashboard(request):
+    e,r,inv=_p2p_querysets(request);now=timezone.now();k={"abiertos":e.filter(estado="ABIERTO").count(),"preparando":e.filter(estado="PREPARANDO_RFQ").count(),"publicadas":r.filter(estado="PUBLICADA").count(),"abiertas":r.filter(estado="ABIERTA").count(),"por_vencer":r.filter(estado__in=["ABIERTA","EXTENDIDA"],fecha_limite__gt=now,fecha_limite__lte=now+timedelta(days=7)).count(),"vencidas":r.filter(estado__in=["ABIERTA","EXTENDIDA"],fecha_limite__lt=now).count(),"extendidas":r.filter(estado="EXTENDIDA").count(),"canceladas":r.filter(estado="CANCELADA").count(),"desiertos":e.filter(estado="DESIERTA").count(),"criticos":e.filter(nivel_riesgo="CRITICO").count(),"invitados":inv.count(),"confirmadas":inv.filter(estado="CONFIRMADA").count(),"declinadas":inv.filter(estado="DECLINADA").count(),"sin_respuesta":inv.filter(estado="SIN_RESPUESTA").count(),"retiradas":inv.filter(estado="RETIRADA").count(),"promedio":r.annotate(n=Count("invitaciones")).aggregate(v=Avg("n"))["v"] or 0,"baja_competencia":r.annotate(n=Count("invitaciones")).filter(n__lt=F("minimo_proveedores")).count(),"urgentes":e.filter(prioridad="URGENTE").count(),"montos":e.values("moneda__moneda__codigo").annotate(total=Sum("presupuesto_estimado"))};return render(request,"compras/p2p_dashboard.html",{"k":k,"expedientes":Paginator(e,25).get_page(request.GET.get("page")),"rfqs":r[:25],"filtros":request.GET})
+
+def _p2p_querysets(request):
+    empresa=_empresa(request);e=ExpedienteCompra.objects.filter(empresa=empresa).select_related("responsable","centro_costo","tipo_compra","moneda__moneda");r=ProcesoRFQ.objects.filter(empresa=empresa).select_related("expediente__responsable","expediente__centro_costo","expediente__tipo_compra","moneda__moneda");inv=InvitacionProveedorRFQ.objects.filter(empresa=empresa).select_related("rfq","proveedor","contacto")
+    estado=request.GET.get("estado","");responsable=request.GET.get("responsable","");centro=request.GET.get("centro_costo","");tipo=request.GET.get("tipo_compra","");desde=request.GET.get("desde","");hasta=request.GET.get("hasta","")
+    if estado:e=e.filter(estado=estado);r=r.filter(estado=estado)
+    if responsable:e=e.filter(responsable_id=responsable);r=r.filter(expediente__responsable_id=responsable)
+    if centro:e=e.filter(centro_costo_id=centro);r=r.filter(expediente__centro_costo_id=centro)
+    if tipo:e=e.filter(tipo_compra_id=tipo);r=r.filter(expediente__tipo_compra_id=tipo)
+    if desde:e=e.filter(fecha_creacion__date__gte=desde);r=r.filter(fecha_creacion__date__gte=desde)
+    if hasta:e=e.filter(fecha_creacion__date__lte=hasta);r=r.filter(fecha_creacion__date__lte=hasta)
+    inv=inv.filter(rfq__in=r)
+    return e.order_by("-fecha_creacion"),r.order_by("-fecha_creacion"),inv.order_by("-fecha_creacion")
+
+@login_required
+@modulo_requerido("modulo_compras")
+def expediente_accion(request,pk,accion):
+    if request.method!="POST":raise PermissionDenied
+    try:
+        if accion=="abrir":abrir_expediente(context=_context(request),expediente_id=pk)
+        elif accion=="preparar":preparar_rfq(context=_context(request),expediente_id=pk)
+        elif accion=="cancelar":cancelar_expediente(context=_context(request),expediente_id=pk,motivo=request.POST.get("motivo",""))
+        elif accion=="desierto":declarar_expediente_desierto(context=_context(request),expediente_id=pk,motivo=request.POST.get("motivo",""))
+        elif accion=="salud":recalcular_salud_expediente(context=_context(request),expediente_id=pk)
+        else:raise PermissionDenied
+        messages.success(request,"Acción completada.")
+    except Exception as exc:messages.error(request,str(exc))
+    return redirect("compras:expediente_detalle",pk=pk)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def rfq_crear_view(request,expediente_id):
+    form=RFQForm(request.POST or None,empresa=_empresa(request))
+    if request.method=="POST" and form.is_valid():
+        try:r=crear_rfq(context=_context(request),expediente_id=expediente_id,datos=form.cleaned_data);return redirect("compras:rfq_detalle",pk=r.pk)
+        except Exception as exc:form.add_error(None,exc)
+    return render(request,"compras/rfq/form.html",{"form":form})
+
+@login_required
+@modulo_requerido("modulo_compras")
+def expediente_editar_view(request,pk):
+    e=get_object_or_404(ExpedienteCompra,pk=pk,empresa=_empresa(request));form=ExpedienteForm(request.POST or None,instance=e,empresa=_empresa(request))
+    if request.method=="POST" and form.is_valid():
+        try:actualizar_expediente_borrador(context=_context(request),expediente_id=pk,datos=form.cleaned_data);messages.success(request,"Expediente actualizado.");return redirect("compras:expediente_detalle",pk=pk)
+        except Exception as exc:form.add_error(None,exc)
+    return render(request,"compras/expedientes/form.html",{"form":form,"expediente":e})
+
+@login_required
+@modulo_requerido("modulo_compras")
+def rfq_editar_view(request,pk):
+    r=get_object_or_404(ProcesoRFQ,pk=pk,empresa=_empresa(request));form=RFQForm(request.POST or None,instance=r,empresa=_empresa(request))
+    if request.method=="POST" and form.is_valid():
+        try:actualizar_rfq_borrador(context=_context(request),rfq_id=pk,datos=form.cleaned_data);messages.success(request,"RFQ actualizada.");return redirect("compras:rfq_detalle",pk=pk)
+        except Exception as exc:form.add_error(None,exc)
+    return render(request,"compras/rfq/form.html",{"form":form,"rfq":r})
+
+@login_required
+@modulo_requerido("modulo_compras")
+def expediente_desde_solicitud_view(request,solicitud_id):
+    if request.method!="POST":raise PermissionDenied
+    try:e=crear_expediente_desde_solicitud(context=_context(request),solicitud_id=solicitud_id);return redirect("compras:expediente_detalle",pk=e.pk)
+    except Exception as exc:messages.error(request,str(exc));return redirect("compras:solicitud_detalle",pk=solicitud_id)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def rfq_agregar(request,pk,tipo):
+    if request.method!="POST":raise PermissionDenied
+    forms={"criterio":CriterioRFQForm,"regla":ReglaRFQForm,"proveedor":InvitacionRFQForm}
+    if tipo not in forms:raise PermissionDenied
+    form=forms[tipo](request.POST,empresa=_empresa(request))
+    try:
+        if not form.is_valid():raise ValidationError(form.errors)
+        if tipo=="criterio":agregar_criterio(context=_context(request),rfq_id=pk,datos=form.cleaned_data)
+        elif tipo=="regla":agregar_regla_participacion(context=_context(request),rfq_id=pk,datos=form.cleaned_data)
+        else:agregar_proveedor_a_rfq(context=_context(request),rfq_id=pk,proveedor_id=form.cleaned_data["proveedor"].pk,contacto_id=getattr(form.cleaned_data.get("contacto"),"pk",None))
+        messages.success(request,"Registro agregado.")
+    except Exception as exc:messages.error(request,str(exc))
+    return redirect("compras:rfq_detalle",pk=pk)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def rfq_extender_view(request,pk):
+    if request.method!="POST":raise PermissionDenied
+    form=ExtensionRFQForm(request.POST)
+    try:
+        if not form.is_valid():raise ValidationError(form.errors)
+        extender_plazo_rfq(context=_context(request),rfq_id=pk,**form.cleaned_data);messages.success(request,"Plazo extendido.")
+    except Exception as exc:messages.error(request,str(exc))
+    return redirect("compras:rfq_detalle",pk=pk)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def rfq_linea_editar(request,pk):
+    linea=get_object_or_404(DetalleRFQ.objects.select_related("rfq"),pk=pk,empresa=_empresa(request))
+    if request.method!="POST":raise PermissionDenied
+    form=DetalleRFQForm(request.POST,instance=linea,empresa=_empresa(request))
+    try:
+        if not form.is_valid():raise ValidationError(form.errors)
+        actualizar_linea_rfq(context=_context(request),linea_id=pk,datos=form.cleaned_data);messages.success(request,"Línea actualizada.")
+    except Exception as exc:messages.error(request,str(exc))
+    return redirect("compras:rfq_detalle",pk=linea.rfq_id)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def rfq_accion(request,pk,accion):
+    if request.method!="POST":raise PermissionDenied
+    try:
+        funcs={"lineas":lambda:generar_lineas_desde_solicitudes(context=_context(request),rfq_id=pk),"revision":lambda:enviar_rfq_revision(context=_context(request),rfq_id=pk),"borrador":lambda:devolver_rfq_borrador(context=_context(request),rfq_id=pk,motivo=request.POST.get("motivo","")),"publicar":lambda:publicar_rfq(context=_context(request),rfq_id=pk),"abrir":lambda:abrir_rfq(context=_context(request),rfq_id=pk),"cerrar":lambda:cerrar_rfq(context=_context(request),rfq_id=pk),"cancelar":lambda:cancelar_rfq(context=_context(request),rfq_id=pk,motivo=request.POST.get("motivo","")),"versionar":lambda:crear_nueva_version_rfq(context=_context(request),rfq_id=pk)};funcs[accion]();messages.success(request,"Acción completada.")
+    except Exception as exc:messages.error(request,str(exc))
+    return redirect("compras:rfq_detalle",pk=pk)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def invitacion_accion(request,pk,accion):
+    if request.method!="POST":raise PermissionDenied
+    i=get_object_or_404(InvitacionProveedorRFQ,pk=pk,empresa=_empresa(request));funcs={"enviar":lambda:marcar_invitacion_enviada(context=_context(request),invitacion_id=pk),"confirmar":lambda:confirmar_participacion(context=_context(request),invitacion_id=pk),"declinar":lambda:declinar_participacion(context=_context(request),invitacion_id=pk,motivo=request.POST.get("motivo","")),"sin-respuesta":lambda:marcar_sin_respuesta(context=_context(request),invitacion_id=pk),"retirar":lambda:retirar_proveedor_de_rfq(context=_context(request),invitacion_id=pk,motivo=request.POST.get("motivo",""))}
+    try:funcs[accion]();messages.success(request,"Invitación actualizada.")
+    except Exception as exc:messages.error(request,str(exc))
+    return redirect("compras:rfq_detalle",pk=i.rfq_id)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def invitacion_contacto(request,pk):
+    if request.method!="POST":raise PermissionDenied
+    i=get_object_or_404(InvitacionProveedorRFQ,pk=pk,empresa=_empresa(request));form=CambioContactoForm(request.POST,empresa=_empresa(request),proveedor=i.proveedor)
+    try:
+        if not form.is_valid():raise ValidationError(form.errors)
+        cambiar_contacto_invitacion_rfq(context=_context(request),invitacion_id=pk,contacto_id=form.cleaned_data["contacto"].pk);messages.success(request,"Contacto actualizado.")
+    except Exception as exc:messages.error(request,str(exc))
+    return redirect("compras:rfq_detalle",pk=i.rfq_id)
+
+def _csv_safe(v):
+    t=str(v or "");return "'"+t if t[:1] in "=+-@" else t
+@login_required
+@modulo_requerido("modulo_compras","compras.exportar_rfq")
+def p2p_exportar(request):
+    e_qs,r_qs,i_qs=_p2p_querysets(request);response=HttpResponse(content_type="text/csv; charset=utf-8");response["Content-Disposition"]='attachment; filename="expedientes_rfq.csv"';w=csv.writer(response);w.writerow(["Tipo","Número","Título/Proveedor","Estado","Responsable","Centro costo","Tipo compra","Moneda","Monto","Salud","Riesgo","Duración días"])
+    for e in e_qs:w.writerow(["EXP",_csv_safe(e.numero),_csv_safe(e.titulo),e.estado,_csv_safe(e.responsable.username),_csv_safe(e.centro_costo.nombre),_csv_safe(e.tipo_compra.nombre),e.moneda.moneda.codigo,e.presupuesto_estimado,e.indice_salud,e.nivel_riesgo,(e.fecha_cierre-e.fecha_creacion).days if e.fecha_cierre else (timezone.now()-e.fecha_creacion).days])
+    for r in r_qs:w.writerow(["RFQ",_csv_safe(r.numero),_csv_safe(r.titulo),r.estado,_csv_safe(r.expediente.responsable.username),_csv_safe(r.expediente.centro_costo.nombre),_csv_safe(r.expediente.tipo_compra.nombre),r.moneda.moneda.codigo,r.expediente.presupuesto_estimado,r.expediente.indice_salud,r.expediente.nivel_riesgo,(r.fecha_publicacion-r.fecha_creacion).days if r.fecha_publicacion else ""])
+    for i in i_qs:w.writerow(["INV",_csv_safe(i.rfq.numero),_csv_safe(i.proveedor.razon_social),i.estado,_csv_safe(i.rfq.expediente.responsable.username),_csv_safe(i.rfq.expediente.centro_costo.nombre),_csv_safe(i.rfq.expediente.tipo_compra.nombre),i.rfq.moneda.moneda.codigo,"","","",""])
+    registrar_evento(empresa=_empresa(request),usuario=request.user,request=request,modulo="compras",accion=EventoAuditoria.Accion.OTRO,descripcion="Exportación de expedientes y RFQ.");return response

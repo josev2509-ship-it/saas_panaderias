@@ -8,7 +8,7 @@ from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 from comercial.models import Cliente, Pedido
 from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
-from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra
+from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra, ExpedienteCompra, ProcesoRFQ, InvitacionProveedorRFQ
 
 from .models import Documento, extension_por_contenido
 
@@ -22,6 +22,9 @@ MODELOS_PERMITIDOS = {
     ("compras", "categoriaproveedor"): CategoriaProveedor,
     ("compras", "cuentabancariaproveedor"): CuentaBancariaProveedor,
     ("compras", "solicitudcompra"): SolicitudCompra,
+    ("compras", "expedientecompra"): ExpedienteCompra,
+    ("compras", "procesorfq"): ProcesoRFQ,
+    ("compras", "invitacionproveedorrfq"): InvitacionProveedorRFQ,
 }
 
 
@@ -63,6 +66,8 @@ def crear_documento_asociado(*, empresa, objeto, archivo, usuario=None, request=
         descripcion=f"Se cargó el documento «{documento.titulo}» (v{documento.version}).",
         datos_nuevos={"documento_id": documento.pk, "titulo": documento.titulo, "version": documento.version},
     )
+    from compras.application.expedientes_rfq import registrar_operacion_documental_p2p
+    registrar_operacion_documental_p2p(documento=documento,accion="CARGA",usuario=usuario,request=request)
     return documento
 
 
@@ -91,6 +96,8 @@ def reemplazar_documento(*, documento, archivo, usuario=None, request=None):
         datos_anteriores={"documento_id": anterior.pk, "version": anterior.version},
         datos_nuevos={"documento_id": nuevo.pk, "version": nuevo.version},
     )
+    from compras.application.expedientes_rfq import registrar_operacion_documental_p2p
+    registrar_operacion_documental_p2p(documento=nuevo,accion="REEMPLAZO_VERSION",usuario=usuario,request=request)
     return nuevo
 
 
@@ -108,4 +115,6 @@ def anular_documento(*, documento, usuario=None, request=None):
         descripcion=f"Se anuló el documento «{documento.titulo}» (v{documento.version}).",
         datos_anteriores={"estado": anterior}, datos_nuevos={"estado": documento.estado},
     )
+    from compras.application.expedientes_rfq import registrar_operacion_documental_p2p
+    registrar_operacion_documental_p2p(documento=documento,accion="ANULACION",usuario=usuario,request=request)
     return documento

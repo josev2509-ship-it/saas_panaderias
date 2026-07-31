@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<div class="ds-page"><h1>Nueva RFQ</h1><form method="post" class="ds-card">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Guardar</button></form></div>{% endblock %}
