@@ -94,12 +94,12 @@
 
         <form method="get"
               action="{% url 'preparar_nota_aclaratoria' %}"
-              style="margin-top:18px; display:grid; gap:12px;">
+              class="ds-stack ds-mt-4">
 
             <input type="hidden" name="fecha_inicio" value="{{ fecha_desde }}">
             <input type="hidden" name="fecha_fin" value="{{ fecha_hasta }}">
 
-            <button type="submit" class="btn btn-secondary" style="width:max-content;">
+            <button type="submit" class="btn btn-secondary">
                 Preparar nota aclaratoria
             </button>
         </form>

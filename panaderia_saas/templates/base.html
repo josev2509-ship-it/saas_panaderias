@@ -1,218 +1,86 @@
-{% load static %}
-<!DOCTYPE html>
+{% load static design_system %}
+<!doctype html>
 <html lang="es">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>
-        {% if empresa and empresa.nombre %}
-            {{ empresa.nombre }}
-        {% else %}
-            SaaS Panaderías
-        {% endif %}
-    </title>
-
-    <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
-    <link rel="stylesheet" href="{% static 'conduces/css/style.css' %}">
-
-    {% block extra_head %}{% endblock %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111c2f">
+  <title>{% block title %}{% if empresa %}{{ empresa.nombre }}{% else %}SASTRE ERP{% endif %}{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'conduces/css/style.css' %}">
+  <link rel="stylesheet" href="{% static 'design_system/css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'design_system/css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'design_system/css/layout.css' %}">
+  <link rel="stylesheet" href="{% static 'design_system/css/components.css' %}">
+  <link rel="stylesheet" href="{% static 'design_system/css/utilities.css' %}">
+  <link rel="stylesheet" href="{% static 'design_system/css/responsive.css' %}">
+  <link rel="stylesheet" href="{% static 'design_system/css/print.css' %}" media="print">
+  {% block extra_head %}{% endblock %}
 </head>
-
-<body>
-
-    <aside class="app-sidebar">
-
-        <div class="empresa-box">
-            <div class="brand-logo">
-                {% if empresa and empresa.logo %}
-                    <img src="{{ empresa.logo.url }}" class="empresa-logo">
-                {% else %}
-                    <span>🥖</span>
-                {% endif %}
-            </div>
-
-            <div>
-                <h2>
-                    {% if empresa and empresa.nombre %}
-                        {{ empresa.nombre }}
-                    {% else %}
-                        SaaS Panaderías
-                    {% endif %}
-                </h2>
-                <p>Gestión inteligente PAE</p>
-            </div>
-        </div>
-
-        <nav class="app-menu">
-
-            <a href="{% url 'inicio' %}">
-                📊 <span>Panel principal</span>
-            </a>
-
-            <a href="{% url 'mi_empresa' %}">
-                ⚙️ <span>Configuración empresa</span>
-            </a>
-
-            <div class="menu-section-title">Comercial</div>
-
-            <a href="{% url 'comercial:dashboard' %}">
-                <span>Dashboard comercial</span>
-            </a>
-
-            {% if perms.core.view_transaction_engine %}
-            <a href="{% url 'core:motor_dashboard' %}">
-                <span>Centro Tecnico</span>
-            </a>
-            {% endif %}
-
-            <a href="{% url 'comercial:clientes_lista' %}">
-                <span>Clientes</span>
-            </a>
-
-            <a href="{% url 'comercial:pedidos_lista' %}">
-                <span>Pedidos</span>
-            </a>
-
-            <a href="{% url 'comercial:programacion_diaria' %}">
-                <span>Programación</span>
-            </a>
-
-            <a href="{% url 'documentos:lista' %}">
-                <span>Documentos</span>
-            </a>
-
-            <a href="{% url 'cartas_administrativas' %}">
-                ✉️ <span>Cartas administrativas</span>
-            </a>
-
-            {% if empresa and empresa.modulo_conduces %}
-                <div class="menu-section-title">Conduces</div>
-
-                <a href="{% url 'buscar_conduces' %}">
-                    📄 <span>Gestión de conduces</span>
-                </a>
-
-                <a href="{% url 'generar_conduces' %}">
-                    ➕ <span>Generar conduces</span>
-                </a>
-            {% endif %}
-
-            {% if empresa and empresa.modulo_centros %}
-                <div class="menu-section-title">Centros educativos</div>
-
-                <a href="{% url 'carga_centros' %}">
-                    🏫 <span>Gestión de centros</span>
-                </a>
-
-                <a href="{% url 'mapa_centros' %}">
-                    🗺️ <span>Mapa de centros</span>
-                </a>
-            {% endif %}
-
-            {% if empresa and empresa.modulo_menu %}
-                <div class="menu-section-title">Menú</div>
-
-                <a href="{% url 'carga_menu' %}">
-                    📅 <span>Menú diario</span>
-                </a>
-
-                <a href="{% url 'calendario_escolar' %}">
-                    🗓️ <span>Calendario escolar</span>
-                </a>
-            {% endif %}
-
-            <div class="menu-section-title">
-                Inventario & Producción
-            </div>
-
-            <a href="{% url 'inventario:dashboard' %}">
-                📦 <span>Dashboard inventario</span>
-            </a>
-
-            <a href="{% url 'inventario:productos' %}">
-                🧂 <span>Materias primas</span>
-            </a>
-
-            <a href="{% url 'inventario:recetas' %}">
-                📖 <span>Recetas</span>
-            </a>
-
-            <a href="{% url 'inventario:produccion' %}">
-                🏭 <span>Producción</span>
-            </a>
-
-            <a href="{% url 'inventario:produccion_dashboard' %}"><span>Dashboard producción</span></a>
-            <a href="{% url 'inventario:recetas_lista' %}"><span>Recetas de producción</span></a>
-            <a href="{% url 'inventario:planes_lista' %}"><span>Planificación</span></a>
-            <a href="{% url 'inventario:ordenes_lista' %}"><span>Órdenes de producción</span></a>
-            <a href="{% url 'inventario:produccion_programacion_diaria' %}"><span>Programación producción</span></a>
-            <a href="{% url 'inventario:necesidades_materia_prima' %}"><span>Necesidades materia prima</span></a>
-
-            <a href="{% url 'inventario:ordenes_compra' %}">
-                🛒 <span>Órdenes de compra</span>
-            </a>
-
-            <a href="{% url 'inventario:movimientos' %}">
-                🔄 <span>Movimientos inventario</span>
-            </a>
-
-            <a href="{% url 'inventario:prestamos' %}">
-                🤝 <span>Préstamos materia prima</span>
-            </a>
-
-            {% if empresa and empresa.modulo_facturacion %}
-                <div class="menu-section-title">
-                    Facturación
-                </div>
-
-                <a href="{% url 'facturacion' %}">
-                    🧾 <span>Facturación</span>
-                </a>
-            {% endif %}
-
-            <div class="menu-section-title">
-                Finanzas
-            </div>
-
-            <a href="{% url 'contabilidad:dashboard' %}">
-                💰 <span>Contabilidad</span>
-            </a>
-
-            <a href="{% url 'contabilidad:reportes_financieros' %}">
-                📊 <span>Reportes financieros</span>
-            </a>
-
-            <a href="{% url 'contabilidad:gastos' %}">
-                🧾 <span>Gastos / 606</span>
-            </a>
-
-            {% if empresa and empresa.modulo_reportes %}
-                <div class="menu-section-title">
-                    Reportes
-                </div>
-
-                <a href="#">
-                    📊 <span>Reportes generales</span>
-                </a>
-            {% endif %}
-
-        </nav>
-
-        <div class="sidebar-footer">
-            <small>SaaS Panaderías</small>
-            <strong>Versión operativa</strong>
-        </div>
-
-    </aside>
-
-    <main class="app-content">
-        {% block content %}{% endblock %}
-    </main>
-
-    {% block extra_scripts %}{% endblock %}
-
+<body class="ds-app">
+<a class="ds-skip-link" href="#contenido-principal">Saltar al contenido</a>
+<aside class="app-sidebar" id="app-sidebar" aria-label="Navegación principal">
+  <button class="ds-btn ds-btn--tertiary ds-btn--sm ds-sidebar-close" type="button" aria-label="Cerrar menú">Cerrar</button>
+  <div class="ds-brand">
+    <div class="ds-brand-mark">{% if empresa and empresa.logo %}<img src="{{ empresa.logo.url }}" alt="Logo de {{ empresa.nombre }}">{% else %}SE{% endif %}</div>
+    <div class="ds-brand-copy"><strong>{% if empresa %}{{ empresa.nombre }}{% else %}SASTRE ERP{% endif %}</strong><small>Control empresarial</small></div>
+  </div>
+  <nav class="app-menu">
+    <a href="{% url 'inicio' %}" {% if request.resolver_match.url_name == 'inicio' %}aria-current="page"{% endif %}><span class="ds-nav-icon">IN</span><span>Inicio</span></a>
+    <details class="ds-nav-group" open>
+      <summary>Comercial</summary>
+      <a href="{% url 'comercial:dashboard' %}" {% if request.resolver_match.namespace == 'comercial' and request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CM</span><span>Resumen comercial</span></a>
+      <a href="{% url 'comercial:clientes_lista' %}" {% if request.resolver_match.url_name == 'clientes_lista' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CL</span><span>Clientes</span></a>
+      <a href="{% url 'comercial:pedidos_lista' %}" {% if request.resolver_match.url_name == 'pedidos_lista' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PD</span><span>Pedidos</span></a>
+      <a href="{% url 'comercial:programacion_diaria' %}" {% if request.resolver_match.url_name == 'programacion_diaria' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PG</span><span>Programación</span></a>
+      <a href="{% url 'documentos:lista' %}" {% if request.resolver_match.namespace == 'documentos' %}aria-current="page"{% endif %}><span class="ds-nav-icon">DC</span><span>Documentos</span></a>
+    </details>
+    {% if empresa and empresa.modulo_conduces %}
+    <details class="ds-nav-group" open>
+      <summary>Operaciones</summary>
+      <a href="{% url 'buscar_conduces' %}" {% if request.resolver_match.url_name == 'buscar_conduces' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CD</span><span>Conduces</span></a>
+      <a href="{% url 'generar_conduces' %}" {% if request.resolver_match.url_name == 'generar_conduces' %}aria-current="page"{% endif %}><span class="ds-nav-icon">GC</span><span>Generar conduces</span></a>
+      {% if empresa.modulo_centros %}<a href="{% url 'carga_centros' %}" {% if request.resolver_match.url_name == 'carga_centros' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CE</span><span>Centros educativos</span></a>{% endif %}
+      {% if empresa.modulo_menu %}<a href="{% url 'carga_menu' %}" {% if request.resolver_match.url_name == 'carga_menu' %}aria-current="page"{% endif %}><span class="ds-nav-icon">MN</span><span>Menú diario</span></a>{% endif %}
+    </details>
+    {% endif %}
+    <details class="ds-nav-group" open>
+      <summary>Inventario y producción</summary>
+      <a href="{% url 'inventario:dashboard' %}" {% if request.resolver_match.namespace == 'inventario' and request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}><span class="ds-nav-icon">IV</span><span>Resumen de inventario</span></a>
+      <a href="{% url 'inventario:productos' %}" {% if request.resolver_match.url_name == 'productos' %}aria-current="page"{% endif %}><span class="ds-nav-icon">MP</span><span>Materias primas</span></a>
+      <a href="{% url 'inventario:movimientos' %}" {% if request.resolver_match.url_name == 'movimientos' %}aria-current="page"{% endif %}><span class="ds-nav-icon">MV</span><span>Movimientos</span></a>
+      <a href="{% url 'inventario:produccion_dashboard' %}" {% if request.resolver_match.url_name == 'produccion_dashboard' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PR</span><span>Producción</span></a>
+      <a href="{% url 'inventario:ordenes_lista' %}" {% if request.resolver_match.url_name == 'ordenes_lista' %}aria-current="page"{% endif %}><span class="ds-nav-icon">OP</span><span>Órdenes de producción</span></a>
+      <a href="{% url 'inventario:necesidades_materia_prima' %}" {% if request.resolver_match.url_name == 'necesidades_materia_prima' %}aria-current="page"{% endif %}><span class="ds-nav-icon">NC</span><span>Necesidades</span></a>
+    </details>
+    {% if perms.core.view_transaction_engine %}
+    <details class="ds-nav-group" open>
+      <summary>Administración</summary>
+      <a href="{% url 'core:motor_dashboard' %}" {% if request.resolver_match.namespace == 'core' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CT</span><span>Centro Técnico</span></a>
+      <a href="{% url 'core:design_system' %}" {% if request.resolver_match.url_name == 'design_system' %}aria-current="page"{% endif %}><span class="ds-nav-icon">DS</span><span>Guía visual</span></a>
+      <a href="{% url 'mi_empresa' %}" {% if request.resolver_match.url_name == 'mi_empresa' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CF</span><span>Configuración</span></a>
+    </details>
+    {% endif %}
+  </nav>
+  <div class="sidebar-footer"><small>SASTRE ERP Enterprise</small><strong>Design System v1.0</strong></div>
+</aside>
+<button class="ds-sidebar-overlay" type="button" aria-label="Cerrar navegación"></button>
+<div class="app-content">
+  <header class="ds-topbar">
+    <div class="ds-topbar-left">
+      <button class="ds-btn ds-btn--tertiary ds-btn--sm ds-menu-toggle" type="button" aria-label="Abrir menú" aria-controls="app-sidebar">Menú</button>
+      <div class="ds-context"><small>Empresa activa</small><strong>{% if empresa %}{{ empresa.nombre }}{% else %}Sin empresa asignada{% endif %}</strong></div>
+    </div>
+    <div class="ds-topbar-right">
+      {% if request.user.is_authenticated %}<div class="ds-user"><span class="ds-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|initials }}</span><span class="ds-user-copy"><small class="ds-muted">Sesión activa</small><strong>{{ request.user.get_full_name|default:request.user.username }}</strong></span></div><a class="ds-btn ds-btn--tertiary ds-btn--sm" href="{% url 'logout_usuario' %}">Salir</a>{% endif %}
+    </div>
+  </header>
+  <main class="ds-main" id="contenido-principal" tabindex="-1">
+    {% if messages %}<div class="ds-messages" aria-live="polite">{% for message in messages %}<div class="ds-alert ds-alert--{% if message.tags == 'error' %}danger{% elif message.tags %}{{ message.tags }}{% else %}info{% endif %}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="{% static 'design_system/js/components.js' %}" defer></script>
+{% block extra_scripts %}{% endblock %}
 </body>
-
 </html>

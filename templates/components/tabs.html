@@ -1,0 +1,1 @@
+<nav class="ds-tabs" aria-label="{{ label|default:'Secciones' }}">{% for tab in tabs %}<a class="ds-tab" href="{{ tab.url }}" {% if tab.active %}aria-current="true"{% endif %}>{{ tab.label }}</a>{% endfor %}</nav>

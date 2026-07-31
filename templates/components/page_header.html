@@ -1,0 +1,9 @@
+<header class="ds-page-header">
+  <div>
+    {% if breadcrumbs %}<nav class="ds-breadcrumb" aria-label="Migas de pan">{{ breadcrumbs }}</nav>{% endif %}
+    {% if eyebrow %}<p class="ds-muted ds-mb-1">{{ eyebrow }}</p>{% endif %}
+    <h1>{{ title }}</h1>
+    {% if description %}<p>{{ description }}</p>{% endif %}
+  </div>
+  {% if actions %}<div class="ds-page-actions">{{ actions }}</div>{% endif %}
+</header>

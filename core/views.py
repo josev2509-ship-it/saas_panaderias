@@ -32,6 +32,18 @@ def _empresa(request):
 
 @login_required
 @permission_required("core.view_transaction_engine", raise_exception=True)
+def design_system(request):
+    return render(request, "core/design_system.html", {
+        "status_samples": [
+            ("BORRADOR", "Borrador"), ("PROCESANDO", "Procesando"),
+            ("APROBADO", "Aprobado"), ("PARCIAL", "Parcial"),
+            ("FALLIDA", "Fallida"), ("ESTADO_FUTURO", "Estado futuro"),
+        ],
+    })
+
+
+@login_required
+@permission_required("core.view_transaction_engine", raise_exception=True)
 def motor_dashboard(request):
     empresa = _empresa(request)
     idempotencias = RegistroIdempotencia.objects.filter(empresa=empresa)

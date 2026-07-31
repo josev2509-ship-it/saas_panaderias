@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from django.template import Context, Template
 
 from conduces.models import Empresa
 from inventario.engine import (
@@ -144,3 +145,33 @@ class Core2CClosingTest(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("core:eventos"))
         self.assertContains(response, reverse("core:evento_detalle", args=[event.pk]))
+
+    def test_design_system_requires_permission_and_renders_components(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("core:design_system"))
+        self.assertEqual(response.status_code, 403)
+        self.user.user_permissions.add(
+            Permission.objects.get(codename="view_transaction_engine")
+        )
+        response = self.client.get(reverse("core:design_system"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enterprise Design System")
+        self.assertContains(response, "ds-modal")
+        self.assertContains(response, "ds-responsive-table")
+
+    def test_base_menu_respects_technical_permission(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("inicio"))
+        self.assertNotContains(response, reverse("core:design_system"))
+        self.user.user_permissions.add(
+            Permission.objects.get(codename="view_transaction_engine")
+        )
+        response = self.client.get(reverse("inicio"))
+        self.assertContains(response, reverse("core:design_system"))
+        self.assertContains(response, "ds-menu-toggle")
+
+    def test_unknown_status_has_safe_neutral_tone(self):
+        rendered = Template(
+            "{% load design_system %}{{ value|status_tone }}"
+        ).render(Context({"value": "NUEVO_ESTADO_FUTURO"}))
+        self.assertEqual(rendered, "neutral")

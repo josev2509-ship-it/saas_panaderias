@@ -1,0 +1,25 @@
+:root {
+  color-scheme: light;
+  --ds-primary-50:#eef5ff;--ds-primary-100:#dbeafe;--ds-primary-500:#2563eb;
+  --ds-primary-600:#1d4ed8;--ds-primary-700:#1e40af;--ds-secondary:#475569;
+  --ds-bg:#f4f7fb;--ds-surface:#fff;--ds-surface-subtle:#f8fafc;
+  --ds-border:#dce3ec;--ds-border-strong:#c5d0dd;--ds-text:#152033;
+  --ds-text-muted:#607086;--ds-success:#15803d;--ds-success-bg:#ecfdf3;
+  --ds-warning:#a16207;--ds-warning-bg:#fffbeb;--ds-danger:#b42318;
+  --ds-danger-bg:#fff1f0;--ds-info:#0369a1;--ds-info-bg:#f0f9ff;
+  --ds-neutral:#475569;--ds-neutral-bg:#f1f5f9;
+  --ds-font:Inter,"Segoe UI",Roboto,Arial,sans-serif;--ds-mono:"SFMono-Regular",Consolas,monospace;
+  --ds-text-xs:.75rem;--ds-text-sm:.875rem;--ds-text-md:1rem;
+  --ds-text-lg:1.125rem;--ds-text-xl:1.375rem;--ds-text-2xl:1.75rem;
+  --ds-text-3xl:2.25rem;--ds-space-1:.25rem;--ds-space-2:.5rem;
+  --ds-space-3:.75rem;--ds-space-4:1rem;--ds-space-5:1.25rem;
+  --ds-space-6:1.5rem;--ds-space-8:2rem;--ds-space-10:2.5rem;
+  --ds-radius-sm:.5rem;--ds-radius-md:.75rem;--ds-radius-lg:1rem;
+  --ds-radius-xl:1.35rem;--ds-radius-pill:999px;
+  --ds-shadow-sm:0 1px 2px rgba(15,23,42,.05);
+  --ds-shadow-md:0 8px 24px rgba(15,23,42,.08);
+  --ds-shadow-lg:0 18px 42px rgba(15,23,42,.12);
+  --ds-speed-fast:150ms;--ds-speed:220ms;--ds-sidebar:272px;
+  --ds-content:1560px;--ds-topbar:68px;--ds-z-sidebar:900;
+  --ds-z-overlay:850;--ds-z-modal:1000;
+}

@@ -6,6 +6,7 @@ app_name = "core"
 
 urlpatterns = [
     path("", views.motor_dashboard, name="motor_dashboard"),
+    path("design-system/", views.design_system, name="design_system"),
     path("idempotencia/", views.idempotencias_lista, name="idempotencias"),
     path("idempotencia/<int:pk>/", views.idempotencia_detalle, name="idempotencia_detalle"),
     path("idempotencia/<int:pk>/cerrar/", views.idempotencia_cerrar, name="idempotencia_cerrar"),
