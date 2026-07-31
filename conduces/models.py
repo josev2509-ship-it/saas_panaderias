@@ -34,6 +34,8 @@ class Empresa(models.Model):
     modulo_rutas = models.BooleanField(default=False)
     modulo_nomina = models.BooleanField(default=False)
     modulo_inventario = models.BooleanField(default=False)
+    modulo_catalogos = models.BooleanField(default=True)
+    modulo_compras = models.BooleanField(default=False)
 
     activa = models.BooleanField(default=True)
 
@@ -491,5 +493,3 @@ class DiaNoDocencia(models.Model):
 
     def __str__(self):
         return f"{self.fecha} - {self.motivo}"
-    
-    

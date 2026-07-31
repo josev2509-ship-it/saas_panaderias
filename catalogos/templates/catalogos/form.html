@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block content %}
+<header class="ds-page-header"><div><h1>{% if objeto.pk %}Editar{% else %}Crear{% endif %} {{ titulo }}</h1></div></header>
+<form method="post" class="ds-card" novalidate>{% csrf_token %}{{ form.as_p }}<div class="ds-cluster"><button class="ds-btn">Guardar</button><a class="ds-btn ds-btn--secondary" href="{% url 'catalogos:lista' clave %}">Cancelar</a></div></form>
+{% endblock %}

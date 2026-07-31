@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}Catálogos · SASTRE ERP{% endblock %}{% block content %}
+<header class="ds-page-header"><div><h1>Centro de Catálogos</h1><p>Maestros transversales de la empresa activa.</p></div></header>
+<section class="ds-grid ds-grid--3">{% for clave,config in catalogos.items %}<a class="ds-card" href="{% url 'catalogos:lista' clave %}"><h2>{{ config.2 }}</h2><p class="ds-muted">Consultar y administrar</p></a>{% endfor %}</section>
+{% endblock %}

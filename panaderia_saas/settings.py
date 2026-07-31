@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'comercial',
     "documentos.apps.DocumentosConfig",
     "auditoria.apps.AuditoriaConfig",
+    "catalogos.apps.CatalogosConfig",
 ]
 
 MIDDLEWARE = [

@@ -55,6 +55,18 @@ def _movimiento_desde_vista(request, *, empresa, producto, tipo, cantidad,
         referencia=referencia,
     )
 
+
+def _bloquear_mutacion_orden_legada(view_func):
+    """Mantiene URLs históricas sin permitir nuevas mutaciones del flujo legado."""
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.contrib.auth.views import redirect_to_login
+            return redirect_to_login(request.get_full_path())
+        return render(request, "inventario/orden_compra_legada_bloqueada.html", status=403)
+    wrapper.__name__ = view_func.__name__
+    wrapper.__doc__ = view_func.__doc__
+    return wrapper
+
 from .models import (
     ProductoInventario,
     ProductoProduccion,
@@ -2096,3 +2108,11 @@ def eliminar_orden_compra(request, orden_id):
 
     messages.success(request, "Orden de compra eliminada correctamente.")
     return redirect("inventario:ordenes_compra")
+
+
+for _legacy_mutation in (
+    "generar_orden_compra_sugerida", "calcular_orden_compra",
+    "actualizar_detalle_orden", "eliminar_detalle_orden",
+    "agregar_producto_manual_orden", "eliminar_orden_compra",
+):
+    globals()[_legacy_mutation] = _bloquear_mutacion_orden_legada(globals()[_legacy_mutation])

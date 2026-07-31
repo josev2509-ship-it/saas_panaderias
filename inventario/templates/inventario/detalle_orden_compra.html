@@ -9,14 +9,11 @@
     <div class="topbar">
         <div>
             <h1>Orden de compra {{ orden.numero }}</h1>
+            <span class="ds-badge ds-status--warning">Orden heredada · edición congelada</span>
             <p>Gestión profesional de productos solicitados.</p>
         </div>
 
         <div class="form-actions">
-            <a href="{% url 'inventario:calcular_orden_compra' orden.id %}" class="btn">
-                Calcular productos
-            </a>
-
             <a href="{% url 'inventario:pdf_orden_compra' orden.id %}" class="btn btn-secondary" target="_blank">
                 Ver PDF
             </a>

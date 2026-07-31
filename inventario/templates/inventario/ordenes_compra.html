@@ -8,14 +8,11 @@
     <div class="topbar">
         <div>
             <h1>Órdenes de compra</h1>
+            <span class="ds-badge ds-status--warning">Órdenes heredadas de Inventario · solo lectura</span>
             <p>Historial de órdenes generadas, sugeridas y manuales.</p>
         </div>
 
         <div class="form-actions">
-            <a href="{% url 'inventario:generar_orden_compra' %}" class="btn">
-                Generar orden sugerida
-            </a>
-
             <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">
                 Volver
             </a>

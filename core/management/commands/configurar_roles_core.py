@@ -42,6 +42,9 @@ class Command(BaseCommand):
             permissions = Permission.objects.filter(
                 content_type__app_label="core", codename__in=codenames
             )
-            group.permissions.set(permissions)
+            # Actualiza únicamente la porción Core del grupo y conserva
+            # permisos transversales asignados por otros módulos.
+            non_core = group.permissions.exclude(content_type__app_label="core")
+            group.permissions.set([*non_core, *permissions])
             self.stdout.write(f"{name}: {permissions.count()} permisos")
         self.stdout.write(self.style.SUCCESS("Roles Core configurados."))

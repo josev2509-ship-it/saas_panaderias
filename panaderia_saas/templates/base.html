@@ -58,6 +58,7 @@
       <summary>Administración</summary>
       <a href="{% url 'core:motor_dashboard' %}" {% if request.resolver_match.namespace == 'core' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CT</span><span>Centro Técnico</span></a>
       <a href="{% url 'core:design_system' %}" {% if request.resolver_match.url_name == 'design_system' %}aria-current="page"{% endif %}><span class="ds-nav-icon">DS</span><span>Guía visual</span></a>
+      {% if empresa.modulo_catalogos and perms.catalogos.view_condicionpago %}<a href="{% url 'catalogos:centro' %}" {% if request.resolver_match.namespace == 'catalogos' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CA</span><span>Catálogos</span></a>{% endif %}
       <a href="{% url 'mi_empresa' %}" {% if request.resolver_match.url_name == 'mi_empresa' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CF</span><span>Configuración</span></a>
     </details>
     {% endif %}

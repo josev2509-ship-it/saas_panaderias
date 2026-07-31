@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block content %}
+<header class="ds-page-header"><div><h1>Flujo heredado en solo lectura</h1><p>La creación y edición de órdenes antiguas de Inventario fue congelada para preparar la convergencia con Compras.</p></div></header>
+<div class="ds-alert ds-alert--warning" role="alert">La URL histórica se conserva, pero esta operación ya no admite cambios. Las órdenes existentes siguen disponibles para consulta.</div>
+<a class="ds-btn ds-btn--secondary" href="{% url 'inventario:ordenes_compra' %}">Volver al historial</a>
+{% endblock %}
