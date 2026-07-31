@@ -1,0 +1,2 @@
+{% extends "base.html" %}
+{% block content %}<div class="container py-4"><div class="card shadow-sm p-4"><h1 class="h3">{{ titulo }}</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary btn-lg" type="submit">Guardar</button></form></div></div>{% endblock %}

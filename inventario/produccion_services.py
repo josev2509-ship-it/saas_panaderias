@@ -13,6 +13,8 @@ from .models import (
     DetallePlanProduccion, HistorialEstadoOrdenProduccion, NecesidadMateriaPrima,
     OrdenProduccion, PlanProduccion, RecetaProduccion,
 )
+from core.application.event_bus import event_bus
+from core.domain.events import OrdenProduccionCompletada, OrdenProduccionIniciada
 
 CUATRO = Decimal("0.0001")
 
@@ -215,6 +217,18 @@ def transicionar_orden(*, orden, empresa, usuario, accion, request=None, comenta
         descripcion=f"Orden {orden.numero}: {orden.get_estado_display()}.",
         datos_anteriores={"estado": origen}, datos_nuevos={"estado": destino},
     )
+    evento_clase = {
+        "iniciar": OrdenProduccionIniciada,
+        "completar": OrdenProduccionCompletada,
+    }.get(accion)
+    if evento_clase:
+        event_bus.publish(evento_clase(
+            empresa_id=empresa.pk, usuario_id=usuario.pk,
+            agregado_tipo="inventario.OrdenProduccion", agregado_id=str(orden.pk),
+            referencia=orden.numero,
+            clave_idempotente=f"orden:{orden.pk}:{destino}",
+            payload={"estado_anterior": origen, "estado_nuevo": destino},
+        ))
     return orden
 
 

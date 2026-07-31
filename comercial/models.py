@@ -173,6 +173,15 @@ class SecuenciaDocumento(models.Model):
     tipo = models.CharField(max_length=30)
     periodo = models.PositiveIntegerField()
     ultimo_numero = models.PositiveIntegerField(default=0)
+    prefijo = models.CharField(max_length=10, blank=True)
+    longitud = models.PositiveSmallIntegerField(default=6)
+    activo = models.BooleanField(default=True)
+    reinicia_anualmente = models.BooleanField(default=True)
+    fecha_ultima_emision = models.DateTimeField(null=True, blank=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    fecha_creacion = models.DateTimeField(auto_now_add=True, null=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True, null=True)
 
     class Meta:
         constraints = [

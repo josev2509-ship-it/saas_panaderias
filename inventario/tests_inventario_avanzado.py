@@ -13,6 +13,8 @@ from .inventario_avanzado_services import (
     aplicar_movimiento, cerrar_ejecucion, consumir_detalle, liberar_reserva,
     preparar_ejecucion, reservar_para_orden,
 )
+from .engine import InventoryEngine
+from core.application.operation_context import OperationContext
 from .models import (
     ConsumoProduccion, DetalleRecetaProduccion, EjecucionInventarioOrden,
     LoteInventario, MovimientoInventario, OrdenProduccion, ProductoInventario,
@@ -188,3 +190,76 @@ class InventarioAvanzadoSprintTest(TestCase):
         self.assertEqual(uno.pk, dos.pk)
         self.assertEqual(self.pt.stock_actual, 90)
         self.assertEqual(uno.lote.orden_produccion_origen, self.orden)
+
+    def test_merma_idempotente(self):
+        ejecucion = preparar_ejecucion(orden=self.orden, empresa=self.empresa)
+        context = OperationContext(
+            empresa=self.empresa, usuario=self.usuario,
+            clave_idempotente="merma-core", referencia=self.orden.numero,
+        )
+        primera = InventoryEngine.record_waste(
+            context=context, ejecucion=ejecucion, lote=self.lote2,
+            cantidad=2, motivo="Prueba controlada",
+        )
+        segunda = InventoryEngine.record_waste(
+            context=context, ejecucion=ejecucion, lote=self.lote2,
+            cantidad=2, motivo="Prueba controlada",
+        )
+        self.mp.refresh_from_db()
+        self.assertEqual(primera.pk, segunda.pk)
+        self.assertEqual(self.mp.stock_actual, 18)
+
+    def test_devolucion_idempotente(self):
+        ejecucion = preparar_ejecucion(orden=self.orden, empresa=self.empresa)
+        detalle = ejecucion.reserva.detalles.first()
+        consumir_detalle(
+            ejecucion=ejecucion, detalle=detalle, cantidad=4,
+            clave_idempotencia="consumo-devolucion",
+        )
+        context = OperationContext(
+            empresa=self.empresa, usuario=self.usuario,
+            clave_idempotente="devolucion-core", referencia=self.orden.numero,
+        )
+        primera = InventoryEngine.return_material(
+            context=context, ejecucion=ejecucion, lote=self.lote1, cantidad=2
+        )
+        segunda = InventoryEngine.return_material(
+            context=context, ejecucion=ejecucion, lote=self.lote1, cantidad=2
+        )
+        self.mp.refresh_from_db()
+        self.assertEqual(primera.pk, segunda.pk)
+        self.assertEqual(self.mp.stock_actual, 18)
+
+    def test_reversion_idempotente_conserva_originales(self):
+        from django.contrib.auth.models import Permission
+        ejecucion = preparar_ejecucion(orden=self.orden, empresa=self.empresa)
+        detalle = ejecucion.reserva.detalles.first()
+        consumo = consumir_detalle(
+            ejecucion=ejecucion, detalle=detalle, cantidad=4,
+            clave_idempotencia="consumo-reversion",
+        )
+        lote_produccion = cerrar_ejecucion(
+            ejecucion=ejecucion, cantidad_neta=90, usuario=self.usuario,
+            clave_idempotencia="cierre-reversion",
+        )
+        self.usuario.user_permissions.add(
+            Permission.objects.get(codename="revertir_ejecucion_inventario")
+        )
+        self.usuario = User.objects.get(pk=self.usuario.pk)
+        context = OperationContext(
+            empresa=self.empresa, usuario=self.usuario,
+            clave_idempotente="reversion-core", referencia=self.orden.numero,
+        )
+        primera = InventoryEngine.reverse_operation(
+            context=context, ejecucion=ejecucion, motivo="Correccion controlada"
+        )
+        segunda = InventoryEngine.reverse_operation(
+            context=context, ejecucion=ejecucion, motivo="Correccion controlada"
+        )
+        self.mp.refresh_from_db()
+        self.pt.refresh_from_db()
+        self.assertEqual(primera.pk, segunda.pk)
+        self.assertEqual(self.mp.stock_actual, 20)
+        self.assertEqual(self.pt.stock_actual, 0)
+        self.assertTrue(MovimientoInventario.objects.filter(pk=consumo.movimiento_id).exists())
+        self.assertTrue(MovimientoInventario.objects.filter(pk=lote_produccion.movimiento_entrada_id).exists())

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+  <h1>Motor transaccional</h1>
+  <div class="row g-3">
+    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Operaciones completadas</span><strong class="display-6">{{ metricas.idem_completadas }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Operaciones fallidas</span><strong class="display-6 text-danger">{{ metricas.idem_fallidas }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Eventos pendientes</span><strong class="display-6">{{ metricas.eventos_pendientes }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Eventos con error</span><strong class="display-6 text-danger">{{ metricas.eventos_error }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Conciliaciones con diferencia</span><strong class="display-6 text-warning">{{ metricas.conciliaciones_diferencia }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Secuencias activas</span><strong class="display-6">{{ metricas.secuencias_activas }}</strong></div></div>
+  </div>
+  <div class="d-flex flex-wrap gap-2 mt-4"><a class="btn btn-outline-primary" href="{% url 'core:idempotencias' %}">Idempotencias</a><a class="btn btn-outline-primary" href="{% url 'core:eventos' %}">Eventos</a><a class="btn btn-outline-primary" href="{% url 'core:secuencias' %}">Secuencias</a><a class="btn btn-outline-primary" href="{% url 'core:conciliaciones' %}">Conciliaciones</a></div>
+</div>
+{% endblock %}

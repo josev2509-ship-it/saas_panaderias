@@ -9,6 +9,7 @@ from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 
 from .models import Cliente, DetallePedido, HistorialEstadoPedido, Pedido, SecuenciaDocumento
+from core.application.numbering import obtener_siguiente_numero
 
 CENTAVO = Decimal("0.01")
 
@@ -37,14 +38,9 @@ def recalcular_pedido(pedido):
 
 
 def siguiente_numero(empresa, fecha=None, tipo="PED"):
-    fecha = fecha or timezone.localdate()
-    with transaction.atomic():
-        secuencia, _ = SecuenciaDocumento.objects.select_for_update().get_or_create(
-            empresa=empresa, tipo=tipo, periodo=fecha.year, defaults={"ultimo_numero": 0}
-        )
-        secuencia.ultimo_numero += 1
-        secuencia.save(update_fields=["ultimo_numero"])
-        return f"{tipo}-{fecha.year}-{secuencia.ultimo_numero:06d}"
+    return obtener_siguiente_numero(
+        empresa=empresa, tipo_documento=tipo, fecha=fecha, prefijo=tipo
+    )
 
 
 def validar_envio(pedido):

@@ -19,6 +19,8 @@ from django.contrib.auth.decorators import login_required
 from django.db import models
 from django.http import HttpResponse
 from django.contrib import messages
+from core.application.operation_context import OperationContext
+from .engine import InventoryEngine
 
 from openpyxl import Workbook, load_workbook
 
@@ -34,6 +36,22 @@ from .models import (
     ProyeccionConsumoDiario,
     DetalleConsumoProduccion,
 )
+
+
+def _movimiento_desde_vista(request, *, empresa, producto, tipo, cantidad,
+                            referencia="", observacion="", **kwargs):
+    clave = request.headers.get("Idempotency-Key") or (
+        f"legacy:{request.path}:{tipo}:{producto.pk}:{referencia}:{cantidad}"
+    )
+    context = OperationContext(
+        empresa=empresa, usuario=request.user, request=request,
+        referencia=referencia or request.path, clave_idempotente=clave,
+        origen="inventario.views", observaciones=observacion,
+    )
+    return InventoryEngine.apply_movement(
+        context=context, producto=producto, tipo=tipo, cantidad=cantidad,
+        referencia=referencia,
+    )
 
 from .models import (
     ProductoInventario,
@@ -394,7 +412,7 @@ def crear_prestamo(request):
         )
 
         if tipo == "entregado":
-            MovimientoInventario.objects.create(
+            _movimiento_desde_vista(request,
                 empresa=empresa,
                 producto=producto,
                 tipo="prestamo_entregado",
@@ -405,7 +423,7 @@ def crear_prestamo(request):
             )
 
         if tipo == "recibido":
-            MovimientoInventario.objects.create(
+            _movimiento_desde_vista(request,
                 empresa=empresa,
                 producto=producto,
                 tipo="prestamo_recibido",
@@ -448,7 +466,7 @@ def registrar_devolucion_prestamo(request, prestamo_id):
         else:
             tipo_movimiento = "salida"
 
-        MovimientoInventario.objects.create(
+        _movimiento_desde_vista(request,
             empresa=empresa,
             producto=prestamo.producto,
             tipo=tipo_movimiento,
@@ -556,7 +574,6 @@ def cargar_inventario_excel(request):
                     "unidad_medida": str(unidad_medida or "lb").strip().lower(),
                     "unidad_compra": str(unidad_compra or "").strip(),
                     "cantidad_por_empaque": convertir_decimal(cantidad_por_empaque, "1"),
-                    "stock_actual": convertir_decimal(stock_actual, "0"),
                     "stock_minimo": convertir_decimal(stock_minimo, "0"),
                     "precio_unitario_compra": convertir_decimal(precio_unitario_compra, "0"),
                     "porcentaje_itbis": convertir_itbis(porcentaje_itbis),
@@ -564,6 +581,16 @@ def cargar_inventario_excel(request):
                     "activo": activo_valor,
                 }
             )
+            saldo_objetivo = convertir_decimal(stock_actual, "0")
+            diferencia = saldo_objetivo - Decimal(producto.stock_actual or 0)
+            if diferencia:
+                _movimiento_desde_vista(
+                    request, empresa=empresa, producto=producto,
+                    tipo="ajuste" if diferencia > 0 else "salida",
+                    cantidad=abs(diferencia),
+                    referencia=f"IMPORT-{producto.codigo}-{saldo_objetivo}",
+                    observacion="Ajuste autorizado por importacion de inventario.",
+                )
 
             if creado:
                 creados += 1
@@ -1241,7 +1268,7 @@ def recibir_orden_compra(request, orden_id):
             cantidad_empaques * cantidad_por_empaque
         )
 
-        MovimientoInventario.objects.create(
+        _movimiento_desde_vista(request,
             empresa=empresa,
             producto=producto,
             tipo="entrada_compra",
@@ -1445,7 +1472,7 @@ def ejecutar_produccion(request, produccion_id):
 
         costo_real += cantidad_consumir * materia.costo_unitario
 
-        MovimientoInventario.objects.create(
+        _movimiento_desde_vista(request,
             empresa=empresa,
             producto=materia,
             tipo="produccion",
@@ -1583,7 +1610,7 @@ def registrar_consumo_manual(request, produccion_id):
             usuario=request.user
         )
 
-        MovimientoInventario.objects.create(
+        _movimiento_desde_vista(request,
             empresa=empresa,
             producto=producto,
             tipo="salida",
@@ -1978,7 +2005,7 @@ def registrar_movimiento_manual(request):
             messages.error(request, "La cantidad debe ser mayor que cero.")
             return redirect("inventario:registrar_movimiento_manual")
 
-        MovimientoInventario.objects.create(
+        _movimiento_desde_vista(request,
             empresa=empresa,
             producto=producto,
             tipo=tipo,

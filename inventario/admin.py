@@ -159,6 +159,10 @@ class MovimientoInventarioAdmin(admin.ModelAdmin):
     )
     list_filter = ("tipo", "fecha", "empresa")
     search_fields = ("producto__nombre", "referencia", "observacion")
+    readonly_fields = tuple(field.name for field in MovimientoInventario._meta.fields)
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(ProduccionProgramada)

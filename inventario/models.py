@@ -430,6 +430,9 @@ class DetalleReceta(models.Model):
 # =====================================================
 
 class MovimientoInventario(models.Model):
+    class Naturaleza(models.TextChoices):
+        ENTRADA = "ENTRADA", "Entrada"
+        SALIDA = "SALIDA", "Salida"
     TIPOS = (
         ("entrada", "Entrada"),
         ("entrada_compra", "Entrada por compra"),
@@ -478,6 +481,10 @@ class MovimientoInventario(models.Model):
     clave_idempotencia = models.CharField(max_length=180, null=True, blank=True, unique=True)
     aplicado_por_servicio = models.BooleanField(default=False, editable=False)
     revertido_de = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="reversiones")
+    naturaleza = models.CharField(max_length=10, choices=Naturaleza.choices, blank=True, editable=False)
+    operacion_origen = models.CharField(max_length=100, blank=True, editable=False)
+    es_reversion = models.BooleanField(default=False, editable=False)
+    metadata = models.JSONField(default=dict, blank=True, editable=False)
 
     class Meta:
         ordering = ["-fecha", "-id"]
@@ -486,60 +493,7 @@ class MovimientoInventario(models.Model):
         return f"{self.get_tipo_display()} - {self.producto.nombre} - {self.cantidad}"
 
     def save(self, *args, **kwargs):
-        nuevo = self.pk is None
-
         super().save(*args, **kwargs)
-
-        if nuevo and not self.aplicado_por_servicio:
-            producto = self.producto
-            cantidad = self.cantidad or Decimal("0")
-
-            if self.tipo in [
-               "entrada",
-               "entrada_compra",
-               "ajuste",
-               "prestamo_recibido",
-               "devolucion_prestamo"
-              ]:
-                producto.stock_actual += cantidad
-
-            elif self.tipo in [
-                "salida",
-                "produccion",
-                "merma",
-                "prestamo_entregado"
-            ]:
-                producto.stock_actual -= cantidad
-
-                cantidad_restante = cantidad
-
-                lotes = LoteInventario.objects.filter(
-                    producto=producto,
-                    cantidad_disponible__gt=0
-                ).order_by(
-                    "fecha_vencimiento",
-                    "fecha_ingreso"
-                )
-
-                for lote in lotes:
-                    if cantidad_restante <= 0:
-                        break
-
-                    disponible = lote.cantidad_disponible
-
-                    if disponible >= cantidad_restante:
-                        lote.cantidad_disponible -= cantidad_restante
-                        lote.save()
-                        cantidad_restante = 0
-                    else:
-                        cantidad_restante -= disponible
-                        lote.cantidad_disponible = 0
-                        lote.save()
-
-            if self.costo_unitario:
-                producto.precio_unitario_compra = self.costo_unitario
-
-            producto.save()
 
 
 # =====================================================
@@ -1236,6 +1190,11 @@ class EjecucionInventarioOrden(models.Model):
     cerrado_en = models.DateTimeField(null=True, blank=True)
     reversado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     reversado_en = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        permissions = [
+            ("ejecutar_inventario_orden", "Puede ejecutar inventario de una orden"),
+            ("revertir_ejecucion_inventario", "Puede revertir una ejecucion de inventario"),
+        ]
 
 
 class ConsumoProduccion(models.Model):

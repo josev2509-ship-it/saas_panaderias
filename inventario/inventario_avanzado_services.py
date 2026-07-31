@@ -64,9 +64,10 @@ def aplicar_movimiento(*, empresa, producto, tipo, cantidad, usuario=None, lote=
     if posterior < 0:
         raise ValidationError("El movimiento produciria stock negativo.")
     if tipo in SALIDAS:
-        if not lote_bloqueado or lote_bloqueado.cantidad_disponible < cantidad:
+        if lote_bloqueado and lote_bloqueado.cantidad_disponible < cantidad:
             raise ValidationError("El lote no posee existencia suficiente.")
-        lote_bloqueado.cantidad_disponible = F("cantidad_disponible") - cantidad
+        if lote_bloqueado:
+            lote_bloqueado.cantidad_disponible = F("cantidad_disponible") - cantidad
     elif lote_bloqueado:
         lote_bloqueado.cantidad_disponible = F("cantidad_disponible") + cantidad
         lote_bloqueado.cantidad_inicial = F("cantidad_inicial") + cantidad
@@ -84,6 +85,12 @@ def aplicar_movimiento(*, empresa, producto, tipo, cantidad, usuario=None, lote=
         saldo_anterior=anterior, saldo_posterior=posterior,
         clave_idempotencia=clave_idempotencia,
         aplicado_por_servicio=True, revertido_de=revertido_de,
+        naturaleza=(
+            MovimientoInventario.Naturaleza.ENTRADA
+            if tipo in ENTRADAS else MovimientoInventario.Naturaleza.SALIDA
+        ),
+        operacion_origen="InventoryEngine",
+        es_reversion=revertido_de is not None,
     )
 
 
