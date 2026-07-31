@@ -5,7 +5,7 @@ register = template.Library()
 STATUS_TONES = {
     "BORRADOR": "neutral", "INACTIVO": "neutral", "ARCHIVADO": "neutral",
     "PENDIENTE": "progress", "PENDIENTE_APROBACION": "progress", "EN_EVALUACION": "progress",
-    "EN_REVISION": "progress", "EN_PREPARACION": "progress",
+    "EN_REVISION": "progress", "EN_PREPARACION": "progress", "EN_APROBACION": "progress",
     "PROCESANDO": "progress", "INICIADA": "progress", "ACTIVA": "info",
     "APROBADO": "success", "APROBADA": "success", "COMPLETADO": "success",
     "COMPLETADA": "success", "ENTREGADO": "success", "COBRADO": "success",
@@ -17,7 +17,7 @@ STATUS_TONES = {
     "CANCELADA": "danger", "FALLIDO": "danger", "FALLIDA": "danger",
     "ERROR": "danger", "AGOTADO": "danger", "BLOQUEADO": "danger",
     "ANULADO": "danger", "CRITICO": "danger", "ALTO": "warning",
-    "MEDIO": "info", "BAJO": "success",
+    "MEDIO": "info", "BAJO": "success", "DEVUELTA": "warning", "RETIRADA": "neutral",
 }
 
 

@@ -1,0 +1,20 @@
+from core.domain.events import DomainEvent
+class ReglaWorkflowCreada(DomainEvent): pass
+class ReglaWorkflowVersionada(DomainEvent): pass
+class ReglaWorkflowActivada(DomainEvent): pass
+class ReglaWorkflowRetirada(DomainEvent): pass
+class SuplenciaWorkflowCreada(DomainEvent): pass
+class SuplenciaWorkflowRevocada(DomainEvent): pass
+class WorkflowIniciado(DomainEvent): pass
+class NivelWorkflowActivado(DomainEvent): pass
+class AprobadorAsignado(DomainEvent): pass
+class DecisionWorkflowRegistrada(DomainEvent): pass
+class NivelWorkflowAprobado(DomainEvent): pass
+class NivelWorkflowRechazado(DomainEvent): pass
+class WorkflowDevuelto(DomainEvent): pass
+class WorkflowReabierto(DomainEvent): pass
+class WorkflowAprobado(DomainEvent): pass
+class WorkflowRechazado(DomainEvent): pass
+class WorkflowCancelado(DomainEvent): pass
+class WorkflowConError(DomainEvent): pass
+class AprobadorReasignado(DomainEvent): pass

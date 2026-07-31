@@ -5,6 +5,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
+    path("workflow/", include("workflow.urls")),
     path("compras/", include("compras.urls")),
     path("catalogos/", include("catalogos.urls")),
     path("core/", include("core.urls")),

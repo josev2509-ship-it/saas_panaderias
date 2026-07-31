@@ -1,0 +1,4 @@
+from django.urls import path
+from . import views
+app_name="workflow"
+urlpatterns=[path("",views.dashboard,name="dashboard"),path("reglas/",views.reglas,name="reglas"),path("reglas/nueva/",views.regla_editar,name="regla_crear"),path("reglas/<int:pk>/",views.regla_detalle,name="regla_detalle"),path("reglas/<int:pk>/editar/",views.regla_editar,name="regla_editar"),path("reglas/<int:pk>/<str:accion>/",views.regla_accion,name="regla_accion"),path("reglas/<int:pk>/agregar/<str:tipo>/",views.regla_agregar,name="regla_agregar"),path("reglas/<int:pk>/nivel/<int:nivel_id>/agregar/<str:tipo>/",views.regla_agregar,name="nivel_agregar"),path("suplencias/",views.suplencias,name="suplencias"),path("bandeja/",views.bandeja,name="bandeja"),path("reportes/",views.reportes,name="reportes"),path("instancias/<int:pk>/",views.instancia_detalle,name="instancia"),path("instancias/<int:pk>/<str:accion>/",views.decidir,name="decidir"),path("exportar/",views.exportar,name="exportar")]

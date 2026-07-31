@@ -77,6 +77,10 @@ movimiento = InventoryEngine.apply_movement(
 
 ## Reglas para módulos futuros
 
+Workflow consume `OperationContext`, EventBus, auditoría e idempotencia como
+infraestructura transversal. Los adaptadores se registran explícitamente y no
+crean dependencias de Core hacia módulos de negocio.
+
 Las vistas validan entrada y llaman servicios. Los servicios resuelven empresa,
 permisos, bloqueos, idempotencia, movimientos, auditoría y eventos. Los efectos
 externos se programan después del commit.

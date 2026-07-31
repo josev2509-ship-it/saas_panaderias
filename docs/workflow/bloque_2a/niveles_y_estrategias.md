@@ -1,0 +1,4 @@
+# Niveles y estrategias
+
+CUALQUIERA, UNANIMIDAD, MAYORIA_SIMPLE, MINIMO_VOTOS,
+TODOS_LOS_ASIGNADOS y PRIMERA_RESPUESTA son estrategias soportadas.

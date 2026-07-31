@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "auditoria.apps.AuditoriaConfig",
     "catalogos.apps.CatalogosConfig",
     "compras.apps.ComprasConfig",
+    "workflow.apps.WorkflowConfig",
 ]
 
 MIDDLEWARE = [

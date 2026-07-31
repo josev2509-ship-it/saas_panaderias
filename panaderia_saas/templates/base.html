@@ -41,6 +41,9 @@
       <a href="{% url 'compras:lista' %}" {% if request.resolver_match.namespace == 'compras' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PV</span><span>Proveedores</span></a>
     </details>
     {% endif %}
+    {% if empresa and empresa.modulo_workflow and perms.workflow.view_tareas_workflow %}
+    <details class="ds-nav-group" open><summary>Workflow</summary><a href="{% url 'workflow:bandeja' %}" {% if request.resolver_match.namespace == 'workflow' and request.resolver_match.url_name == 'bandeja' %}aria-current="page"{% endif %}><span class="ds-nav-icon">AP</span><span>Mis aprobaciones</span></a>{% if perms.workflow.view_reglaaprobacion %}<a href="{% url 'workflow:reglas' %}"><span class="ds-nav-icon">WF</span><span>Reglas</span></a>{% endif %}{% if perms.workflow.view_instanciaworkflow %}<a href="{% url 'workflow:reportes' %}"><span class="ds-nav-icon">RP</span><span>Reportes workflow</span></a>{% endif %}</details>
+    {% endif %}
     {% if empresa and empresa.modulo_conduces %}
     <details class="ds-nav-group" open>
       <summary>Operaciones</summary>

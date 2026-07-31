@@ -8,3 +8,5 @@ La navegación se define exclusivamente en `base.html`.
 - El sidebar móvil tiene overlay, cierre visible y tecla Escape.
 - No agregue enlaces `#`, rutas inexistentes ni módulos futuros simulados.
 - La topbar solo presenta funciones reales: empresa activa, usuario y salida.
+- Workflow muestra “Mis aprobaciones” solo con módulo y permiso; la edición de
+  reglas aparece únicamente para usuarios de configuración.
