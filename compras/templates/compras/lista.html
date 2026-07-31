@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% load design_system %}
+{% block content %}<div class="ds-page">
+{% include "components/page_header.html" with title="Proveedores" subtitle="Búsqueda, riesgo y estado documental" %}
+<form method="get" class="ds-card ds-filter-bar">
+<input class="form-control" name="q" value="{{ filtros.q }}" placeholder="Código, nombre o RNC">
+<select class="form-control" name="estado"><option value="">Todos los estados</option>{% for value,label in estados %}<option value="{{ value }}" {% if filtros.estado == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<select class="form-control" name="nivel_riesgo"><option value="">Todos los riesgos</option>{% for value,label in riesgos %}<option value="{{ value }}" {% if filtros.nivel_riesgo == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<button class="btn btn-primary">Filtrar</button></form>
+<div class="ds-actions">{% if perms.compras.add_proveedor %}<a class="btn btn-primary" href="{% url 'compras:crear' %}">Nuevo proveedor</a>{% endif %}{% if perms.compras.exportar_proveedores %}<a class="btn btn-secondary" href="{% url 'compras:exportar' %}?{{ request.GET.urlencode }}">CSV seguro</a>{% endif %}</div>
+<div class="ds-table-wrap"><table class="ds-table"><thead><tr><th>Código</th><th>Proveedor</th><th>RNC/ID</th><th>Estado</th><th>Riesgo</th><th>Documentación</th></tr></thead><tbody>
+{% for p in proveedores %}<tr><td><a href="{% url 'compras:detalle' p.pk %}">{{ p.codigo }}</a></td><td>{{ p.razon_social }}<small>{{ p.nombre_comercial }}</small></td><td>{{ p.rnc_identificacion|default:"—" }}</td><td>{% include "components/status_badge.html" with value=p.estado label=p.get_estado_display %}</td><td>{% include "components/status_badge.html" with value=p.nivel_riesgo label=p.get_nivel_riesgo_display %}</td><td>{{ p.documentacion_completa|yesno:"Completa,Pendiente" }}</td></tr>
+{% empty %}<tr><td colspan="6">{% include "components/empty_state.html" with title="No hay proveedores" description="Ajusta los filtros o registra el primer proveedor." %}</td></tr>{% endfor %}
+</tbody></table></div>{% include "components/pagination.html" with page_obj=proveedores %}</div>{% endblock %}

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "documentos.apps.DocumentosConfig",
     "auditoria.apps.AuditoriaConfig",
     "catalogos.apps.CatalogosConfig",
+    "compras.apps.ComprasConfig",
 ]
 
 MIDDLEWARE = [

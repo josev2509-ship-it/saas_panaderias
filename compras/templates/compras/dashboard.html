@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load design_system %}
+{% block content %}
+<div class="ds-page">
+{% include "components/page_header.html" with title="Proveedores" subtitle="Maestro canónico de abastecimiento y cumplimiento" %}
+<div class="ds-grid ds-grid--cards">
+  <article class="ds-card"><strong>{{ total }}</strong><span>Total</span></article>
+  <article class="ds-card"><strong>{{ resumen.ACTIVO }}</strong><span>Activos</span></article>
+  <article class="ds-card"><strong>{{ resumen.EN_EVALUACION }}</strong><span>En evaluación</span></article>
+  <article class="ds-card"><strong>{{ resumen.SUSPENDIDO }}</strong><span>Suspendidos</span></article>
+  <article class="ds-card"><strong>{{ resumen.BLOQUEADO }}</strong><span>Bloqueados</span></article>
+  <article class="ds-card"><strong>{{ criticos }}</strong><span>Críticos</span></article>
+  <article class="ds-card"><strong>{{ sin_contacto }}</strong><span>Sin contacto principal</span></article>
+  <article class="ds-card"><strong>{{ sin_fiscal }}</strong><span>Sin dirección fiscal</span></article>
+  <article class="ds-card"><strong>{{ revision_pendiente }}</strong><span>Revisión pendiente</span></article>
+</div>
+<div class="ds-actions"><a class="btn btn-primary" href="{% url 'compras:lista' %}">Ver proveedores</a>{% if perms.compras.add_proveedor %}<a class="btn btn-secondary" href="{% url 'compras:crear' %}">Nuevo proveedor</a>{% endif %}</div>
+<div class="ds-grid ds-grid--2">
+<section class="ds-card"><h2>Por categoría</h2>{% for item in por_categoria %}<p>{{ item.categoria__nombre|default:"Sin categoría" }} <strong>{{ item.total }}</strong></p>{% empty %}{% include "components/empty_state.html" with title="Sin datos" %}{% endfor %}</section>
+<section class="ds-card"><h2>Por riesgo</h2>{% for item in por_riesgo %}<p>{% include "components/status_badge.html" with value=item.nivel_riesgo label=item.nivel_riesgo %} <strong>{{ item.total }}</strong></p>{% empty %}{% include "components/empty_state.html" with title="Sin datos" %}{% endfor %}</section>
+</div></div>
+{% endblock %}

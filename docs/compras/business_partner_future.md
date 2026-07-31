@@ -1,9 +1,5 @@
 # Business Partner futuro
 
-Un Business Partner unificaría identidad por empresa y RNC, direcciones,
-contactos y cuentas bancarias, asignando roles de cliente, proveedor,
-transportista, contratista o empleado externo. Cliente y Proveedor migrarían
-mediante claves de correspondencia, preservando sus FKs hasta conmutar.
-
-El proveedor de Compras debe conservar identidad estable y separar roles/datos
-operativos, pero no depende de esta abstracción todavía.
+`compras.Proveedor.external_reference` y la correspondencia legado permiten una
+futura convergencia. No existe hoy entidad Business Partner ni claves que la
+simulen. La transición deberá conservar IDs y trazabilidad por fases.

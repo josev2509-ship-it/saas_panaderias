@@ -59,6 +59,8 @@ def documentos_objeto(request, app_label, model, object_id):
     if objeto is None:
         from django.http import Http404
         raise Http404
+    if app_label.lower() == "compras" and model.lower() == "proveedor":
+        return redirect("compras:detalle", pk=objeto.pk)
     return redirect("comercial:cliente_detalle", pk=objeto.pk)
 
 
