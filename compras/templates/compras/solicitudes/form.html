@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% load design_system %}{% block content %}<div class="ds-page">
+{% include "components/page_header.html" with title="Solicitud de compra" subtitle="Encabezado, justificación y presupuesto estimado" %}
+<form method="post" class="ds-card">{% csrf_token %}{{ form.as_p }}<div class="ds-actions"><button class="btn btn-primary">Guardar borrador</button><a class="btn btn-secondary" href="{% if solicitud %}{% url 'compras:solicitud_detalle' solicitud.pk %}{% else %}{% url 'compras:solicitudes_lista' %}{% endif %}">Cancelar</a></div></form></div>{% endblock %}

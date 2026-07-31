@@ -1,4 +1,5 @@
 import csv
+from uuid import uuid4
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
@@ -8,6 +9,7 @@ from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from workflow.domain.exceptions import WorkflowError
 
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
@@ -27,6 +29,15 @@ from .forms import (
     ProductoProveedorForm, ProveedorForm, ProveedorLegadoMapForm, TransicionForm,
 )
 from .models import CuentaBancariaProveedor, Proveedor, ProveedorLegadoMap
+from .models import SolicitudCompra
+from .forms import DetalleSolicitudCompraForm, FiltroSolicitudForm, MotivoSolicitudForm, SolicitudCompraForm
+from .selectors import dashboard_solicitudes, solicitudes_empresa
+from .application.solicitudes.services import (
+    agregar_linea_solicitud, actualizar_solicitud_compra, cancelar_solicitud_compra,
+    crear_solicitud_compra, duplicar_solicitud_compra, enviar_solicitud_a_aprobacion,
+    exportar_solicitudes_csv, marcar_solicitud_lista, retirar_linea_solicitud,
+    validar_solicitud_para_envio, devolver_solicitud_a_borrador,
+)
 from .selectors import proveedores_empresa
 
 
@@ -165,3 +176,75 @@ def exportar(request):
     for p in qs: writer.writerow([p.codigo,p.razon_social,p.rnc_identificacion,p.estado,p.nivel_riesgo,p.categoria or "",p.documentacion_completa])
     registrar_evento(empresa=_empresa(request),usuario=request.user,request=request,modulo="compras",accion=EventoAuditoria.Accion.OTRO,descripcion="Exportación segura de proveedores.",datos_nuevos={"filas":qs.count()})
     return response
+
+
+@login_required
+@modulo_requerido("modulo_compras","compras.view_solicitudcompra")
+def solicitudes_dashboard(request):
+    return render(request,"compras/solicitudes/dashboard.html",{"kpis":dashboard_solicitudes(empresa=_empresa(request))})
+
+@login_required
+@modulo_requerido("modulo_compras","compras.view_solicitudcompra")
+def solicitudes_lista(request):
+    form=FiltroSolicitudForm(request.GET or None);filtros=request.GET if form.is_valid() else {}
+    pagina=Paginator(solicitudes_empresa(empresa=_empresa(request),usuario=request.user,filtros=filtros),25).get_page(request.GET.get("page"))
+    return render(request,"compras/solicitudes/lista.html",{"solicitudes":pagina,"form":form})
+
+@login_required
+@modulo_requerido("modulo_compras")
+def solicitud_editar(request,pk=None):
+    empresa=_empresa(request);perm="change_solicitudcompra" if pk else "add_solicitudcompra"
+    if not request.user.has_perm(f"compras.{perm}"): raise PermissionDenied
+    obj=get_object_or_404(SolicitudCompra,pk=pk,empresa=empresa) if pk else None
+    form=SolicitudCompraForm(request.POST or None,instance=obj,empresa=empresa)
+    if request.method=="POST" and form.is_valid():
+        try:
+            saved=actualizar_solicitud_compra(context=_context(request),solicitud_id=obj.pk,datos=form.cleaned_data) if obj else crear_solicitud_compra(context=_context(request),datos=dict(form.cleaned_data))
+            messages.success(request,"Solicitud guardada.");return redirect("compras:solicitud_detalle",pk=saved.pk)
+        except (ValidationError,PermissionDenied) as exc: form.add_error(None,exc)
+    return render(request,"compras/solicitudes/form.html",{"form":form,"solicitud":obj})
+
+@login_required
+@modulo_requerido("modulo_compras","compras.view_solicitudcompra")
+def solicitud_detalle(request,pk):
+    obj=get_object_or_404(solicitudes_empresa(empresa=_empresa(request),usuario=request.user),pk=pk)
+    result=validar_solicitud_para_envio(context=_context(request),solicitud=obj)
+    return render(request,"compras/solicitudes/detalle.html",{"solicitud":obj,"linea_form":DetalleSolicitudCompraForm(empresa=_empresa(request)),"motivo_form":MotivoSolicitudForm(),"validacion":result,"documentos":obtener_documentos(obj,_empresa(request))})
+
+@login_required
+@modulo_requerido("modulo_compras")
+def solicitud_linea_agregar(request,pk):
+    if request.method!="POST": raise PermissionDenied
+    form=DetalleSolicitudCompraForm(request.POST,empresa=_empresa(request))
+    if form.is_valid():
+        try: agregar_linea_solicitud(context=_context(request),solicitud_id=pk,datos=form.cleaned_data);messages.success(request,"Línea agregada.")
+        except (ValidationError,PermissionDenied) as exc: messages.error(request,str(exc))
+    else: messages.error(request,str(form.errors))
+    return redirect("compras:solicitud_detalle",pk=pk)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def solicitud_linea_retirar(request,pk,linea_id):
+    if request.method!="POST": raise PermissionDenied
+    retirar_linea_solicitud(context=_context(request),linea_id=linea_id);return redirect("compras:solicitud_detalle",pk=pk)
+
+@login_required
+@modulo_requerido("modulo_compras")
+def solicitud_accion(request,pk,accion):
+    if request.method!="POST": raise PermissionDenied
+    try:
+        if accion=="marcar-lista": marcar_solicitud_lista(context=_context(request),solicitud_id=pk)
+        elif accion=="borrador": devolver_solicitud_a_borrador(context=_context(request),solicitud_id=pk)
+        elif accion=="enviar": enviar_solicitud_a_aprobacion(context=_context(request),solicitud_id=pk,idempotency_key=request.POST.get("idempotency_key") or f"solicitud-{pk}-{uuid4().hex}")
+        elif accion=="cancelar": cancelar_solicitud_compra(context=_context(request),solicitud_id=pk,motivo=request.POST.get("motivo",""))
+        elif accion=="duplicar":
+            new=duplicar_solicitud_compra(context=_context(request),solicitud_id=pk);return redirect("compras:solicitud_detalle",pk=new.pk)
+        else: raise PermissionDenied
+        messages.success(request,"Acción completada.")
+    except (ValidationError,PermissionDenied,WorkflowError) as exc: messages.error(request,str(exc))
+    return redirect("compras:solicitud_detalle",pk=pk)
+
+@login_required
+@modulo_requerido("modulo_compras","compras.exportar_solicitudescompra")
+def solicitudes_exportar(request):
+    content=exportar_solicitudes_csv(context=_context(request),queryset=solicitudes_empresa(empresa=_empresa(request),usuario=request.user,filtros=request.GET));response=HttpResponse(content,content_type="text/csv; charset=utf-8");response["Content-Disposition"]='attachment; filename="solicitudes_compra.csv"';return response

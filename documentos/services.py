@@ -8,7 +8,7 @@ from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 from comercial.models import Cliente, Pedido
 from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
-from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor
+from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra
 
 from .models import Documento, extension_por_contenido
 
@@ -21,6 +21,7 @@ MODELOS_PERMITIDOS = {
     ("compras", "proveedor"): Proveedor,
     ("compras", "categoriaproveedor"): CategoriaProveedor,
     ("compras", "cuentabancariaproveedor"): CuentaBancariaProveedor,
+    ("compras", "solicitudcompra"): SolicitudCompra,
 }
 
 

@@ -39,6 +39,7 @@
     <details class="ds-nav-group" open>
       <summary>Compras</summary>
       <a href="{% url 'compras:lista' %}" {% if request.resolver_match.namespace == 'compras' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PV</span><span>Proveedores</span></a>
+      {% if perms.compras.view_solicitudcompra %}<a href="{% url 'compras:solicitudes_lista' %}"><span class="ds-nav-icon">SC</span><span>Solicitudes de compra</span></a>{% endif %}
     </details>
     {% endif %}
     {% if empresa and empresa.modulo_workflow and perms.workflow.view_tareas_workflow %}
