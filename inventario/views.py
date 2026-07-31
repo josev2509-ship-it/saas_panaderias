@@ -20,6 +20,7 @@ from django.db import models
 from django.http import HttpResponse
 from django.contrib import messages
 from core.application.operation_context import OperationContext
+from core.application.request_idempotency import resolve_idempotency_context
 from .engine import InventoryEngine
 
 from openpyxl import Workbook, load_workbook
@@ -40,13 +41,14 @@ from .models import (
 
 def _movimiento_desde_vista(request, *, empresa, producto, tipo, cantidad,
                             referencia="", observacion="", **kwargs):
-    clave = request.headers.get("Idempotency-Key") or (
-        f"legacy:{request.path}:{tipo}:{producto.pk}:{referencia}:{cantidad}"
-    )
+    operation = f"inventario.views.{tipo}"
     context = OperationContext(
         empresa=empresa, usuario=request.user, request=request,
-        referencia=referencia or request.path, clave_idempotente=clave,
-        origen="inventario.views", observaciones=observacion,
+        observaciones=observacion,
+        **resolve_idempotency_context(
+            request, operation=operation, reference=referencia,
+            metadata={"product_id": producto.pk},
+        ),
     )
     return InventoryEngine.apply_movement(
         context=context, producto=producto, tipo=tipo, cantidad=cantidad,

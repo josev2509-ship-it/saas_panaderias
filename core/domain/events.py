@@ -11,6 +11,7 @@ class DomainEvent:
     usuario_id: int | None = None
     referencia: str = ""
     payload: dict = field(default_factory=dict)
+    requiere_consumidor: bool = False
     fecha: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @property

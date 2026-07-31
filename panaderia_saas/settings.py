@@ -101,6 +101,15 @@ DATABASES = {
     )
 }
 
+# Core transaccional. Todos los tiempos se expresan en segundos y pueden
+# configurarse por entorno sin cambiar codigo.
+CORE_IDEMPOTENCY_STALE_SECONDS = int(os.environ.get("CORE_IDEMPOTENCY_STALE_SECONDS", "900"))
+CORE_IDEMPOTENCY_MAX_RETRIES = int(os.environ.get("CORE_IDEMPOTENCY_MAX_RETRIES", "3"))
+CORE_DOUBLE_SUBMIT_WINDOW_SECONDS = int(os.environ.get("CORE_DOUBLE_SUBMIT_WINDOW_SECONDS", "5"))
+CORE_EVENT_PROCESSING_TIMEOUT_SECONDS = int(os.environ.get("CORE_EVENT_PROCESSING_TIMEOUT_SECONDS", "900"))
+CORE_EVENT_MAX_ATTEMPTS = int(os.environ.get("CORE_EVENT_MAX_ATTEMPTS", "5"))
+CORE_EVENT_BATCH_SIZE = int(os.environ.get("CORE_EVENT_BATCH_SIZE", "100"))
+
 
 # =========================================================
 # Password validation

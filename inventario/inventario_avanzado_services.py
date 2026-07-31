@@ -1,4 +1,13 @@
+"""Implementacion interna del inventario.
+
+Los consumidores productivos deben usar ``inventario.engine.InventoryEngine``.
+Estas funciones se conservan para compatibilidad y para la fachada; no forman
+parte de la API publica del ERP.
+"""
+
 from decimal import Decimal
+
+__all__ = ()
 
 from django.core.exceptions import ValidationError
 from django.db import transaction

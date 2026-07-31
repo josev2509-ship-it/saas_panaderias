@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -32,6 +33,8 @@ def begin(*, context, operation, payload=None, allow_retry=False):
     if not created and record.hash_solicitud != digest:
         raise IdempotencyConflict("La clave ya fue usada con una solicitud diferente.")
     if not created and record.estado == RegistroIdempotencia.Estado.FALLIDA and allow_retry:
+        if record.intentos >= settings.CORE_IDEMPOTENCY_MAX_RETRIES:
+            raise IdempotencyConflict("La operacion alcanzo el maximo de reintentos.")
         record.estado = RegistroIdempotencia.Estado.INICIADA
         record.intentos += 1
         record.mensaje_error = ""
@@ -75,3 +78,41 @@ def reintentar_operacion_fallida(*, context, operation, payload=None):
     return begin(
         context=context, operation=operation, payload=payload, allow_retry=True
     )
+
+
+@transaction.atomic
+def recover_stale(*, empresa=None, usuario=None, limit=100):
+    cutoff = timezone.now() - timezone.timedelta(
+        seconds=settings.CORE_IDEMPOTENCY_STALE_SECONDS
+    )
+    queryset = RegistroIdempotencia.objects.select_for_update().filter(
+        estado=RegistroIdempotencia.Estado.INICIADA,
+        fecha_inicio__lt=cutoff,
+    )
+    if empresa is not None:
+        queryset = queryset.filter(empresa=empresa)
+    records = list(queryset.order_by("fecha_inicio")[:limit])
+    now = timezone.now()
+    for record in records:
+        record.estado = RegistroIdempotencia.Estado.FALLIDA
+        record.fecha_finalizacion = now
+        record.mensaje_error = "Operacion abandonada recuperada por timeout."
+    if records:
+        RegistroIdempotencia.objects.bulk_update(
+            records, ["estado", "fecha_finalizacion", "mensaje_error"]
+        )
+        from auditoria.models import EventoAuditoria
+        from auditoria.services import registrar_evento
+        for record in records:
+            registrar_evento(
+                empresa=record.empresa, usuario=usuario, modulo="core",
+                accion=EventoAuditoria.Accion.OTRO,
+                descripcion=f"Idempotencia abandonada {record.pk} recuperada.",
+                objeto=record,
+                datos_anteriores={"estado": RegistroIdempotencia.Estado.INICIADA},
+                datos_nuevos={
+                    "estado": record.estado,
+                    "motivo": record.mensaje_error,
+                },
+            )
+    return records

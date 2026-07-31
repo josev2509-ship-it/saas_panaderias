@@ -1,15 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container py-4">
-  <h1>Motor transaccional</h1>
-  <div class="row g-3">
-    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Operaciones completadas</span><strong class="display-6">{{ metricas.idem_completadas }}</strong></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Operaciones fallidas</span><strong class="display-6 text-danger">{{ metricas.idem_fallidas }}</strong></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Eventos pendientes</span><strong class="display-6">{{ metricas.eventos_pendientes }}</strong></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Eventos con error</span><strong class="display-6 text-danger">{{ metricas.eventos_error }}</strong></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Conciliaciones con diferencia</span><strong class="display-6 text-warning">{{ metricas.conciliaciones_diferencia }}</strong></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm p-3 h-100"><span>Secuencias activas</span><strong class="display-6">{{ metricas.secuencias_activas }}</strong></div></div>
-  </div>
-  <div class="d-flex flex-wrap gap-2 mt-4"><a class="btn btn-outline-primary" href="{% url 'core:idempotencias' %}">Idempotencias</a><a class="btn btn-outline-primary" href="{% url 'core:eventos' %}">Eventos</a><a class="btn btn-outline-primary" href="{% url 'core:secuencias' %}">Secuencias</a><a class="btn btn-outline-primary" href="{% url 'core:conciliaciones' %}">Conciliaciones</a></div>
-</div>
+<style>.tech-dashboard{max-width:1320px;margin:auto;padding:28px}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.kpi{padding:18px;border:1px solid #e5e7eb;border-radius:16px;background:#fff}.kpi span{display:block;color:#64748b;font-size:.9rem}.kpi strong{font-size:2rem;color:#0f172a}.tech-panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:22px}.tech-panel{padding:20px;border:1px solid #e5e7eb;border-radius:16px;background:#fff}@media(max-width:600px){.tech-dashboard{padding:16px}.kpis{grid-template-columns:1fr 1fr}.kpi{padding:14px}.kpi strong{font-size:1.5rem}}</style>
+<section class="tech-dashboard"><header><p class="text-muted mb-1">Supervision operativa</p><h1>Centro Tecnico</h1><p>Estado del motor transaccional de su empresa.</p></header>
+<div class="kpis">{% for label,value in metricas.items %}<article class="kpi"><span>{{ label|cut:"_"|title }}</span><strong>{{ value }}</strong></article>{% endfor %}</div>
+<nav class="d-flex flex-wrap gap-2 mt-4"><a class="btn btn-outline-primary" href="{% url 'core:idempotencias' %}">Idempotencias</a><a class="btn btn-outline-primary" href="{% url 'core:eventos' %}">Eventos</a><a class="btn btn-outline-primary" href="{% url 'core:eventos_fallidos' %}">Errores</a><a class="btn btn-outline-primary" href="{% url 'core:secuencias' %}">Secuencias</a><a class="btn btn-outline-primary" href="{% url 'core:conciliaciones' %}">Conciliaciones</a></nav>
+<div class="tech-panels"><section class="tech-panel"><h2 class="h5">Ultimos eventos con error</h2>{% for item in eventos_error %}<p><a href="{% url 'core:evento_detalle' item.pk %}">{{ item.tipo_evento }}</a><br><small>{{ item.ultimo_error }}</small></p>{% empty %}<p class="text-muted">Sin errores recientes.</p>{% endfor %}</section><section class="tech-panel"><h2 class="h5">Conciliaciones recientes</h2>{% for item in conciliaciones %}<p><a href="{% url 'core:conciliacion_detalle' item.pk %}">{{ item.producto }}</a> · {{ item.get_estado_display }}</p>{% empty %}<p class="text-muted">Sin conciliaciones.</p>{% endfor %}</section></div>
+</section>
 {% endblock %}

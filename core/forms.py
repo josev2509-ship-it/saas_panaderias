@@ -27,7 +27,17 @@ class TechnicalFilterForm(forms.Form):
 
 
 class ReintentoEventoForm(forms.Form):
-    motivo = forms.CharField(min_length=5, max_length=250)
+    motivo = forms.CharField(
+        min_length=5, max_length=250, required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+
+class AccionIdempotenciaForm(forms.Form):
+    motivo = forms.CharField(
+        min_length=5, max_length=250,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
 
 
 class SecuenciaDocumentoForm(forms.ModelForm):
@@ -44,3 +54,11 @@ class SecuenciaDocumentoForm(forms.ModelForm):
         except Exception as exc:
             raise forms.ValidationError(str(exc))
         return cleaned
+
+
+class SecuenciaDocumentoCreateForm(SecuenciaDocumentoForm):
+    class Meta(SecuenciaDocumentoForm.Meta):
+        fields = (
+            "tipo", "periodo", "prefijo", "longitud", "activo",
+            "reinicia_anualmente",
+        )

@@ -40,6 +40,12 @@ class EventoDominio(models.Model):
         PROCESANDO = "PROCESANDO", "Procesando"
         PROCESADO = "PROCESADO", "Procesado"
         ERROR = "ERROR", "Error"
+        AGOTADO = "AGOTADO", "Agotado"
+        CANCELADO = "CANCELADO", "Cancelado"
+
+    class Categoria(models.TextChoices):
+        TRAZABILIDAD = "TRAZABILIDAD", "Trazabilidad"
+        EJECUTABLE = "EJECUTABLE", "Ejecutable"
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     tipo_evento = models.CharField(max_length=120)
@@ -50,8 +56,13 @@ class EventoDominio(models.Model):
     payload = models.JSONField(default=dict, blank=True)
     estado = models.CharField(max_length=15, choices=Estado.choices, default=Estado.PENDIENTE)
     intentos = models.PositiveIntegerField(default=0)
+    categoria = models.CharField(
+        max_length=15, choices=Categoria.choices, default=Categoria.TRAZABILIDAD
+    )
+    requiere_consumidor = models.BooleanField(default=False)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_procesamiento = models.DateTimeField(null=True, blank=True)
+    fecha_ultimo_intento = models.DateTimeField(null=True, blank=True)
     ultimo_error = models.CharField(max_length=500, blank=True)
     creado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
@@ -71,6 +82,13 @@ class ConciliacionInventario(models.Model):
         DIFERENCIA = "DIFERENCIA", "Diferencia"
         CORREGIDA = "CORREGIDA", "Corregida"
         IGNORADA = "IGNORADA", "Ignorada"
+        REQUIERE_INTERVENCION = "REQUIERE_INTERVENCION", "Requiere intervencion"
+
+    class Severidad(models.TextChoices):
+        NINGUNA = "NINGUNA", "Ninguna"
+        BAJA = "BAJA", "Baja"
+        MEDIA = "MEDIA", "Media"
+        ALTA = "ALTA", "Alta"
 
     class Modo(models.TextChoices):
         DIAGNOSTICO = "DIAGNOSTICO", "Diagnostico"
@@ -81,9 +99,14 @@ class ConciliacionInventario(models.Model):
     saldo_movimientos = models.DecimalField(max_digits=16, decimal_places=4)
     saldo_cacheado = models.DecimalField(max_digits=16, decimal_places=4)
     saldo_lotes = models.DecimalField(max_digits=16, decimal_places=4)
+    saldo_reservado = models.DecimalField(max_digits=16, decimal_places=4, default=0)
+    saldo_disponible = models.DecimalField(max_digits=16, decimal_places=4, default=0)
     diferencia_movimientos_cache = models.DecimalField(max_digits=16, decimal_places=4)
     diferencia_lotes_cache = models.DecimalField(max_digits=16, decimal_places=4)
-    estado = models.CharField(max_length=15, choices=Estado.choices)
+    estado = models.CharField(max_length=24, choices=Estado.choices)
+    severidad = models.CharField(
+        max_length=10, choices=Severidad.choices, default=Severidad.NINGUNA
+    )
     modo = models.CharField(max_length=15, choices=Modo.choices)
     motivo = models.TextField(blank=True)
     ejecutado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
@@ -91,6 +114,10 @@ class ConciliacionInventario(models.Model):
     observaciones = models.TextField(blank=True)
     lote = models.ForeignKey("inventario.LoteInventario", on_delete=models.PROTECT, null=True, blank=True)
     fecha_correccion = models.DateTimeField(null=True, blank=True)
+    corregido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
     referencia = models.CharField(max_length=180, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
 

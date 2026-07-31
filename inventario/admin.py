@@ -38,6 +38,7 @@ class CategoriaInventarioAdmin(admin.ModelAdmin):
 
 @admin.register(ProductoInventario)
 class ProductoInventarioAdmin(admin.ModelAdmin):
+    readonly_fields = ("stock_actual",)
 
     list_display = (
         "codigo",
@@ -163,6 +164,12 @@ class MovimientoInventarioAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return False
     def has_delete_permission(self, request, obj=None): return False
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        empresa = getattr(request.user, "empresa_principal", None)
+        return queryset.filter(empresa=empresa) if empresa else queryset.none()
 
 
 @admin.register(ProduccionProgramada)
@@ -217,6 +224,18 @@ class OrdenCompraAdmin(admin.ModelAdmin):
 
 @admin.register(LoteInventario)
 class LoteInventarioAdmin(admin.ModelAdmin):
+    readonly_fields = (
+        "cantidad_inicial", "cantidad_disponible", "cantidad_reservada",
+        "estado", "empresa", "producto",
+    )
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        empresa = getattr(request.user, "empresa_principal", None)
+        return queryset.filter(empresa=empresa) if empresa else queryset.none()
 
     list_display = (
         "producto",
@@ -375,6 +394,13 @@ class ReservaInventarioAdmin(admin.ModelAdmin):
     inlines = (DetalleReservaInline,)
     def has_add_permission(self, request): return False
     def has_delete_permission(self, request, obj=None): return False
+    def has_change_permission(self, request, obj=None): return False
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        empresa = getattr(request.user, "empresa_principal", None)
+        return queryset.filter(empresa=empresa) if empresa else queryset.none()
 
 
 @admin.register(EjecucionInventarioOrden)

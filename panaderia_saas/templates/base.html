@@ -61,6 +61,12 @@
                 <span>Dashboard comercial</span>
             </a>
 
+            {% if perms.core.view_transaction_engine %}
+            <a href="{% url 'core:motor_dashboard' %}">
+                <span>Centro Tecnico</span>
+            </a>
+            {% endif %}
+
             <a href="{% url 'comercial:clientes_lista' %}">
                 <span>Clientes</span>
             </a>

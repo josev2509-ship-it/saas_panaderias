@@ -2,7 +2,8 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Case, DecimalField, F, Q, Sum, Value, When
+from django.utils import timezone
 
 from auditoria.models import EventoAuditoria
 from core.application.idempotency import begin, complete, fail
@@ -21,6 +22,7 @@ from .inventario_avanzado_services import (
     aplicar_movimiento, cerrar_ejecucion, consumir_detalle, liberar_reserva,
     preparar_ejecucion, registrar_devolucion, reservar_para_orden, revertir_ejecucion,
 )
+from .inventario_avanzado_services import ENTRADAS, SALIDAS
 from .models import LoteInventario, MovimientoInventario, ProductoInventario
 
 
@@ -307,9 +309,15 @@ class InventoryEngine:
     calculate_balance = staticmethod(lambda producto, hasta_fecha=None: calcular_saldo_desde_movimientos(producto, hasta_fecha))
 
     @staticmethod
-    def apply_authorized_adjustment(*, context, producto, lote, cantidad, entrada=True):
+    def apply_authorized_adjustment(
+        *, context, producto, cantidad, entrada=True, lote=None, requiere_lote=None
+    ):
         if not context.usuario or not context.usuario.has_perm("inventario.change_productoinventario"):
             raise PermissionDenied
+        has_lots = producto.lotes.filter(activo=True).exists()
+        lot_required = has_lots if requiere_lote is None else requiere_lote
+        if lot_required and lote is None:
+            raise ValueError("El producto requiere un lote para este ajuste.")
         return InventoryEngine.apply_movement(
             context=context, producto=producto, lote=lote,
             tipo="ajuste" if entrada else "salida", cantidad=cantidad,
@@ -326,13 +334,30 @@ class InventoryEngine:
 
 
 def calcular_saldo_desde_movimientos(producto, hasta_fecha=None):
+    """Calculate the ledger independently; never trust cached posterior balances."""
     movements = MovimientoInventario.objects.filter(
-        empresa=producto.empresa, producto=producto, saldo_posterior__isnull=False
+        empresa=producto.empresa, producto=producto
     )
     if hasta_fecha:
         movements = movements.filter(fecha__lte=hasta_fecha)
-    last = movements.order_by("-fecha", "-id").values_list("saldo_posterior", flat=True).first()
-    return Decimal(last or 0)
+    opening = movements.order_by("fecha", "id").values_list(
+        "saldo_anterior", flat=True
+    ).first()
+    signed = movements.aggregate(total=Sum(Case(
+        When(
+            Q(naturaleza=MovimientoInventario.Naturaleza.ENTRADA)
+            | Q(naturaleza="", tipo__in=ENTRADAS),
+            then=F("cantidad"),
+        ),
+        When(
+            Q(naturaleza=MovimientoInventario.Naturaleza.SALIDA)
+            | Q(naturaleza="", tipo__in=SALIDAS),
+            then=-F("cantidad"),
+        ),
+        default=Value(0),
+        output_field=DecimalField(max_digits=18, decimal_places=4),
+    )))["total"]
+    return Decimal(opening or 0) + Decimal(signed or 0)
 
 
 def verificar_consistencia_lotes(producto):
@@ -343,15 +368,52 @@ def verificar_consistencia_lotes(producto):
     )
 
 
+def calcular_reservado(producto):
+    from .models import DetalleReservaInventario, ReservaInventario
+    return Decimal(
+        DetalleReservaInventario.objects.filter(
+            lote__empresa=producto.empresa,
+            lote__producto=producto,
+            reserva__estado__in=[
+                ReservaInventario.Estado.ACTIVA,
+                ReservaInventario.Estado.PARCIAL,
+            ],
+        ).aggregate(total=Sum(
+            F("cantidad_reservada") - F("cantidad_consumida") - F("cantidad_liberada")
+        ))["total"] or 0
+    )
+
+
+def vista_previa_reconstruccion(*, context, producto):
+    _validate_company(context, producto)
+    historical = calcular_saldo_desde_movimientos(producto)
+    cached = Decimal(producto.stock_actual or 0)
+    lots = verificar_consistencia_lotes(producto)
+    reserved = calcular_reservado(producto)
+    has_lots = producto.lotes.filter(activo=True).exists()
+    return {
+        "saldo_calculado": historical,
+        "saldo_cacheado": cached,
+        "saldo_lotes": lots,
+        "saldo_reservado": reserved,
+        "saldo_disponible": historical - reserved,
+        "diferencia": historical - cached,
+        "lotes_consistentes": not has_lots or lots == historical,
+        "requiere_intervencion": has_lots and lots != historical,
+    }
+
+
 @transaction.atomic
 def diagnosticar_producto(*, context, producto):
     _validate_company(context, producto)
     producto = ProductoInventario.objects.select_for_update().get(
         pk=producto.pk, empresa=context.empresa
     )
-    movements = calcular_saldo_desde_movimientos(producto)
-    cached = Decimal(producto.stock_actual or 0)
-    lots = verificar_consistencia_lotes(producto)
+    preview = vista_previa_reconstruccion(context=context, producto=producto)
+    movements = preview["saldo_calculado"]
+    cached = preview["saldo_cacheado"]
+    lots = preview["saldo_lotes"]
+    reserved = preview["saldo_reservado"]
     state = (
         ConciliacionInventario.Estado.CONSISTENTE
         if movements == cached and lots == cached
@@ -359,11 +421,19 @@ def diagnosticar_producto(*, context, producto):
     )
     return ConciliacionInventario.objects.create(
         empresa=context.empresa, producto=producto, saldo_movimientos=movements,
-        saldo_cacheado=cached, saldo_lotes=lots,
+        saldo_cacheado=cached, saldo_lotes=lots, saldo_reservado=reserved,
+        saldo_disponible=preview["saldo_disponible"],
         diferencia_movimientos_cache=movements - cached,
         diferencia_lotes_cache=lots - cached, estado=state,
+        severidad=(
+            ConciliacionInventario.Severidad.NINGUNA
+            if state == ConciliacionInventario.Estado.CONSISTENTE
+            else ConciliacionInventario.Severidad.ALTA
+        ),
         modo=ConciliacionInventario.Modo.DIAGNOSTICO,
         ejecutado_por=context.usuario if getattr(context.usuario, "is_authenticated", False) else None,
+        referencia=context.referencia,
+        metadata={"request_id": context.identificador_solicitud},
     )
 
 
@@ -388,31 +458,52 @@ def _reconstruir_stock_cacheado_once(*, context, producto, motivo):
     producto = ProductoInventario.objects.select_for_update().get(
         pk=producto.pk, empresa=context.empresa
     )
-    target = calcular_saldo_desde_movimientos(producto)
-    previous = Decimal(producto.stock_actual or 0)
-    lots = verificar_consistencia_lotes(producto)
+    preview = vista_previa_reconstruccion(context=context, producto=producto)
+    target = preview["saldo_calculado"]
+    previous = preview["saldo_cacheado"]
+    lots = preview["saldo_lotes"]
     producto.stock_actual = target
     producto.save(update_fields=["stock_actual"])
     reconciliation = ConciliacionInventario.objects.create(
         empresa=context.empresa, producto=producto, saldo_movimientos=target,
         saldo_cacheado=previous, saldo_lotes=lots,
+        saldo_reservado=preview["saldo_reservado"],
+        saldo_disponible=preview["saldo_disponible"],
         diferencia_movimientos_cache=target - previous,
         diferencia_lotes_cache=lots - previous,
-        estado=ConciliacionInventario.Estado.CORREGIDA,
+        estado=(
+            ConciliacionInventario.Estado.REQUIERE_INTERVENCION
+            if preview["requiere_intervencion"]
+            else ConciliacionInventario.Estado.CORREGIDA
+        ),
+        severidad=(
+            ConciliacionInventario.Severidad.ALTA
+            if preview["requiere_intervencion"]
+            else ConciliacionInventario.Severidad.NINGUNA
+        ),
         modo=ConciliacionInventario.Modo.CORRECCION, motivo=motivo.strip(),
         ejecutado_por=context.usuario,
+        corregido_por=context.usuario,
+        fecha_correccion=timezone.now(),
+        referencia=context.referencia,
+        observaciones=(
+            "El saldo cacheado fue reconstruido; los lotes requieren intervencion."
+            if preview["requiere_intervencion"] else "Reconstruccion completada."
+        ),
+        metadata={"request_id": context.identificador_solicitud, "operation": "rebuild"},
     )
     audit_update(
         context=context, module="inventario", obj=reconciliation,
         description=f"Se reconstruyo el saldo de {producto.codigo}.",
         before={"stock_actual": str(previous)}, after={"stock_actual": str(target)},
     )
-    from core.domain.events import DomainEvent
-    event_bus.publish(DomainEvent(
+    from core.domain.events import SaldoReconstruido
+    event_bus.publish(SaldoReconstruido(
         empresa_id=context.empresa.pk, usuario_id=context.usuario.pk,
         agregado_tipo="core.ConciliacionInventario",
         agregado_id=str(reconciliation.pk), referencia=context.referencia,
         clave_idempotente=f"reconstruccion:{reconciliation.pk}",
         payload={"producto_id": producto.pk, "saldo_anterior": str(previous), "saldo_nuevo": str(target)},
+        requiere_consumidor=True,
     ))
     return reconciliation

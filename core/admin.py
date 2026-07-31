@@ -2,12 +2,19 @@ from django.contrib import admin
 
 from .models import ConciliacionInventario, EventoDominio, RegistroIdempotencia
 from comercial.models import SecuenciaDocumento
+from conduces.services import obtener_empresa_usuario
 
 
 class ImmutableAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return False
     def has_delete_permission(self, request, obj=None): return False
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        empresa = obtener_empresa_usuario(request)
+        return queryset.filter(empresa=empresa) if empresa else queryset.none()
 
 
 @admin.register(RegistroIdempotencia)
@@ -44,3 +51,9 @@ class SecuenciaDocumentoAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None): return False
     def has_change_permission(self, request, obj=None):
         return request.user.is_superuser or request.user.has_perm("core.manage_document_sequences")
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        empresa = obtener_empresa_usuario(request)
+        return queryset.filter(empresa=empresa) if empresa else queryset.none()

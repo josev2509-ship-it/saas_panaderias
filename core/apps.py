@@ -6,3 +6,6 @@ class CoreConfig(AppConfig):
     name = "core"
     verbose_name = "Motor transaccional"
 
+    def ready(self):
+        from core.application.handlers import register_handlers
+        register_handlers()

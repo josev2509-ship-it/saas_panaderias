@@ -13,6 +13,11 @@ from core.domain.events import SecuenciaEmitida
 
 def obtener_siguiente_numero(*, empresa, tipo_documento, fecha=None, prefijo=None, longitud=None, usuario=None, context=None):
     if context:
+        if context.empresa.pk != empresa.pk:
+            from core.domain.exceptions import CrossCompanyViolation
+            raise CrossCompanyViolation("La secuencia pertenece a otra empresa.")
+        usuario = usuario or context.usuario
+    if context:
         payload = {
             "tipo_documento": tipo_documento,
             "fecha": str(fecha or timezone.localdate()),
@@ -27,7 +32,7 @@ def obtener_siguiente_numero(*, empresa, tipo_documento, fecha=None, prefijo=Non
         try:
             number = _emit_number(
                 empresa=empresa, tipo_documento=tipo_documento, fecha=fecha,
-                prefijo=prefijo, longitud=longitud, usuario=usuario,
+                prefijo=prefijo, longitud=longitud, usuario=usuario, context=context,
             )
             complete(record, number)
             return number
@@ -36,21 +41,29 @@ def obtener_siguiente_numero(*, empresa, tipo_documento, fecha=None, prefijo=Non
             raise
     return _emit_number(
         empresa=empresa, tipo_documento=tipo_documento, fecha=fecha,
-        prefijo=prefijo, longitud=longitud, usuario=usuario,
+        prefijo=prefijo, longitud=longitud, usuario=usuario, context=context,
     )
 
 
 @transaction.atomic
-def _emit_number(*, empresa, tipo_documento, fecha=None, prefijo=None, longitud=None, usuario=None):
+def _emit_number(*, empresa, tipo_documento, fecha=None, prefijo=None, longitud=None, usuario=None, context=None):
     fecha = fecha or timezone.localdate()
     sequence = SecuenciaDocumento.objects.select_for_update().filter(
         empresa=empresa, tipo=tipo_documento, reinicia_anualmente=False
     ).order_by("-periodo").first()
     if not sequence:
-        sequence, _ = SecuenciaDocumento.objects.select_for_update().get_or_create(
+        sequence, created = SecuenciaDocumento.objects.select_for_update().get_or_create(
             empresa=empresa, tipo=tipo_documento, periodo=fecha.year,
-            defaults={"ultimo_numero": 0},
+            defaults={
+                "ultimo_numero": 0,
+                "creado_por": usuario,
+                "actualizado_por": usuario,
+                "prefijo": prefijo or tipo_documento,
+                "longitud": longitud or 6,
+            },
         )
+    else:
+        created = False
     if not sequence.activo:
         raise InactiveSequenceError("La secuencia documental esta inactiva.")
     effective_prefix = prefijo or sequence.prefijo or tipo_documento
@@ -63,6 +76,13 @@ def _emit_number(*, empresa, tipo_documento, fecha=None, prefijo=None, longitud=
     if usuario:
         sequence.actualizado_por = usuario
     sequence.save(update_fields=["ultimo_numero", "prefijo", "fecha_ultima_emision", "actualizado_por", "fecha_actualizacion"])
+    if context and created:
+        from core.infrastructure.audit_adapter import audit_create
+        audit_create(
+            context=context, module="core", obj=sequence,
+            description=f"Secuencia {tipo_documento} creada.",
+            after={"tipo": tipo_documento, "periodo": fecha.year},
+        )
     emitted = format_number(effective_prefix, fecha.year, sequence.ultimo_numero, effective_length)
     event_bus.publish(SecuenciaEmitida(
         empresa_id=empresa.pk, usuario_id=getattr(usuario, "pk", None),
