@@ -1,0 +1,2 @@
+# Permisos y roles
+Administrador: todo; Gerente: configuración/aprobaciones/reportes; Supervisor: equipo, precios y pedidos; Vendedor: CRM/cotiza/pedido propios; Facturación: factura/NCF/notas; Crédito y Cobros: límites/CxC/cobros/factoring; Despacho: preparación/conduce/entrega; Auditor: lectura completa; Consulta: lectura no sensible; Operador INABIE: vertical. Permisos separados view/add/change/transición/export/documentos/auditoría; mínimo privilegio y ámbito por empresa/equipo.

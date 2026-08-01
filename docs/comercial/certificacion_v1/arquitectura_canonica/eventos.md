@@ -1,0 +1,2 @@
+# Eventos
+Envelope v1: event_name, schema_version, empresa_id, aggregate_type/id, reference, previous/new_state, actor_id, occurred_at, correlation_id, causation_id y safe_payload. Se adopta íntegro el catálogo mínimo CRM, Cliente, Pricing, Cotización, Pedido, Entrega, Facturación, CxC y Comisiones de la instrucción. Payload: IDs, estados, moneda e importes agregados; nunca identificación fiscal, contacto, dirección, documentos, rutas privadas, tokens ni comentarios internos. Trazabilidad sin consumidor ficticio.

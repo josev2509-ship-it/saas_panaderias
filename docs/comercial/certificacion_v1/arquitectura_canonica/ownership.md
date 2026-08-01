@@ -1,0 +1,2 @@
+# Ownership
+Comercial: cliente, precio de venta, cotización, pedido, despacho/entrega, factura, CxC, cobro y comisión. Inventario: producto físico, stock, lote y costo. Producción: plan/orden. Contabilidad: asiento. RRHH: empleado; Comercial referencia vendedor. Activos: vehículo/equipo. INABIE: centro/menú/datos sectoriales. Rutas comerciales pertenecen a Comercial. Integración solo por API/evento; nunca escritura ORM cruzada.

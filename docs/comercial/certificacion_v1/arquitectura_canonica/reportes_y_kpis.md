@@ -1,0 +1,2 @@
+# Reportes y KPIs
+CRM: conversión=ganadas/calificadas, pipeline, días por etapa, actividades y pérdidas. Ventas: pedidos/facturación por moneda, producto, cliente, vendedor, zona/canal. Entrega: puntualidad, diferencias, rechazo/devolución. CxC: aging por saldo/vencimiento, DSO, mora, cobros, promesas, factoring y exposición. INABIE: raciones, centros, conduces, relaciones y facturación/periodo. Fuente canónica, frecuencia diaria/tiempo real según KPI, permiso específico y drill-down tenant.

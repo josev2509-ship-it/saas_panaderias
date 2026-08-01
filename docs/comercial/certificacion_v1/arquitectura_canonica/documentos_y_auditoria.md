@@ -1,0 +1,2 @@
+# Documentos y auditoría
+Documentables: Prospecto, Oportunidad, Cliente, Cotización, Pedido, Despacho, Conduce, Entrega, Factura, Nota, CxC, Cobro, Factoring y Devolución. Allowlist por agregado/tipo; versiones, reemplazo, anulación y descarga protegida; evento documental sin binario/ruta. Auditoría registra empresa, actor, permiso, request/IP, estados, versión, motivo y metadata segura para mutaciones, consultas sensibles y exportación.

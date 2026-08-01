@@ -1,0 +1,2 @@
+# ADRs
+ADR-001 ampliar Cliente; 002 ampliar Pedido; 003 ProductoInventario conserva producto físico; 004 ProductoComercial es capa opcional; 005 crear ConduceCanónico; 006 crear FacturaVenta; 007 crear CxC multiempresa; 008 Contabilidad consume eventos; 009 INABIE vertical; 010 no dual-write permanente; 011 API interna obligatoria; 012 eventos versionados; 013 snapshots históricos; 014 Workflow desacoplado; 015 InventoryEngine única fachada de stock. Todas aceptadas; consecuencias: migración progresiva, mayor trazabilidad y coexistencia temporal controlada.

@@ -1,0 +1,2 @@
+# Seguridad
+Empresa activa en cada selector/constraint; permisos por acción; POST+CSRF; lookup tenant para evitar IDOR; documentos privados con descarga autorizada; exportaciones auditadas/neutralizadas; cifrado/retención para datos fiscales/personales. Locks e idempotencia bloquean doble factura, NCF, cobro/aplicación. Precio, descuento, crédito, estado y totales nunca se confían al cliente. Logs solo IDs y metadata segura.

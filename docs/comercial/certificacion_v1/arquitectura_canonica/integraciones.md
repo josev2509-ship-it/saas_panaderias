@@ -1,0 +1,2 @@
+# Integraciones
+InventoryEngine: disponibilidad/reservar/liberar/despachar/devolver por fachada. Producción: demanda/plan/estado por API. Contabilidad consume eventos; Comercial no crea asientos. Workflow usa adaptadores Comercial→Workflow y callbacks idempotentes. Documentos usa allowlist y GenericFK con tenant validado. RRHH/Activos proveen referencias de vendedor/vehículo. INABIE extiende por perfiles y adaptadores.
