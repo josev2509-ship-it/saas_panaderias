@@ -11,6 +11,7 @@ from comercial.models import (
     PoliticaCredito, PoliticaDescuento, PoliticaEntrega, PoliticaFacturacion,
     PoliticaDevolucion, PoliticaComision,
     Prospecto, OportunidadComercial, ActividadComercial,
+    ProductoComercial, ListaPrecio, CotizacionVenta,
 )
 from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
 from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra, ExpedienteCompra, ProcesoRFQ, InvitacionProveedorRFQ
@@ -32,6 +33,9 @@ MODELOS_PERMITIDOS = {
     ("comercial", "prospecto"): Prospecto,
     ("comercial", "oportunidadcomercial"): OportunidadComercial,
     ("comercial", "actividadcomercial"): ActividadComercial,
+    ("comercial", "productocomercial"): ProductoComercial,
+    ("comercial", "listaprecio"): ListaPrecio,
+    ("comercial", "cotizacionventa"): CotizacionVenta,
     ("inventario", "recetaproduccion"): RecetaProduccion,
     ("inventario", "planproduccion"): PlanProduccion,
     ("inventario", "ordenproduccion"): OrdenProduccion,

@@ -1,4 +1,5 @@
 from django import forms
+from decimal import Decimal
 
 from django.forms import inlineformset_factory
 
@@ -10,6 +11,7 @@ from .models import (
     PoliticaEntrega, PoliticaFacturacion, PoliticaDevolucion, PoliticaComision,
     SecuenciaDocumento,
     Prospecto, OportunidadComercial, ActividadComercial,
+    ProductoComercial, ListaPrecio, DetalleListaPrecio, CotizacionVenta, DetalleCotizacionVenta,
 )
 
 
@@ -26,7 +28,11 @@ class StyledModelForm(forms.ModelForm):
 class ClienteForm(StyledModelForm):
     class Meta:
         model = Cliente
-        exclude = ("empresa", "creado_por", "fecha_creacion", "fecha_actualizacion")
+        exclude = (
+            "empresa", "creado_por", "fecha_creacion", "fecha_actualizacion",
+            "credito_utilizado", "categoria_riesgo", "score_riesgo",
+            "explicacion_riesgo", "version_formula_riesgo", "fecha_calculo_riesgo",
+        )
         widgets = {
             "direccion_fiscal": forms.Textarea(attrs={"rows": 3}),
             "observaciones": forms.Textarea(attrs={"rows": 4}),
@@ -208,3 +214,18 @@ class ActividadComercialForm(EmpresaScopedModelForm):
         from django.contrib.auth import get_user_model
         from django.db.models import Q
         self.fields["responsable"].queryset=get_user_model().objects.filter(Q(empresa_principal=empresa)|Q(perfiles_vendedor__empresa=empresa)).distinct()
+
+class ProductoComercialForm(EmpresaScopedModelForm):
+    class Meta:model=ProductoComercial;exclude=("empresa","fecha_creacion","fecha_actualizacion");widgets={"descripcion_venta":forms.Textarea(attrs={"rows":3})}
+class ListaPrecioForm(EmpresaScopedModelForm):
+    class Meta:model=ListaPrecio;exclude=("empresa","version","estado","version_anterior","creado_por","fecha_creacion");widgets={"vigencia_desde":forms.DateInput(attrs={"type":"date"}),"vigencia_hasta":forms.DateInput(attrs={"type":"date"})}
+class DetalleListaPrecioForm(EmpresaScopedModelForm):
+    class Meta:model=DetalleListaPrecio;exclude=("lista",)
+class CotizacionVentaForm(EmpresaScopedModelForm):
+    class Meta:model=CotizacionVenta;exclude=("empresa","numero","version","estado","subtotal","descuento_total","impuesto_total","total","creado_por","actualizado_por","aprobado_por","fecha_creacion","fecha_actualizacion");widgets={"fecha":forms.DateInput(attrs={"type":"date"}),"valida_hasta":forms.DateInput(attrs={"type":"date"}),"observaciones":forms.Textarea(attrs={"rows":3})}
+class LineaCotizacionForm(EmpresaScopedModelForm):
+    descuento=forms.DecimalField(min_value=0,max_value=100,initial=0)
+    class Meta:model=DetalleCotizacionVenta;fields=("producto","cantidad","descuento")
+class SimuladorPrecioForm(forms.Form):
+    cliente=forms.ModelChoiceField(queryset=Cliente.objects.none());producto=forms.ModelChoiceField(queryset=ProductoComercial.objects.none());cantidad=forms.DecimalField(min_value=Decimal("0.0001"));fecha=forms.DateField(widget=forms.DateInput(attrs={"type":"date"}))
+    def __init__(self,*a,empresa=None,**k):super().__init__(*a,**k);self.fields["cliente"].queryset=Cliente.objects.filter(empresa=empresa);self.fields["producto"].queryset=ProductoComercial.objects.filter(empresa=empresa,activo=True,disponible_venta=True)

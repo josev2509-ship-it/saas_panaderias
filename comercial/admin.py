@@ -103,3 +103,7 @@ class ActividadCRMAdmin(admin.ModelAdmin):
     def has_delete_permission(self,request,obj=None):return False
 for model in (HistorialEstadoProspecto,HistorialEtapaOportunidad,HistorialActividadComercial):
     admin.site.register(model,type(f"{model.__name__}Admin",(admin.ModelAdmin,),{"readonly_fields":tuple(f.name for f in model._meta.fields),"has_add_permission":lambda self,request:False,"has_change_permission":lambda self,request,obj=None:False,"has_delete_permission":lambda self,request,obj=None:False}))
+for model in (ProductoComercial,ListaPrecio,DetalleListaPrecio,ReglaPrecio,PoliticaDescuentoComercial,PromocionComercial,ReglaPromocion,CotizacionVenta,DetalleCotizacionVenta,ProgramacionPedido):
+    admin.site.register(model,admin.ModelAdmin)
+for model in (VersionCotizacionVenta,HistorialCotizacionVenta):
+    admin.site.register(model,type(f"{model.__name__}Admin",(admin.ModelAdmin,),{"readonly_fields":tuple(f.name for f in model._meta.fields),"has_add_permission":lambda self,request:False,"has_change_permission":lambda self,request,obj=None:False,"has_delete_permission":lambda self,request,obj=None:False}))

@@ -60,6 +60,23 @@ class Cliente(models.Model):
         validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))],
     )
     lista_precio = models.CharField(max_length=100, blank=True)
+    segmento = models.ForeignKey("SegmentoCliente",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes")
+    clasificacion = models.ForeignKey("ClasificacionCliente",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes")
+    canal = models.ForeignKey("CanalVenta",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes")
+    vendedor = models.ForeignKey("VendedorComercial",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes")
+    equipo = models.ForeignKey("EquipoComercial",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes")
+    zona = models.ForeignKey("ZonaComercial",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes")
+    ruta = models.ForeignKey("RutaComercial",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes")
+    moneda_comercial = models.ForeignKey("catalogos.MonedaEmpresa",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes_comerciales")
+    condicion_pago_catalogo = models.ForeignKey("catalogos.CondicionPago",on_delete=models.PROTECT,null=True,blank=True,related_name="clientes_comerciales")
+    credito_utilizado = models.DecimalField(max_digits=14,decimal_places=2,default=0)
+    exento_impuestos = models.BooleanField(default=False)
+    retenciones = models.JSONField(default=dict,blank=True)
+    categoria_riesgo = models.CharField(max_length=12,default="MEDIO")
+    score_riesgo = models.PositiveSmallIntegerField(default=50)
+    explicacion_riesgo = models.JSONField(default=list,blank=True)
+    version_formula_riesgo = models.CharField(max_length=20,default="1.0")
+    fecha_calculo_riesgo = models.DateTimeField(null=True,blank=True)
     vendedor_asignado = models.CharField(max_length=150, blank=True)
     ruta_asignada = models.CharField(max_length=150, blank=True)
     observaciones = models.TextField(blank=True)
@@ -74,7 +91,11 @@ class Cliente(models.Model):
             models.UniqueConstraint(fields=["empresa", "codigo"], name="comercial_cliente_empresa_codigo_uniq"),
             models.CheckConstraint(condition=Q(limite_credito__gte=0), name="comercial_cliente_limite_no_negativo"),
             models.CheckConstraint(condition=Q(descuento_maximo__gte=0, descuento_maximo__lte=100), name="comercial_cliente_descuento_rango"),
+            models.CheckConstraint(condition=Q(credito_utilizado__gte=0),name="com_cliente_credito_util_no_neg"),
+            models.CheckConstraint(condition=Q(score_riesgo__gte=0,score_riesgo__lte=100),name="com_cliente_score_rango"),
+            models.UniqueConstraint(fields=["empresa","rnc_cedula"],condition=~Q(rnc_cedula=""),name="com_cliente_emp_ident_uniq"),
         ]
+        permissions=[("bloquear_credito_cliente","Puede bloquear crédito de clientes"),("gestionar_credito_cliente","Puede gestionar crédito de clientes"),("calcular_riesgo_cliente","Puede calcular riesgo de clientes"),("administrar_cliente_360","Puede administrar Cliente 360"),("exportar_cliente_360","Puede exportar Cliente 360")]
         indexes = [
             models.Index(fields=["empresa", "estado"], name="com_cli_emp_estado_idx"),
             models.Index(fields=["empresa", "nombre_comercial"], name="com_cli_emp_nombre_idx"),
@@ -92,6 +113,10 @@ class Cliente(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    @property
+    def credito_disponible(self):return max(Decimal("0"),(self.limite_credito or 0)-(self.credito_utilizado or 0))
+    def delete(self,*a,**k):raise ValidationError("Los clientes no se eliminan físicamente.")
+
     def __str__(self):
         return f"{self.codigo} - {self.nombre_comercial}"
 
@@ -102,6 +127,7 @@ class DireccionCliente(models.Model):
         ENTREGA = "ENTREGA", "Entrega"
         COBRO = "COBRO", "Cobro"
         OTRO = "OTRO", "Otro"
+        SUCURSAL = "SUCURSAL", "Sucursal"
 
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name="direcciones")
     nombre = models.CharField(max_length=150)
@@ -157,6 +183,8 @@ class ContactoCliente(models.Model):
     recibe_facturas = models.BooleanField(default=False)
     recibe_cobros = models.BooleanField(default=False)
     recibe_entregas = models.BooleanField(default=False)
+    recibe_compras = models.BooleanField(default=False)
+    recibe_cobranzas = models.BooleanField(default=False)
     activo = models.BooleanField(default=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
@@ -212,8 +240,11 @@ class Pedido(models.Model):
         ENTREGADO_PARCIAL = "ENTREGADO_PARCIAL", "Entregado parcial"
         ENTREGADO = "ENTREGADO", "Entregado"
         FACTURADO = "FACTURADO", "Facturado"
+        EN_PROGRAMACION = "EN_PROGRAMACION", "En programación"
+        PROGRAMADO = "PROGRAMADO", "Programado"
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="pedidos")
+    cotizacion_origen = models.OneToOneField("CotizacionVenta",on_delete=models.PROTECT,null=True,blank=True,related_name="pedido_convertido")
     numero = models.CharField(max_length=30)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="pedidos")
     direccion_entrega = models.ForeignKey(DireccionCliente, on_delete=models.PROTECT, null=True, blank=True)
@@ -511,3 +542,91 @@ class HistorialEtapaOportunidad(HistorialCRMBase):
     oportunidad=models.ForeignKey(OportunidadComercial,on_delete=models.CASCADE,related_name="historial_etapas");etapa_anterior=models.CharField(max_length=15);etapa_nueva=models.CharField(max_length=15);dias_en_etapa=models.PositiveIntegerField(default=0)
 class HistorialActividadComercial(HistorialCRMBase):
     actividad=models.ForeignKey(ActividadComercial,on_delete=models.CASCADE,related_name="historial");accion=models.CharField(max_length=30);estado_anterior=models.CharField(max_length=15,blank=True);estado_nuevo=models.CharField(max_length=15,blank=True);snapshot=models.JSONField(default=dict)
+
+
+class ProductoComercial(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE,related_name="productos_comerciales");producto_inventario=models.OneToOneField(ProductoInventario,on_delete=models.PROTECT,related_name="producto_comercial");codigo=models.CharField(max_length=40);nombre=models.CharField(max_length=180);descripcion_venta=models.TextField(blank=True);marca=models.CharField(max_length=100,blank=True);categoria=models.CharField(max_length=100,blank=True);presentacion=models.CharField(max_length=100,blank=True);unidad_venta=models.CharField(max_length=30);factor_conversion=models.DecimalField(max_digits=14,decimal_places=4,default=1);venta_minima=models.DecimalField(max_digits=14,decimal_places=4,default=1);multiplo_venta=models.DecimalField(max_digits=14,decimal_places=4,default=1);permite_descuento=models.BooleanField(default=True);impuesto=models.ForeignKey("catalogos.Impuesto",on_delete=models.PROTECT,null=True,blank=True);precio_base=models.DecimalField(max_digits=18,decimal_places=4,default=0);moneda=models.ForeignKey("catalogos.MonedaEmpresa",on_delete=models.PROTECT);imagen=models.ImageField(upload_to="comercial/productos/",blank=True);ficha=models.TextField(blank=True);canal=models.ForeignKey(CanalVenta,on_delete=models.PROTECT,null=True,blank=True);activo=models.BooleanField(default=True);disponible_venta=models.BooleanField(default=True);fecha_creacion=models.DateTimeField(auto_now_add=True);fecha_actualizacion=models.DateTimeField(auto_now=True)
+    class Meta:ordering=["nombre"];constraints=[models.UniqueConstraint(fields=["empresa","codigo"],name="com_prodcom_emp_cod_uniq"),models.CheckConstraint(condition=Q(factor_conversion__gt=0,venta_minima__gt=0,multiplo_venta__gt=0),name="com_prodcom_factores_pos"),models.CheckConstraint(condition=Q(precio_base__gte=0),name="com_prodcom_precio_no_neg")];permissions=[("administrar_producto_comercial","Puede administrar productos comerciales"),("exportar_producto_comercial","Puede exportar productos comerciales")]
+    def clean(self):
+        e={}
+        for f in ("producto_inventario","impuesto","moneda","canal"):
+            o=getattr(self,f,None)
+            if o and getattr(o,"empresa_id",None)!=self.empresa_id:e[f]="El registro pertenece a otra empresa."
+        if e:raise ValidationError(e)
+    def delete(self,*a,**k):raise ValidationError("El producto comercial no se elimina físicamente.")
+    def __str__(self):return f"{self.codigo} - {self.nombre}"
+
+
+class ListaPrecio(models.Model):
+    ESTADOS=(("BORRADOR","Borrador"),("ACTIVA","Activa"),("VENCIDA","Vencida"),("INACTIVA","Inactiva"))
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE,related_name="listas_precio_comerciales");codigo=models.CharField(max_length=30);nombre=models.CharField(max_length=150);moneda=models.ForeignKey("catalogos.MonedaEmpresa",on_delete=models.PROTECT);cliente=models.ForeignKey(Cliente,on_delete=models.PROTECT,null=True,blank=True);segmento=models.ForeignKey(SegmentoCliente,on_delete=models.PROTECT,null=True,blank=True);canal=models.ForeignKey(CanalVenta,on_delete=models.PROTECT,null=True,blank=True);zona=models.ForeignKey(ZonaComercial,on_delete=models.PROTECT,null=True,blank=True);vigencia_desde=models.DateField();vigencia_hasta=models.DateField(null=True,blank=True);prioridad=models.PositiveIntegerField(default=100);version=models.PositiveIntegerField(default=1);estado=models.CharField(max_length=10,choices=ESTADOS,default="BORRADOR");predeterminada=models.BooleanField(default=False);version_anterior=models.ForeignKey("self",on_delete=models.PROTECT,null=True,blank=True);creado_por=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,related_name="+");fecha_creacion=models.DateTimeField(auto_now_add=True)
+    class Meta:ordering=["prioridad","nombre"];constraints=[models.UniqueConstraint(fields=["empresa","codigo","version"],name="com_lista_emp_cod_ver_uniq")];indexes=[models.Index(fields=["empresa","estado","vigencia_desde"],name="com_lista_emp_est_vig_idx")];permissions=[("activar_lista_precio","Puede activar listas de precio"),("versionar_lista_precio","Puede versionar listas de precio"),("simular_precio_comercial","Puede simular precios"),("administrar_pricing","Puede administrar pricing")]
+    def clean(self):
+        e={}
+        if self.vigencia_hasta and self.vigencia_hasta<self.vigencia_desde:e["vigencia_hasta"]="Vigencia inválida."
+        for f in ("moneda","cliente","segmento","canal","zona"):
+            o=getattr(self,f,None)
+            if o and getattr(o,"empresa_id",None)!=self.empresa_id:e[f]="El registro pertenece a otra empresa."
+        if e:raise ValidationError(e)
+class DetalleListaPrecio(models.Model):
+    lista=models.ForeignKey(ListaPrecio,on_delete=models.CASCADE,related_name="detalles");producto=models.ForeignKey(ProductoComercial,on_delete=models.PROTECT);presentacion=models.CharField(max_length=100,blank=True);cantidad_minima=models.DecimalField(max_digits=14,decimal_places=4,default=1);cantidad_maxima=models.DecimalField(max_digits=14,decimal_places=4,null=True,blank=True);precio=models.DecimalField(max_digits=18,decimal_places=4);fecha_creacion=models.DateTimeField(auto_now_add=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["lista","producto","presentacion","cantidad_minima"],name="com_detlista_unico"),models.CheckConstraint(condition=Q(precio__gte=0,cantidad_minima__gt=0),name="com_detlista_valores_pos")]
+class ReglaPrecio(models.Model):
+    TIPOS=(("FIJO","Precio fijo"),("VOLUMEN","Precio por volumen"),("RECARGO","Recargo"),("DESCUENTO","Descuento"),("ESPECIAL","Precio especial"),("BONIFICACION","Bonificación futura"))
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);codigo=models.CharField(max_length=30);nombre=models.CharField(max_length=150);tipo=models.CharField(max_length=15,choices=TIPOS);prioridad=models.PositiveIntegerField(default=100);condiciones=models.JSONField(default=dict);accion=models.JSONField(default=dict);vigencia_desde=models.DateField();vigencia_hasta=models.DateField(null=True,blank=True);activa=models.BooleanField(default=True);fecha_creacion=models.DateTimeField(auto_now_add=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["empresa","codigo"],name="com_regprecio_emp_cod_uniq")];permissions=[("administrar_regla_precio","Puede administrar reglas de precio")]
+class PoliticaDescuentoComercial(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);nombre=models.CharField(max_length=150);porcentaje_maximo=models.DecimalField(max_digits=5,decimal_places=2,default=0);requiere_aprobacion_desde=models.DecimalField(max_digits=5,decimal_places=2,default=0);activa=models.BooleanField(default=True);version=models.PositiveIntegerField(default=1);fecha_creacion=models.DateTimeField(auto_now_add=True)
+class PromocionComercial(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);codigo=models.CharField(max_length=30);nombre=models.CharField(max_length=150);vigencia_desde=models.DateField();vigencia_hasta=models.DateField();prioridad=models.PositiveIntegerField(default=100);activa=models.BooleanField(default=True);fecha_creacion=models.DateTimeField(auto_now_add=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["empresa","codigo"],name="com_promo_emp_cod_uniq")];permissions=[("administrar_promocion_comercial","Puede administrar promociones")]
+class ReglaPromocion(models.Model):
+    promocion=models.ForeignKey(PromocionComercial,on_delete=models.CASCADE,related_name="reglas");producto=models.ForeignKey(ProductoComercial,on_delete=models.PROTECT,null=True,blank=True);cantidad_minima=models.DecimalField(max_digits=14,decimal_places=4,default=1);porcentaje_descuento=models.DecimalField(max_digits=5,decimal_places=2,default=0);precio_especial=models.DecimalField(max_digits=18,decimal_places=4,null=True,blank=True)
+
+
+class CotizacionVenta(models.Model):
+    ESTADOS=(("BORRADOR","Borrador"),("EN_REVISION","En revisión"),("APROBADA_INTERNA","Aprobada interna"),("ENVIADA","Enviada"),("ACEPTADA","Aceptada"),("RECHAZADA","Rechazada"),("VENCIDA","Vencida"),("CANCELADA","Cancelada"),("CONVERTIDA","Convertida"))
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE,related_name="cotizaciones_venta");numero=models.CharField(max_length=30);cliente=models.ForeignKey(Cliente,on_delete=models.PROTECT,related_name="cotizaciones");oportunidad=models.ForeignKey(OportunidadComercial,on_delete=models.PROTECT,null=True,blank=True,related_name="cotizaciones");version=models.PositiveIntegerField(default=1);estado=models.CharField(max_length=20,choices=ESTADOS,default="BORRADOR");fecha=models.DateField();valida_hasta=models.DateField();moneda=models.ForeignKey("catalogos.MonedaEmpresa",on_delete=models.PROTECT);condicion_pago=models.CharField(max_length=100,blank=True);dias_credito=models.PositiveIntegerField(default=0);subtotal=models.DecimalField(max_digits=18,decimal_places=2,default=0);descuento_total=models.DecimalField(max_digits=18,decimal_places=2,default=0);impuesto_total=models.DecimalField(max_digits=18,decimal_places=2,default=0);total=models.DecimalField(max_digits=18,decimal_places=2,default=0);observaciones=models.TextField(blank=True);creado_por=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,related_name="cotizaciones_creadas");actualizado_por=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,related_name="cotizaciones_actualizadas");aprobado_por=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True,related_name="cotizaciones_aprobadas");fecha_creacion=models.DateTimeField(auto_now_add=True);fecha_actualizacion=models.DateTimeField(auto_now=True)
+    class Meta:ordering=["-fecha","-id"];constraints=[models.UniqueConstraint(fields=["empresa","numero"],name="com_cot_emp_num_uniq")];indexes=[models.Index(fields=["empresa","estado"],name="com_cot_emp_estado_idx")];permissions=[("aprobar_cotizacion_venta","Puede aprobar cotizaciones"),("versionar_cotizacion_venta","Puede versionar cotizaciones"),("convertir_cotizacion_venta","Puede convertir cotizaciones"),("exportar_cotizacion_venta","Puede exportar cotizaciones"),("administrar_cotizacion_venta","Puede administrar cotizaciones")]
+    def clean(self):
+        e={}
+        for f in ("cliente","oportunidad","moneda"):
+            o=getattr(self,f,None)
+            if o and getattr(o,"empresa_id",None)!=self.empresa_id:e[f]="El registro pertenece a otra empresa."
+        if self.fecha and self.valida_hasta and self.valida_hasta<self.fecha:e["valida_hasta"]="La vigencia no puede terminar antes de la fecha."
+        if e:raise ValidationError(e)
+    def delete(self,*a,**k):raise ValidationError("Las cotizaciones no se eliminan físicamente.")
+class DetalleCotizacionVenta(models.Model):
+    cotizacion=models.ForeignKey(CotizacionVenta,on_delete=models.CASCADE,related_name="detalles");producto=models.ForeignKey(ProductoComercial,on_delete=models.PROTECT);descripcion=models.CharField(max_length=255);cantidad=models.DecimalField(max_digits=14,decimal_places=4);precio_unitario=models.DecimalField(max_digits=18,decimal_places=4);porcentaje_descuento=models.DecimalField(max_digits=5,decimal_places=2,default=0);porcentaje_impuesto=models.DecimalField(max_digits=5,decimal_places=2,default=0);subtotal=models.DecimalField(max_digits=18,decimal_places=2,default=0);descuento=models.DecimalField(max_digits=18,decimal_places=2,default=0);impuesto=models.DecimalField(max_digits=18,decimal_places=2,default=0);total=models.DecimalField(max_digits=18,decimal_places=2,default=0);snapshot=models.JSONField(default=dict);hash_precio=models.CharField(max_length=64,blank=True);orden=models.PositiveIntegerField(default=0)
+    class Meta:ordering=["orden","id"];constraints=[models.CheckConstraint(condition=Q(cantidad__gt=0,precio_unitario__gte=0),name="com_detcot_valores_pos")]
+    def clean(self):
+        e={}
+        if self.producto_id and self.cotizacion_id and self.producto.empresa_id!=self.cotizacion.empresa_id:e["producto"]="El producto pertenece a otra empresa."
+        if self.cantidad is not None and self.cantidad<=0:e["cantidad"]="Debe ser mayor que cero."
+        if self.porcentaje_descuento is not None and not 0<=self.porcentaje_descuento<=100:e["porcentaje_descuento"]="Debe estar entre 0 y 100."
+        if e:raise ValidationError(e)
+class VersionCotizacionVenta(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);cotizacion=models.ForeignKey(CotizacionVenta,on_delete=models.CASCADE,related_name="versiones");version=models.PositiveIntegerField();snapshot=models.JSONField();hash_contenido=models.CharField(max_length=64);motivo=models.CharField(max_length=250);creado_por=models.ForeignKey(User,on_delete=models.SET_NULL,null=True);fecha=models.DateTimeField(auto_now_add=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=["cotizacion","version"],name="com_vercot_cot_ver_uniq")]
+    def save(self,*a,**k):
+        if self.pk:raise ValidationError("La versión es inmutable.")
+        return super().save(*a,**k)
+class HistorialCotizacionVenta(models.Model):
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE);cotizacion=models.ForeignKey(CotizacionVenta,on_delete=models.CASCADE,related_name="historial");estado_anterior=models.CharField(max_length=20);estado_nuevo=models.CharField(max_length=20);usuario=models.ForeignKey(User,on_delete=models.SET_NULL,null=True);comentario=models.TextField(blank=True);fecha=models.DateTimeField(auto_now_add=True)
+    class Meta:ordering=["-fecha"]
+    def save(self,*a,**k):
+        if self.pk:raise ValidationError("El historial es inmutable.")
+        return super().save(*a,**k)
+
+
+class ProgramacionPedido(models.Model):
+    ESTADOS=(("PENDIENTE","Pendiente"),("PROGRAMADA","Programada"),("REPROGRAMADA","Reprogramada"),("CANCELADA","Cancelada"),("ENVIADA_A_PREPARACION","Enviada a preparación"))
+    empresa=models.ForeignKey(Empresa,on_delete=models.CASCADE,related_name="programaciones_comerciales");pedido=models.OneToOneField(Pedido,on_delete=models.PROTECT,related_name="programacion_comercial");fecha_programada=models.DateField();hora_desde=models.TimeField(null=True,blank=True);hora_hasta=models.TimeField(null=True,blank=True);ruta=models.ForeignKey(RutaComercial,on_delete=models.PROTECT,null=True,blank=True);zona=models.ForeignKey(ZonaComercial,on_delete=models.PROTECT,null=True,blank=True);vendedor=models.ForeignKey(VendedorComercial,on_delete=models.PROTECT,null=True,blank=True);estado=models.CharField(max_length=25,choices=ESTADOS,default="PENDIENTE");motivo=models.TextField(blank=True);creado_por=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,related_name="+");actualizado_por=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,related_name="+");fecha_creacion=models.DateTimeField(auto_now_add=True);fecha_actualizacion=models.DateTimeField(auto_now=True)
+    class Meta:ordering=["fecha_programada","pedido__numero"];indexes=[models.Index(fields=["empresa","fecha_programada","estado"],name="com_prog_emp_fecha_est_idx")];permissions=[("programar_pedido_comercial","Puede programar pedidos"),("reprogramar_pedido_comercial","Puede reprogramar pedidos")]
+    def clean(self):
+        e={}
+        for f in ("pedido","ruta","zona","vendedor"):
+            o=getattr(self,f,None)
+            if o and getattr(o,"empresa_id",None)!=self.empresa_id:e[f]="El registro pertenece a otra empresa."
+        if self.hora_desde and self.hora_hasta and self.hora_hasta<=self.hora_desde:e["hora_hasta"]="Debe ser posterior a la hora inicial."
+        if e:raise ValidationError(e)
