@@ -2,10 +2,27 @@ from django.urls import path
 
 from . import views
 from . import pedidos_views
+from . import configuracion_views
 
 app_name = "comercial"
 
 urlpatterns = [
+    path("configuracion/", configuracion_views.dashboard, name="configuracion_dashboard"),
+    path("configuracion/editar/", configuracion_views.configuracion_editar, name="configuracion_editar"),
+    path("configuracion/validar/", configuracion_views.readiness_ejecutar, name="readiness_ejecutar"),
+    path("configuracion/catalogos/<str:tipo>/", configuracion_views.catalogo_lista, name="catalogo_lista"),
+    path("configuracion/catalogos/<str:tipo>/nuevo/", configuracion_views.catalogo_editar, name="catalogo_crear"),
+    path("configuracion/catalogos/<str:tipo>/<int:pk>/", configuracion_views.catalogo_detalle, name="catalogo_detalle"),
+    path("configuracion/catalogos/<str:tipo>/<int:pk>/editar/", configuracion_views.catalogo_editar, name="catalogo_editar"),
+    path("configuracion/catalogos/<str:tipo>/<int:pk>/estado/", configuracion_views.catalogo_estado, name="catalogo_estado"),
+    path("configuracion/politicas/<str:tipo>/", configuracion_views.politica_lista, name="politica_lista"),
+    path("configuracion/politicas/<str:tipo>/nueva/", configuracion_views.politica_editar, name="politica_crear"),
+    path("configuracion/politicas/<str:tipo>/<int:pk>/", configuracion_views.politica_detalle, name="politica_detalle"),
+    path("configuracion/politicas/<str:tipo>/<int:pk>/editar/", configuracion_views.politica_editar, name="politica_editar"),
+    path("configuracion/politicas/<str:tipo>/<int:pk>/<str:accion>/", configuracion_views.politica_accion, name="politica_accion"),
+    path("configuracion/secuencias/", configuracion_views.secuencias, name="secuencias"),
+    path("configuracion/reportes/", configuracion_views.reportes, name="configuracion_reportes"),
+    path("configuracion/exportar/<str:formato>/", configuracion_views.exportar, name="configuracion_exportar"),
     path("", views.dashboard, name="dashboard"),
     path("clientes/", views.clientes_lista, name="clientes_lista"),
     path("clientes/nuevo/", views.cliente_crear, name="cliente_crear"),

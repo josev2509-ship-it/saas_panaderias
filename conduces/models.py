@@ -37,6 +37,7 @@ class Empresa(models.Model):
     modulo_catalogos = models.BooleanField(default=True)
     modulo_compras = models.BooleanField(default=False)
     modulo_workflow = models.BooleanField(default=False)
+    modulo_inabie = models.BooleanField(default=False)
 
     activa = models.BooleanField(default=True)
 

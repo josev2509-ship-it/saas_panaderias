@@ -6,7 +6,11 @@ from django.db import transaction
 
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
-from comercial.models import Cliente, Pedido
+from comercial.models import (
+    Cliente, Pedido, ConfiguracionComercialEmpresa, VendedorComercial, RutaComercial,
+    PoliticaCredito, PoliticaDescuento, PoliticaEntrega, PoliticaFacturacion,
+    PoliticaDevolucion, PoliticaComision,
+)
 from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
 from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra, ExpedienteCompra, ProcesoRFQ, InvitacionProveedorRFQ
 
@@ -15,6 +19,15 @@ from .models import Documento, extension_por_contenido
 MODELOS_PERMITIDOS = {
     ("comercial", "cliente"): Cliente,
     ("comercial", "pedido"): Pedido,
+    ("comercial", "configuracioncomercialempresa"): ConfiguracionComercialEmpresa,
+    ("comercial", "vendedorcomercial"): VendedorComercial,
+    ("comercial", "rutacomercial"): RutaComercial,
+    ("comercial", "politicacredito"): PoliticaCredito,
+    ("comercial", "politicadescuento"): PoliticaDescuento,
+    ("comercial", "politicaentrega"): PoliticaEntrega,
+    ("comercial", "politicafacturacion"): PoliticaFacturacion,
+    ("comercial", "politicadevolucion"): PoliticaDevolucion,
+    ("comercial", "politicacomision"): PoliticaComision,
     ("inventario", "recetaproduccion"): RecetaProduccion,
     ("inventario", "planproduccion"): PlanProduccion,
     ("inventario", "ordenproduccion"): OrdenProduccion,

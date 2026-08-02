@@ -1,0 +1,26 @@
+from core.domain.events import DomainEvent
+class ConfiguracionComercialCreada(DomainEvent):pass
+class ConfiguracionComercialActualizada(DomainEvent):pass
+class ConfiguracionComercialValidada(DomainEvent):pass
+class EmpresaListaParaVender(DomainEvent):pass
+class EmpresaNoListaParaVender(DomainEvent):pass
+class CatalogoComercialCreado(DomainEvent):pass
+class CatalogoComercialActualizado(DomainEvent):pass
+class CatalogoComercialInactivado(DomainEvent):pass
+class VendedorComercialCreado(DomainEvent):pass
+class VendedorComercialActualizado(DomainEvent):pass
+class EquipoComercialCreado(DomainEvent):pass
+class EquipoComercialActualizado(DomainEvent):pass
+class ZonaComercialCreada(DomainEvent):pass
+class ZonaComercialActualizada(DomainEvent):pass
+class RutaComercialCreada(DomainEvent):pass
+class RutaComercialActualizada(DomainEvent):pass
+class PoliticaComercialCreada(DomainEvent):pass
+class PoliticaComercialVersionada(DomainEvent):pass
+class PoliticaComercialActivada(DomainEvent):pass
+class PoliticaComercialInactivada(DomainEvent):pass
+class SecuenciaComercialConfigurada(DomainEvent):pass
+class ModuloINABIEActivado(DomainEvent):pass
+class ModuloINABIEDesactivado(DomainEvent):pass
+class DocumentoConfiguracionComercialActualizado(DomainEvent):pass
+class ExportacionConfiguracionComercialGenerada(DomainEvent):pass

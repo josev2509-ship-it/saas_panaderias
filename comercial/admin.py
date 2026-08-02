@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Cliente, ContactoCliente, DetallePedido, DireccionCliente, HistorialEstadoPedido, Pedido
+from .models import *
 
 
 @admin.register(Cliente)
@@ -68,3 +68,21 @@ class HistorialEstadoPedidoAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return False
     def has_delete_permission(self, request, obj=None): return False
+
+class ConfigScopedAdmin(admin.ModelAdmin):
+    list_display=("codigo","nombre","activo","orden");list_filter=("empresa","activo");search_fields=("codigo","nombre")
+    def has_delete_permission(self,request,obj=None):return False
+for model in (CanalVenta,SegmentoCliente,ClasificacionCliente,TipoCliente,TipoEntrega,PrioridadComercial,MotivoComercial,ZonaComercial,RutaComercial,EquipoComercial,VendedorComercial):admin.site.register(model,ConfigScopedAdmin)
+@admin.register(ConfiguracionComercialEmpresa)
+class ConfiguracionAdmin(admin.ModelAdmin):
+    list_display=("empresa","estado","version","lista_para_vender","porcentaje_preparacion");readonly_fields=("version","lista_para_vender","porcentaje_preparacion","ultima_validacion","resultado_validacion")
+    def has_delete_permission(self,request,obj=None):return False
+for model in (PoliticaCredito,PoliticaDescuento,PoliticaEntrega,PoliticaFacturacion,PoliticaDevolucion,PoliticaComision):admin.site.register(model,admin.ModelAdmin)
+@admin.register(VersionPoliticaComercial)
+class VersionPoliticaAdmin(admin.ModelAdmin):
+    list_display=("tipo_politica","codigo","version","estado","fecha_creacion")
+    list_filter=("empresa","tipo_politica","estado")
+    readonly_fields=tuple(field.name for field in VersionPoliticaComercial._meta.fields)
+    def has_add_permission(self,request):return False
+    def has_change_permission(self,request,obj=None):return False
+    def has_delete_permission(self,request,obj=None):return False

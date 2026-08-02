@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<style>.cc-wrap{max-width:1400px;margin:auto;padding:1rem}.cc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem}.cc-card{background:var(--surface,#fff);border:1px solid #dfe3e8;border-radius:12px;padding:1rem;overflow-wrap:anywhere}.cc-actions{display:flex;gap:.5rem;flex-wrap:wrap}.cc-table{width:100%;border-collapse:collapse}.cc-table th,.cc-table td{padding:.65rem;border-bottom:1px solid #ddd;text-align:left}.cc-scroll{overflow-x:auto}.cc-red{border-left:5px solid #c62828}.cc-yellow{border-left:5px solid #ef9f00}.cc-green{border-left:5px solid #25804b}@media(max-width:390px){.cc-wrap{padding:.6rem}.cc-grid{grid-template-columns:1fr}}</style>
+<main class="cc-wrap"><nav class="cc-actions"><a href="{% url 'comercial:configuracion_dashboard' %}">Dashboard</a><a href="{% url 'comercial:secuencias' %}">Numeración</a><a href="{% url 'comercial:configuracion_reportes' %}">Reportes</a></nav>{% block configuracion_content %}{% endblock %}</main>
+{% endblock %}

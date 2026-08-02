@@ -1,0 +1,1 @@
+from comercial.management.commands.validar_configuracion_comercial import Command

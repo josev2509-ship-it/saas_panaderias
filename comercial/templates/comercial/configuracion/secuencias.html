@@ -1,0 +1,1 @@
+{% extends "comercial/configuracion/base.html" %}{% block configuracion_content %}<h1>Numeración comercial</h1><div class="cc-grid">{% for tipo in tipos %}<article class="cc-card"><h2>{{ tipo }}</h2><form method="post">{% csrf_token %}<input type="hidden" name="tipo" value="{{ tipo }}">{{ form.as_p }}<button>Configurar</button></form></article>{% endfor %}</div>{% endblock %}
