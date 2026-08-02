@@ -1,0 +1,24 @@
+from core.domain.events import DomainEvent
+class ProspectoCreado(DomainEvent):pass
+class ProspectoActualizado(DomainEvent):pass
+class ProspectoContactado(DomainEvent):pass
+class ProspectoCalificado(DomainEvent):pass
+class ProspectoNoCalificado(DomainEvent):pass
+class ProspectoDescartado(DomainEvent):pass
+class ProspectoConvertido(DomainEvent):pass
+class ProspectoReasignado(DomainEvent):pass
+class OportunidadCreada(DomainEvent):pass
+class OportunidadActualizada(DomainEvent):pass
+class OportunidadEtapaCambiada(DomainEvent):pass
+class OportunidadGanada(DomainEvent):pass
+class OportunidadPerdida(DomainEvent):pass
+class OportunidadCancelada(DomainEvent):pass
+class OportunidadReasignada(DomainEvent):pass
+class ActividadComercialCreada(DomainEvent):pass
+class ActividadComercialActualizada(DomainEvent):pass
+class ActividadComercialCompletada(DomainEvent):pass
+class ActividadComercialCancelada(DomainEvent):pass
+class ActividadComercialReprogramada(DomainEvent):pass
+class ActividadComercialVencida(DomainEvent):pass
+class DocumentoCRMActualizado(DomainEvent):pass
+class ExportacionCRMGenerada(DomainEvent):pass

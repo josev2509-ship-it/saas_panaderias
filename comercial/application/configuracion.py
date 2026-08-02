@@ -8,7 +8,7 @@ from core.application.event_bus import event_bus
 from comercial.domain.configuracion_events import *
 from comercial.models import *
 
-CATALOGOS={m.__name__:m for m in (CanalVenta,SegmentoCliente,ClasificacionCliente,TipoCliente,TipoEntrega,PrioridadComercial,MotivoComercial,ZonaComercial,RutaComercial,EquipoComercial,VendedorComercial)}
+CATALOGOS={m.__name__:m for m in (CanalVenta,SegmentoCliente,ClasificacionCliente,TipoCliente,TipoEntrega,PrioridadComercial,MotivoComercial,FuenteProspecto,ZonaComercial,RutaComercial,EquipoComercial,VendedorComercial)}
 POLITICAS={m.__name__:m for m in (PoliticaCredito,PoliticaDescuento,PoliticaEntrega,PoliticaFacturacion,PoliticaDevolucion,PoliticaComision)}
 def _perm(c,p):
     if not c.usuario or not c.usuario.has_perm(f"comercial.{p}"):raise PermissionDenied

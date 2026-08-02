@@ -86,3 +86,20 @@ class VersionPoliticaAdmin(admin.ModelAdmin):
     def has_add_permission(self,request):return False
     def has_change_permission(self,request,obj=None):return False
     def has_delete_permission(self,request,obj=None):return False
+
+@admin.register(FuenteProspecto)
+class FuenteProspectoAdmin(ConfigScopedAdmin):pass
+@admin.register(Prospecto)
+class ProspectoAdmin(admin.ModelAdmin):
+    list_display=("numero","nombre","empresa","estado","vendedor","fecha_proxima_accion");list_filter=("empresa","estado","fuente","vendedor");search_fields=("numero","nombre","nombre_comercial","identificacion_fiscal","correo");readonly_fields=("numero","estado","cliente_convertido","convertido_por","fecha_conversion","fecha_creacion","fecha_actualizacion")
+    def has_delete_permission(self,request,obj=None):return False
+@admin.register(OportunidadComercial)
+class OportunidadAdmin(admin.ModelAdmin):
+    list_display=("numero","titulo","empresa","etapa","monto_estimado","probabilidad","monto_ponderado");list_filter=("empresa","etapa","vendedor","moneda");search_fields=("numero","titulo");readonly_fields=("numero","etapa","monto_ponderado","cerrado_por","fecha_cierre_real","fecha_creacion","fecha_actualizacion")
+    def has_delete_permission(self,request,obj=None):return False
+@admin.register(ActividadComercial)
+class ActividadCRMAdmin(admin.ModelAdmin):
+    list_display=("asunto","empresa","tipo","estado","responsable","fecha_inicio");list_filter=("empresa","tipo","estado","prioridad");search_fields=("asunto","descripcion");readonly_fields=("estado","completado_por","fecha_creacion","fecha_actualizacion")
+    def has_delete_permission(self,request,obj=None):return False
+for model in (HistorialEstadoProspecto,HistorialEtapaOportunidad,HistorialActividadComercial):
+    admin.site.register(model,type(f"{model.__name__}Admin",(admin.ModelAdmin,),{"readonly_fields":tuple(f.name for f in model._meta.fields),"has_add_permission":lambda self,request:False,"has_change_permission":lambda self,request,obj=None:False,"has_delete_permission":lambda self,request,obj=None:False}))

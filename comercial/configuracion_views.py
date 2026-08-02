@@ -20,7 +20,7 @@ from comercial.models import *
 from conduces.services import obtener_empresa_usuario
 from core.application.operation_context import OperationContext
 
-CATALOGOS={m._meta.model_name:m for m in (CanalVenta,SegmentoCliente,ClasificacionCliente,TipoCliente,TipoEntrega,PrioridadComercial,MotivoComercial,EquipoComercial,VendedorComercial,ZonaComercial,RutaComercial)}
+CATALOGOS={m._meta.model_name:m for m in (CanalVenta,SegmentoCliente,ClasificacionCliente,TipoCliente,TipoEntrega,PrioridadComercial,MotivoComercial,FuenteProspecto,EquipoComercial,VendedorComercial,ZonaComercial,RutaComercial)}
 POLITICAS={m._meta.model_name:m for m in (PoliticaCredito,PoliticaDescuento,PoliticaEntrega,PoliticaFacturacion,PoliticaDevolucion,PoliticaComision)}
 
 def _empresa(request):

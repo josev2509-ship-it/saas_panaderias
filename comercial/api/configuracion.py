@@ -27,7 +27,7 @@ def validar_empresa_lista_para_vender(*,empresa,persistir=False):
     blockers=[];warnings=[];sections={};cfg=ConfiguracionComercialEmpresa.objects.filter(empresa=empresa).first()
     sections["empresa_activa"]=getattr(empresa,"activa",getattr(empresa,"activo",True));sections["configuracion"]=bool(cfg);sections["moneda_base"]=bool(cfg and cfg.moneda_base_id)
     sections["impuestos"]=Impuesto.objects.filter(empresa=empresa,activo=True).exists();sections["condiciones_pago"]=CondicionPago.objects.filter(empresa=empresa,activo=True).exists()
-    sections["catalogos"]=all(m.objects.filter(empresa=empresa,activo=True).exists() for m in (CanalVenta,SegmentoCliente,ClasificacionCliente,TipoCliente,TipoEntrega,PrioridadComercial,MotivoComercial))
+    sections["catalogos"]=all(m.objects.filter(empresa=empresa,activo=True).exists() for m in (CanalVenta,SegmentoCliente,ClasificacionCliente,TipoCliente,TipoEntrega,PrioridadComercial,MotivoComercial,FuenteProspecto))
     sections["vendedores_equipos"]=VendedorComercial.objects.filter(empresa=empresa,activo=True).exists() and EquipoComercial.objects.filter(empresa=empresa,activo=True).exists();sections["zonas_rutas"]=ZonaComercial.objects.filter(empresa=empresa,activo=True).exists() and RutaComercial.objects.filter(empresa=empresa,activo=True).exists()
     politicas=(PoliticaCredito,PoliticaDescuento,PoliticaEntrega,PoliticaFacturacion,PoliticaDevolucion,PoliticaComision);sections["politicas"]=all(m.objects.filter(empresa=empresa,estado="ACTIVA").exists() for m in politicas)
     sections["politicas_sin_ambiguedad"]=not any(m.objects.filter(empresa=empresa,estado="ACTIVA").values("prioridad","ambito").annotate(n=models.Count("id")).filter(n__gt=1).exists() for m in politicas)

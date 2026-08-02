@@ -9,6 +9,7 @@ from .models import (
     VendedorComercial, ZonaComercial, RutaComercial, PoliticaCredito, PoliticaDescuento,
     PoliticaEntrega, PoliticaFacturacion, PoliticaDevolucion, PoliticaComision,
     SecuenciaDocumento,
+    Prospecto, OportunidadComercial, ActividadComercial,
 )
 
 
@@ -181,3 +182,29 @@ class FiltroReporteComercialForm(forms.Form):
     estado = forms.CharField(required=False, max_length=20)
     desde = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
     hasta = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+
+
+class ProspectoForm(EmpresaScopedModelForm):
+    class Meta:
+        model=Prospecto
+        exclude=("empresa","numero","estado","motivo_no_calificacion","motivo_descarte","creado_por","actualizado_por","convertido_por","fecha_conversion","cliente_convertido","fecha_creacion","fecha_actualizacion")
+        widgets={"direccion":forms.Textarea(attrs={"rows":3}),"observaciones":forms.Textarea(attrs={"rows":3}),"fecha_primer_contacto":forms.DateInput(attrs={"type":"date"}),"fecha_proxima_accion":forms.DateTimeInput(attrs={"type":"datetime-local"})}
+
+
+class OportunidadForm(EmpresaScopedModelForm):
+    class Meta:
+        model=OportunidadComercial
+        exclude=("empresa","numero","etapa","monto_ponderado","motivo_perdida","motivo_cancelacion","creado_por","actualizado_por","cerrado_por","fecha_cierre_real","fecha_creacion","fecha_actualizacion")
+        widgets={"descripcion":forms.Textarea(attrs={"rows":3}),"observaciones":forms.Textarea(attrs={"rows":3}),"fecha_apertura":forms.DateInput(attrs={"type":"date"}),"fecha_estimada_cierre":forms.DateInput(attrs={"type":"date"}),"fecha_proxima_accion":forms.DateTimeInput(attrs={"type":"datetime-local"})}
+
+
+class ActividadComercialForm(EmpresaScopedModelForm):
+    class Meta:
+        model=ActividadComercial
+        exclude=("empresa","estado","resultado","creado_por","actualizado_por","completado_por","fecha_creacion","fecha_actualizacion")
+        widgets={"descripcion":forms.Textarea(attrs={"rows":3}),"fecha_inicio":forms.DateTimeInput(attrs={"type":"datetime-local"}),"fecha_fin":forms.DateTimeInput(attrs={"type":"datetime-local"}),"fecha_recordatorio":forms.DateTimeInput(attrs={"type":"datetime-local"}),"fecha_siguiente_accion":forms.DateTimeInput(attrs={"type":"datetime-local"})}
+    def __init__(self,*args,empresa=None,**kwargs):
+        super().__init__(*args,empresa=empresa,**kwargs)
+        from django.contrib.auth import get_user_model
+        from django.db.models import Q
+        self.fields["responsable"].queryset=get_user_model().objects.filter(Q(empresa_principal=empresa)|Q(perfiles_vendedor__empresa=empresa)).distinct()

@@ -30,6 +30,10 @@
     <details class="ds-nav-group" open>
       <summary>Comercial</summary>
       <a href="{% url 'comercial:dashboard' %}" {% if request.resolver_match.namespace == 'comercial' and request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CM</span><span>Resumen comercial</span></a>
+      <a href="{% url 'comercial:crm_dashboard' %}" {% if request.resolver_match.url_name == 'crm_dashboard' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CR</span><span>CRM</span></a>
+      <a href="{% url 'comercial:prospectos_lista' %}"><span class="ds-nav-icon">PR</span><span>Prospectos</span></a>
+      <a href="{% url 'comercial:pipeline' %}"><span class="ds-nav-icon">OP</span><span>Pipeline</span></a>
+      <a href="{% url 'comercial:agenda' %}"><span class="ds-nav-icon">AG</span><span>Agenda CRM</span></a>
       <a href="{% url 'comercial:clientes_lista' %}" {% if request.resolver_match.url_name == 'clientes_lista' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CL</span><span>Clientes</span></a>
       <a href="{% url 'comercial:pedidos_lista' %}" {% if request.resolver_match.url_name == 'pedidos_lista' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PD</span><span>Pedidos</span></a>
       <a href="{% url 'comercial:programacion_diaria' %}" {% if request.resolver_match.url_name == 'programacion_diaria' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PG</span><span>Programación</span></a>

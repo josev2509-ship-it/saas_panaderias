@@ -10,6 +10,7 @@ from comercial.models import (
     Cliente, Pedido, ConfiguracionComercialEmpresa, VendedorComercial, RutaComercial,
     PoliticaCredito, PoliticaDescuento, PoliticaEntrega, PoliticaFacturacion,
     PoliticaDevolucion, PoliticaComision,
+    Prospecto, OportunidadComercial, ActividadComercial,
 )
 from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
 from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra, ExpedienteCompra, ProcesoRFQ, InvitacionProveedorRFQ
@@ -28,6 +29,9 @@ MODELOS_PERMITIDOS = {
     ("comercial", "politicafacturacion"): PoliticaFacturacion,
     ("comercial", "politicadevolucion"): PoliticaDevolucion,
     ("comercial", "politicacomision"): PoliticaComision,
+    ("comercial", "prospecto"): Prospecto,
+    ("comercial", "oportunidadcomercial"): OportunidadComercial,
+    ("comercial", "actividadcomercial"): ActividadComercial,
     ("inventario", "recetaproduccion"): RecetaProduccion,
     ("inventario", "planproduccion"): PlanProduccion,
     ("inventario", "ordenproduccion"): OrdenProduccion,
@@ -39,6 +43,12 @@ MODELOS_PERMITIDOS = {
     ("compras", "procesorfq"): ProcesoRFQ,
     ("compras", "invitacionproveedorrfq"): InvitacionProveedorRFQ,
 }
+
+def _emitir_documento_crm(documento,accion,usuario):
+    if documento.content_type.app_label!="comercial" or documento.content_type.model not in {"prospecto","oportunidadcomercial","actividadcomercial"}:return
+    from comercial.domain.crm_events import DocumentoCRMActualizado
+    from core.application.event_bus import event_bus
+    event_bus.publish(DocumentoCRMActualizado(empresa_id=documento.empresa_id,usuario_id=getattr(usuario,"pk",None),agregado_tipo=f"comercial.{documento.content_type.model}",agregado_id=str(documento.object_id),referencia=str(documento.pk),clave_idempotente=f"crm-documento:{accion}:{documento.pk}:v{documento.version}",payload={"schema_version":1,"empresa_id":documento.empresa_id,"documento_id":documento.pk,"accion":accion,"version":documento.version}))
 
 
 def resolver_objeto_permitido(*, empresa, app_label, model, object_id):
@@ -81,6 +91,7 @@ def crear_documento_asociado(*, empresa, objeto, archivo, usuario=None, request=
     )
     from compras.application.expedientes_rfq import registrar_operacion_documental_p2p
     registrar_operacion_documental_p2p(documento=documento,accion="CARGA",usuario=usuario,request=request)
+    _emitir_documento_crm(documento,"CARGA",usuario)
     return documento
 
 
@@ -111,6 +122,7 @@ def reemplazar_documento(*, documento, archivo, usuario=None, request=None):
     )
     from compras.application.expedientes_rfq import registrar_operacion_documental_p2p
     registrar_operacion_documental_p2p(documento=nuevo,accion="REEMPLAZO_VERSION",usuario=usuario,request=request)
+    _emitir_documento_crm(nuevo,"REEMPLAZO_VERSION",usuario)
     return nuevo
 
 
@@ -130,4 +142,5 @@ def anular_documento(*, documento, usuario=None, request=None):
     )
     from compras.application.expedientes_rfq import registrar_operacion_documental_p2p
     registrar_operacion_documental_p2p(documento=documento,accion="ANULACION",usuario=usuario,request=request)
+    _emitir_documento_crm(documento,"ANULACION",usuario)
     return documento

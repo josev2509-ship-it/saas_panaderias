@@ -3,10 +3,16 @@ from django.urls import path
 from . import views
 from . import pedidos_views
 from . import configuracion_views
+from . import crm_views
 
 app_name = "comercial"
 
 urlpatterns = [
+    path("crm/",crm_views.dashboard,name="crm_dashboard"),
+    path("crm/prospectos/",crm_views.prospectos_lista,name="prospectos_lista"),path("crm/prospectos/nuevo/",crm_views.prospecto_form,name="prospecto_crear"),path("crm/prospectos/<int:pk>/",crm_views.prospecto_detalle,name="prospecto_detalle"),path("crm/prospectos/<int:pk>/editar/",crm_views.prospecto_form,name="prospecto_editar"),path("crm/prospectos/<int:pk>/<str:accion>/",crm_views.prospecto_accion,name="prospecto_accion"),
+    path("crm/oportunidades/",crm_views.oportunidades_lista,name="oportunidades_lista"),path("crm/oportunidades/nueva/",crm_views.oportunidad_form,name="oportunidad_crear"),path("crm/oportunidades/<int:pk>/",crm_views.oportunidad_detalle,name="oportunidad_detalle"),path("crm/oportunidades/<int:pk>/editar/",crm_views.oportunidad_form,name="oportunidad_editar"),path("crm/oportunidades/<int:pk>/<str:accion>/",crm_views.oportunidad_accion,name="oportunidad_accion"),path("crm/pipeline/",crm_views.pipeline_view,name="pipeline"),
+    path("crm/actividades/",crm_views.actividades_lista,name="actividades_lista"),path("crm/actividades/nueva/",crm_views.actividad_form,name="actividad_crear"),path("crm/actividades/<int:pk>/",crm_views.actividad_detalle,name="actividad_detalle"),path("crm/actividades/<int:pk>/editar/",crm_views.actividad_form,name="actividad_editar"),path("crm/actividades/<int:pk>/<str:accion>/",crm_views.actividad_accion,name="actividad_accion"),path("crm/agenda/",crm_views.agenda_view,name="agenda"),path("crm/agenda/<str:vista>/",crm_views.agenda_view,name="agenda_vista"),
+    path("crm/masivo/<str:tipo>/<str:accion>/",crm_views.accion_masiva,name="crm_accion_masiva"),path("crm/reportes/",crm_views.reportes,name="crm_reportes"),path("crm/exportar/<str:tipo>/<str:formato>/",crm_views.exportar,name="crm_exportar"),
     path("configuracion/", configuracion_views.dashboard, name="configuracion_dashboard"),
     path("configuracion/editar/", configuracion_views.configuracion_editar, name="configuracion_editar"),
     path("configuracion/validar/", configuracion_views.readiness_ejecutar, name="readiness_ejecutar"),
