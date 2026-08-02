@@ -12,6 +12,9 @@ from comercial.models import (
     PoliticaDevolucion, PoliticaComision,
     Prospecto, OportunidadComercial, ActividadComercial,
     ProductoComercial, ListaPrecio, CotizacionVenta,
+    ReservaComercial, PreparacionPedido, TareaPicking, PackingPedido,
+    DespachoComercial, ConduceComercial, EntregaComercial, FacturaVenta,
+    CuentaPorCobrar, ReciboCobro, CesionFactoring,
 )
 from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
 from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra, ExpedienteCompra, ProcesoRFQ, InvitacionProveedorRFQ
@@ -36,6 +39,17 @@ MODELOS_PERMITIDOS = {
     ("comercial", "productocomercial"): ProductoComercial,
     ("comercial", "listaprecio"): ListaPrecio,
     ("comercial", "cotizacionventa"): CotizacionVenta,
+    ("comercial", "reservacomercial"): ReservaComercial,
+    ("comercial", "preparacionpedido"): PreparacionPedido,
+    ("comercial", "tareapicking"): TareaPicking,
+    ("comercial", "packingpedido"): PackingPedido,
+    ("comercial", "despachocomercial"): DespachoComercial,
+    ("comercial", "conducecomercial"): ConduceComercial,
+    ("comercial", "entregacomercial"): EntregaComercial,
+    ("comercial", "facturaventa"): FacturaVenta,
+    ("comercial", "cuentaporcobrar"): CuentaPorCobrar,
+    ("comercial", "recibocobro"): ReciboCobro,
+    ("comercial", "cesionfactoring"): CesionFactoring,
     ("inventario", "recetaproduccion"): RecetaProduccion,
     ("inventario", "planproduccion"): PlanProduccion,
     ("inventario", "ordenproduccion"): OrdenProduccion,

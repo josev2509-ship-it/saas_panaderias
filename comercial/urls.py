@@ -5,10 +5,13 @@ from . import pedidos_views
 from . import configuracion_views
 from . import crm_views
 from . import o2c_views
+from . import o2c_full_views
 
 app_name = "comercial"
 
 urlpatterns = [
+    path("o2c/",o2c_full_views.dashboard,name="o2c_full_dashboard"),path("o2c/<str:tipo>/",o2c_full_views.listado,name="o2c_full_lista"),
+    path("o2c/pedido/<int:pk>/reservar/",o2c_full_views.pedido_reservar,name="o2c_pedido_reservar"),path("o2c/reserva/<int:pk>/preparar/",o2c_full_views.reserva_preparar,name="o2c_reserva_preparar"),path("o2c/preparacion/<int:pk>/validar/",o2c_full_views.preparacion_validar,name="o2c_preparacion_validar"),path("o2c/picking/<int:pk>/completar/",o2c_full_views.picking_completar,name="o2c_picking_completar"),path("o2c/packing/<int:pk>/despachar/",o2c_full_views.packing_despachar,name="o2c_packing_despachar"),path("o2c/despacho/<int:pk>/conduce/",o2c_full_views.despacho_conduce,name="o2c_despacho_conduce"),path("o2c/conduce/<int:pk>/entregar/",o2c_full_views.conduce_entregar,name="o2c_conduce_entregar"),path("o2c/entrega/<int:pk>/facturar/",o2c_full_views.entrega_facturar,name="o2c_entrega_facturar"),path("o2c/cxc/<int:pk>/cobrar/",o2c_full_views.cobrar,name="o2c_cobrar"),path("o2c/exportar/<str:tipo>/<str:formato>/",o2c_full_views.exportar,name="o2c_full_exportar"),
     path("o2c/",o2c_views.dashboard,name="o2c_dashboard"),path("clientes/<int:pk>/360/",o2c_views.cliente_360,name="cliente_360"),path("clientes/<int:pk>/360/<str:accion>/",o2c_views.cliente_accion,name="cliente_360_accion"),
     path("productos-comerciales/",o2c_views.productos_lista,name="productos_comerciales"),path("productos-comerciales/nuevo/",o2c_views.producto_form,name="producto_comercial_crear"),path("productos-comerciales/<int:pk>/",o2c_views.producto_detalle,name="producto_detalle"),path("productos-comerciales/<int:pk>/editar/",o2c_views.producto_form,name="producto_editar"),
     path("precios/listas/",o2c_views.listas,name="listas_precio"),path("precios/listas/nueva/",o2c_views.lista_form,name="lista_crear"),path("precios/listas/<int:pk>/",o2c_views.lista_detalle,name="lista_detalle"),path("precios/listas/<int:pk>/editar/",o2c_views.lista_form,name="lista_editar"),path("precios/listas/<int:pk>/activar/",o2c_views.lista_activar,name="lista_activar"),path("precios/simulador/",o2c_views.simulador,name="simulador_precio"),

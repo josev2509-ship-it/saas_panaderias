@@ -39,6 +39,7 @@
       <a href="{% url 'comercial:listas_precio' %}"><span class="ds-nav-icon">LP</span><span>Precios</span></a>
       <a href="{% url 'comercial:cotizaciones_lista' %}"><span class="ds-nav-icon">CT</span><span>Cotizaciones</span></a>
       <a href="{% url 'comercial:programacion_comercial' %}"><span class="ds-nav-icon">PR</span><span>Programación comercial</span></a>
+      <a href="{% url 'comercial:o2c_full_dashboard' %}"><span class="ds-nav-icon">OC</span><span>Order-to-Cash</span></a>
       <a href="{% url 'comercial:clientes_lista' %}" {% if request.resolver_match.url_name == 'clientes_lista' %}aria-current="page"{% endif %}><span class="ds-nav-icon">CL</span><span>Clientes</span></a>
       <a href="{% url 'comercial:pedidos_lista' %}" {% if request.resolver_match.url_name == 'pedidos_lista' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PD</span><span>Pedidos</span></a>
       <a href="{% url 'comercial:programacion_diaria' %}" {% if request.resolver_match.url_name == 'programacion_diaria' %}aria-current="page"{% endif %}><span class="ds-nav-icon">PG</span><span>Programación</span></a>

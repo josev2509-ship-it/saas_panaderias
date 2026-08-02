@@ -105,5 +105,7 @@ for model in (HistorialEstadoProspecto,HistorialEtapaOportunidad,HistorialActivi
     admin.site.register(model,type(f"{model.__name__}Admin",(admin.ModelAdmin,),{"readonly_fields":tuple(f.name for f in model._meta.fields),"has_add_permission":lambda self,request:False,"has_change_permission":lambda self,request,obj=None:False,"has_delete_permission":lambda self,request,obj=None:False}))
 for model in (ProductoComercial,ListaPrecio,DetalleListaPrecio,ReglaPrecio,PoliticaDescuentoComercial,PromocionComercial,ReglaPromocion,CotizacionVenta,DetalleCotizacionVenta,ProgramacionPedido):
     admin.site.register(model,admin.ModelAdmin)
+for model in (ReservaComercial,PreparacionPedido,TareaPicking,PackingPedido,DespachoComercial,ConduceComercial,EntregaComercial,FacturaVenta,CuentaPorCobrar,ReciboCobro,CesionFactoring):
+    admin.site.register(model,admin.ModelAdmin)
 for model in (VersionCotizacionVenta,HistorialCotizacionVenta):
     admin.site.register(model,type(f"{model.__name__}Admin",(admin.ModelAdmin,),{"readonly_fields":tuple(f.name for f in model._meta.fields),"has_add_permission":lambda self,request:False,"has_change_permission":lambda self,request,obj=None:False,"has_delete_permission":lambda self,request,obj=None:False}))

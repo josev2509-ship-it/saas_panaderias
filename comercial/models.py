@@ -630,3 +630,7 @@ class ProgramacionPedido(models.Model):
             if o and getattr(o,"empresa_id",None)!=self.empresa_id:e[f]="El registro pertenece a otra empresa."
         if self.hora_desde and self.hora_hasta and self.hora_hasta<=self.hora_desde:e["hora_hasta"]="Debe ser posterior a la hora inicial."
         if e:raise ValidationError(e)
+
+# Los agregados del ciclo logístico/financiero se mantienen en un módulo
+# aislado para facilitar la coexistencia con Conduce y Factura legacy.
+from .models_o2c4 import *  # noqa: E402,F401,F403

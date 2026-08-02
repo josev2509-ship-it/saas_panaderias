@@ -51,6 +51,62 @@ def _idempotent_result(*, context, operation, payload, model, callback, allow_re
 
 class InventoryEngine:
     @staticmethod
+    def commercial_availability(*, context, producto, cantidad=0):
+        """Lectura ATP para Comercial; el ledger y los lotes siguen siendo canónicos."""
+        _validate_company(context, producto)
+        reservado=calcular_reservado(producto)
+        # Las reservas comerciales viven en Comercial, pero solo esta fachada
+        # puede incorporarlas al ATP del inventario.
+        from comercial.models import DetalleReservaComercial,ReservaComercial
+        comercial=DetalleReservaComercial.objects.filter(
+            reserva__empresa=context.empresa,producto=producto,
+            reserva__estado__in=["PENDIENTE","PARCIAL","COMPLETA"],
+        ).aggregate(total=Sum(F("cantidad_reservada")-F("cantidad_consumida")))["total"] or 0
+        disponible=Decimal(producto.stock_actual or 0)-Decimal(reservado)-Decimal(comercial)
+        return {"producto_id":producto.pk,"existencia":Decimal(producto.stock_actual or 0),"reservado":Decimal(reservado)+Decimal(comercial),"disponible":max(Decimal(0),disponible),"suficiente":disponible>=Decimal(cantidad or 0)}
+
+    @staticmethod
+    @transaction.atomic
+    def reserve_commercial(*, context, detalle):
+        """Selecciona lotes FEFO/FIFO y registra la reserva comercial."""
+        _validate_company(context,detalle.reserva,detalle.producto)
+        if detalle.cantidad_reservada:return detalle
+        restante=Decimal(detalle.cantidad_solicitada)
+        lotes=LoteInventario.objects.select_for_update().filter(empresa=context.empresa,producto=detalle.producto,activo=True).exclude(fecha_vencimiento__lt=timezone.localdate()).order_by("fecha_vencimiento","fecha_ingreso","id")
+        # El detalle comercial representa una selección única; si hay varios
+        # lotes, se crean detalles adicionales sin duplicar stock.
+        from comercial.models import DetalleReservaComercial
+        primero=True
+        for lote in lotes:
+            libre=Decimal(lote.cantidad_disponible)-Decimal(lote.cantidad_reservada)
+            tomar=min(max(Decimal(0),libre),restante)
+            if tomar<=0:continue
+            target=detalle if primero else DetalleReservaComercial.objects.create(reserva=detalle.reserva,detalle_pedido=detalle.detalle_pedido,producto=detalle.producto,lote=lote,cantidad_solicitada=detalle.cantidad_solicitada,cantidad_reservada=0)
+            target.lote=lote;target.cantidad_reservada=tomar;target.save(update_fields=["lote","cantidad_reservada"]);lote.cantidad_reservada=F("cantidad_reservada")+tomar;lote.save(update_fields=["cantidad_reservada","actualizado_en"]);restante-=tomar;primero=False
+            if restante<=0:break
+        return detalle
+
+    @staticmethod
+    @transaction.atomic
+    def release_commercial(*,context,reserva):
+        _validate_company(context,reserva)
+        for d in reserva.detalles.select_for_update().select_related("lote"):
+            pendiente=Decimal(d.cantidad_reservada)-Decimal(d.cantidad_consumida)
+            if d.lote_id and pendiente>0:LoteInventario.objects.filter(pk=d.lote_id).update(cantidad_reservada=F("cantidad_reservada")-pendiente)
+        return reserva
+
+    @staticmethod
+    @transaction.atomic
+    def confirm_commercial_outbound(*,context,reserva,referencia):
+        _validate_company(context,reserva)
+        movimientos=[]
+        for d in reserva.detalles.select_for_update().select_related("lote","producto"):
+            cantidad=Decimal(d.cantidad_reservada)-Decimal(d.cantidad_consumida)
+            if cantidad<=0:continue
+            if d.lote_id:LoteInventario.objects.filter(pk=d.lote_id).update(cantidad_reservada=F("cantidad_reservada")-cantidad)
+            movimientos.append(InventoryEngine.apply_movement(context=context,producto=d.producto,lote=d.lote,tipo="salida",cantidad=cantidad,referencia=referencia));d.cantidad_consumida=F("cantidad_consumida")+cantidad;d.save(update_fields=["cantidad_consumida"])
+        return movimientos
+    @staticmethod
     def apply_movement(*, context, producto, tipo, cantidad, lote=None, referencia=""):
         _validate_company(context, producto, lote)
         record, execute = begin(

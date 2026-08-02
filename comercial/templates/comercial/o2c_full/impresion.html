@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<h1>{{ titulo|title }}</h1><table>{% for r in rows %}<tr>{% for c in r %}<td>{{ c }}</td>{% endfor %}</tr>{% endfor %}</table>{% endblock %}
