@@ -63,8 +63,11 @@ def validate_sufficient_balance(balance, quantity):
 
 
 def normalize_idempotency_key(value):
-    value = re.sub(r"\s+", "-", str(value or "").strip().lower())
-    if not value or len(value) > 180:
+    raw = str(value or "")
+    if any(ord(char) < 32 or ord(char) == 127 for char in raw):
+        raise BusinessRuleViolation("La clave idempotente no es valida.")
+    value = re.sub(r"\s+", "-", raw.strip().lower())
+    if not value or len(value) > 180 or ".." in value or not re.fullmatch(r"[a-z0-9][a-z0-9:._/-]*", value):
         raise BusinessRuleViolation("La clave idempotente no es valida.")
     return value
 

@@ -419,3 +419,5 @@ class Factura606(models.Model):
 
     def __str__(self):
         return self.numero_comprobante
+
+from .enterprise_models import *  # noqa: E402,F401,F403

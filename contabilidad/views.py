@@ -22,6 +22,20 @@ from .models import (
 def decimal_cero(valor):
     return valor or Decimal("0.00")
 
+@login_required
+def dashboard_enterprise(request):
+    from conduces.services import obtener_empresa_usuario
+    from contabilidad.models import AsientoContable,CuentaPorPagarEnterprise
+    from tesoreria.models import CuentaBancariaEmpresa
+    from presupuesto.models import Presupuesto as PresupuestoEnterprise
+    from rrhh.models import Empleado
+    from nomina.models import Nomina
+    from activos.models import ActivoFijo
+    from mantenimiento.models import OrdenMantenimiento
+    e=obtener_empresa_usuario(request)
+    kpis={"asientos":AsientoContable.objects.filter(empresa=e).count(),"cxp":CuentaPorPagarEnterprise.objects.filter(empresa=e).aggregate(v=Sum("saldo"))["v"] or 0,"bancos":CuentaBancariaEmpresa.objects.filter(empresa=e).aggregate(v=Sum("saldo"))["v"] or 0,"presupuestos":PresupuestoEnterprise.objects.filter(empresa=e,estado="ACTIVO").count(),"empleados":Empleado.objects.filter(empresa=e,estado="ACTIVO").count(),"nominas":Nomina.objects.filter(empresa=e).count(),"activos":ActivoFijo.objects.filter(empresa=e,estado="ACTIVO").count(),"mantenimientos":OrdenMantenimiento.objects.filter(empresa=e).exclude(estado__in=["COMPLETADA","CANCELADA"]).count()}
+    return render(request,"contabilidad/dashboard_enterprise.html",{"empresa":e,"kpis":kpis})
+
 
 @login_required
 def dashboard_contabilidad(request):

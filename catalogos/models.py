@@ -54,6 +54,33 @@ class MonedaEmpresa(models.Model):
         ]
 
 
+class TasaCambio(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    moneda = models.ForeignKey(MonedaEmpresa, on_delete=models.PROTECT, related_name="tasas")
+    tasa = models.DecimalField(max_digits=18, decimal_places=6)
+    vigente_desde = models.DateField()
+    vigente_hasta = models.DateField(null=True, blank=True)
+    activa = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["empresa", "moneda", "vigente_desde"], name="cat_tasa_emp_mon_fecha_uniq"),
+            models.CheckConstraint(condition=Q(tasa__gt=0), name="cat_tasa_cambio_positiva"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.moneda_id and self.moneda.empresa_id != self.empresa_id:
+            errors["moneda"] = "La moneda pertenece a otra empresa."
+        if self.moneda_id and self.moneda.es_base and self.tasa != Decimal("1"):
+            errors["tasa"] = "La moneda base debe usar tasa 1."
+        if self.vigente_hasta and self.vigente_hasta < self.vigente_desde:
+            errors["vigente_hasta"] = "La vigencia final no puede ser anterior."
+        if errors:
+            raise ValidationError(errors)
+
+
 class CondicionPago(AuditadoEmpresa):
     class Tipo(models.TextChoices):
         CONTADO = "CONTADO", "Contado"

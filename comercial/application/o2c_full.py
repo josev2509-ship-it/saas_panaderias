@@ -136,25 +136,29 @@ def actualizar_aging_cuenta(*,context,cuenta_id):
     if c.saldo>0 and c.fecha_vencimiento<timezone.localdate():c.estado="EN_MORA"
     c.save();return c
 @transaction.atomic
-def registrar_cobro(*,context,cliente,moneda,monto,metodo,fecha=None,referencia=""):
+def registrar_cobro(*,context,cliente,moneda,monto,metodo,fecha=None,referencia="",tasa_cambio=None,dimensiones=None):
     _perm(context,"registrar_cobro");
     if cliente.empresa_id!=context.empresa.pk or moneda.empresa_id!=context.empresa.pk:raise ValidationError("Datos de otra empresa.")
-    o=ReciboCobro.objects.create(empresa=context.empresa,numero=_num(context,"REC"),cliente=cliente,moneda=moneda,fecha=fecha or timezone.localdate(),metodo=metodo,monto=monto,referencia=referencia,estado="REGISTRADO",creado_por=context.usuario);_audit(context,o,"Cobro registrado.");_emit(context,CobroRegistrado,o,"registrado");return o
+    tasa=Decimal(str(tasa_cambio if tasa_cambio is not None else (1 if moneda.es_base else 0)))
+    if tasa<=0:raise ValidationError("La tasa del cobro debe ser positiva.")
+    o=ReciboCobro.objects.create(empresa=context.empresa,numero=_num(context,"REC"),cliente=cliente,moneda=moneda,tasa_cambio=tasa,dimensiones=dimensiones or {},fecha=fecha or timezone.localdate(),metodo=metodo,monto=monto,referencia=referencia,estado="REGISTRADO",creado_por=context.usuario);_audit(context,o,"Cobro registrado.");_emit(context,CobroRegistrado,o,"registrado");return o
 @transaction.atomic
-def aplicar_cobro(*,context,recibo_id,cuenta_id,monto):
-    r=ReciboCobro.objects.select_for_update().get(pk=recibo_id,empresa=context.empresa);c=CuentaPorCobrar.objects.select_for_update().get(pk=cuenta_id,empresa=context.empresa,cliente=r.cliente,moneda=r.moneda);m=Decimal(monto)
-    if m<=0 or m>c.saldo or r.monto_aplicado+m>r.monto:raise ValidationError("Aplicación de cobro inválida.")
-    anterior=c.saldo;c.saldo-=m;c.estado="COBRADA" if c.saldo==0 else "PARCIAL";c.save();AplicacionCobro.objects.create(recibo=r,cuenta=c,monto=m);MovimientoCxC.objects.create(cuenta=c,tipo="COBRO",monto=m,saldo_anterior=anterior,saldo_posterior=c.saldo,referencia=r.numero);r.monto_aplicado+=m;r.estado="APLICADO" if r.monto_aplicado==r.monto else "PARCIALMENTE_APLICADO";r.save();c.factura.estado="COBRADA" if c.saldo==0 else "PARCIALMENTE_COBRADA";c.factura.save();_audit(context,r,"Cobro aplicado.");_emit(context,CobroAplicado,r,f"aplicado-{c.pk}",{"cuenta_id":c.pk,"monto":str(m)});return c
+def aplicar_cobro(*,context,recibo_id,cuenta_id,monto,monto_cuenta=None):
+    r=ReciboCobro.objects.select_for_update().get(pk=recibo_id,empresa=context.empresa);c=CuentaPorCobrar.objects.select_for_update().select_related("factura").get(pk=cuenta_id,empresa=context.empresa,cliente=r.cliente);cobrado=Decimal(str(monto));aplicado=Decimal(str(monto_cuenta if monto_cuenta is not None else monto));tf=Decimal(str(c.factura.tasa_cambio));tc=Decimal(str(r.tasa_cambio));diferencia=(cobrado*tc-aplicado*tf).quantize(Decimal("0.01"))
+    if cobrado<=0 or aplicado<=0 or aplicado>c.saldo or r.monto_aplicado+cobrado>r.monto:raise ValidationError("Aplicación de cobro inválida.")
+    anterior=c.saldo;c.saldo-=aplicado;c.estado="COBRADA" if c.saldo==0 else "PARCIAL";c.save();AplicacionCobro.objects.create(recibo=r,cuenta=c,monto=aplicado,monto_moneda_cobro=cobrado,tasa_factura=tf,tasa_cobro=tc,diferencia_cambiaria=diferencia);MovimientoCxC.objects.create(cuenta=c,tipo="COBRO",monto=aplicado,saldo_anterior=anterior,saldo_posterior=c.saldo,referencia=r.numero);r.monto_aplicado+=cobrado;r.estado="APLICADO" if r.monto_aplicado==r.monto else "PARCIALMENTE_APLICADO";r.save();c.factura.estado="COBRADA" if c.saldo==0 else "PARCIALMENTE_COBRADA";c.factura.save();_audit(context,r,"Cobro aplicado.");_emit(context,CobroAplicado,r,f"aplicado-{c.pk}",{"cuenta_id":c.pk,"monto_cuenta":str(aplicado),"monto_cobro":str(cobrado),"tasa_factura":str(tf),"tasa_cobro":str(tc),"diferencia_cambiaria":str(diferencia)});return c
 
 @transaction.atomic
-def solicitar_factoring(*,context,cuenta_id,factor,porcentaje):
-    _perm(context,"gestionar_factoring_o2c");c=CuentaPorCobrar.objects.get(pk=cuenta_id,empresa=context.empresa);o=CesionFactoring.objects.create(empresa=context.empresa,numero=_num(context,"FACT"),cuenta=c,factor=factor,porcentaje_anticipo=porcentaje,monto_cedido=c.saldo,estado="SOLICITADA",creado_por=context.usuario);_audit(context,o,"Cesión factoring solicitada.");_emit(context,CesionFactoringSolicitada,o,"solicitada");return o
+def solicitar_factoring(*,context,cuenta_id,factor,porcentaje,monto=None):
+    _perm(context,"gestionar_factoring_o2c");c=CuentaPorCobrar.objects.select_related("factura").get(pk=cuenta_id,empresa=context.empresa);cedido=Decimal(str(monto if monto is not None else c.saldo))
+    if cedido<=0 or cedido>c.saldo:raise ValidationError("Monto de factoring inválido.")
+    o=CesionFactoring.objects.create(empresa=context.empresa,numero=_num(context,"FACT"),cuenta=c,factor=factor,porcentaje_anticipo=porcentaje,monto_cedido=cedido,moneda=c.moneda,tasa_cambio=c.factura.tasa_cambio,dimensiones=c.factura.dimensiones,estado="SOLICITADA",creado_por=context.usuario);_audit(context,o,"Cesión factoring solicitada.");_emit(context,CesionFactoringSolicitada,o,"solicitada");return o
 
 @transaction.atomic
 def emitir_nota_credito(*,context,factura_id,monto,motivo,ncf=""):
     f=FacturaVenta.objects.select_for_update().get(pk=factura_id,empresa=context.empresa);m=Decimal(monto)
     if m<=0 or m>f.cuenta_cobrar.saldo:raise ValidationError("Monto de nota inválido.")
-    n=NotaCreditoVenta.objects.create(empresa=context.empresa,numero=_num(context,"NC"),factura=f,motivo=motivo,ncf=ncf,estado="EMITIDA",total=m,creado_por=context.usuario);DetalleNotaCreditoVenta.objects.create(nota=n,descripcion=motivo,cantidad=1,monto=m);c=f.cuenta_cobrar;anterior=c.saldo;c.saldo-=m;c.estado="COBRADA" if c.saldo==0 else "PARCIAL";c.save();MovimientoCxC.objects.create(cuenta=c,tipo="NOTA_CREDITO",monto=m,saldo_anterior=anterior,saldo_posterior=c.saldo,referencia=n.numero);f.estado="NOTA_CREDITO_TOTAL" if c.saldo==0 else "NOTA_CREDITO_PARCIAL";f.save();_audit(context,n,"Nota de crédito emitida.");_emit(context,NotaCreditoEmitida,n,"emitida");return n
+    n=NotaCreditoVenta.objects.create(empresa=context.empresa,numero=_num(context,"NC"),factura=f,moneda=f.moneda,tasa_cambio=f.tasa_cambio,dimensiones=f.dimensiones,motivo=motivo,ncf=ncf,estado="EMITIDA",total=m,creado_por=context.usuario);DetalleNotaCreditoVenta.objects.create(nota=n,descripcion=motivo,cantidad=1,monto=m);c=f.cuenta_cobrar;anterior=c.saldo;c.saldo-=m;c.estado="COBRADA" if c.saldo==0 else "PARCIAL";c.save();MovimientoCxC.objects.create(cuenta=c,tipo="NOTA_CREDITO",monto=m,saldo_anterior=anterior,saldo_posterior=c.saldo,referencia=n.numero);f.estado="NOTA_CREDITO_TOTAL" if c.saldo==0 else "NOTA_CREDITO_PARCIAL";f.save();_audit(context,n,"Nota de crédito emitida.");_emit(context,NotaCreditoEmitida,n,"emitida");return n
 
 @transaction.atomic
 def avanzar_factoring(*,context,pk,estado,monto=0):

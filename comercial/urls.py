@@ -6,10 +6,27 @@ from . import configuracion_views
 from . import crm_views
 from . import o2c_views
 from . import o2c_full_views
+from . import financial_views
 
 app_name = "comercial"
 
 urlpatterns = [
+    path("o2c/finanzas/facturas/<int:pk>/emitir/", financial_views.factura_emitir, name="fin_factura_emitir"),
+    path("o2c/finanzas/facturas/<int:pk>/contabilizar/", financial_views.factura_contabilizar, name="fin_factura_contabilizar"),
+    path("o2c/finanzas/facturas/<int:pk>/nota-credito/", financial_views.nota_credito, name="fin_nota_credito"),
+    path("o2c/finanzas/facturas/<int:pk>/nota-debito/", financial_views.nota_debito, name="fin_nota_debito"),
+    path("o2c/finanzas/facturas/<int:pk>/anular/", financial_views.factura_anular, name="fin_factura_anular"),
+    path("o2c/finanzas/cobros/registrar/", financial_views.cobro_registrar, name="fin_cobro_registrar"),
+    path("o2c/finanzas/cobros/<int:pk>/aplicar/", financial_views.cobro_aplicar, name="fin_cobro_aplicar"),
+    path("o2c/finanzas/cobros/<int:pk>/integrar/", financial_views.cobro_integrar, name="fin_cobro_integrar"),
+    path("o2c/finanzas/cobros/<int:pk>/revertir/", financial_views.cobro_revertir, name="fin_cobro_revertir"),
+    path("o2c/finanzas/factoring/solicitar/", financial_views.factoring_solicitar, name="fin_factoring_solicitar"),
+    path("o2c/finanzas/factoring/<int:pk>/desembolsar/", financial_views.factoring_desembolsar, name="fin_factoring_desembolsar"),
+    path("o2c/finanzas/factoring/<int:pk>/aprobar/", financial_views.factoring_aprobar, name="fin_factoring_aprobar"),
+    path("o2c/finanzas/conciliaciones/<int:pk>/aplicar/", financial_views.conciliacion_aplicar, name="fin_conciliacion_aplicar"),
+    path("o2c/finanzas/conciliaciones/lineas/<int:pk>/revertir/", financial_views.conciliacion_revertir, name="fin_conciliacion_revertir"),
+    path("o2c/finanzas/exportar/<str:tipo>/<str:formato>/", financial_views.exportacion_financiera, name="fin_exportar"),
+    path("o2c/finanzas/facturas/<int:pk>/reintentar/", financial_views.reintentar_integracion, name="fin_reintentar"),
     path("o2c/",o2c_full_views.dashboard,name="o2c_full_dashboard"),path("o2c/<str:tipo>/",o2c_full_views.listado,name="o2c_full_lista"),
     path("o2c/pedido/<int:pk>/reservar/",o2c_full_views.pedido_reservar,name="o2c_pedido_reservar"),path("o2c/reserva/<int:pk>/preparar/",o2c_full_views.reserva_preparar,name="o2c_reserva_preparar"),path("o2c/preparacion/<int:pk>/validar/",o2c_full_views.preparacion_validar,name="o2c_preparacion_validar"),path("o2c/picking/<int:pk>/completar/",o2c_full_views.picking_completar,name="o2c_picking_completar"),path("o2c/packing/<int:pk>/despachar/",o2c_full_views.packing_despachar,name="o2c_packing_despachar"),path("o2c/despacho/<int:pk>/conduce/",o2c_full_views.despacho_conduce,name="o2c_despacho_conduce"),path("o2c/conduce/<int:pk>/entregar/",o2c_full_views.conduce_entregar,name="o2c_conduce_entregar"),path("o2c/entrega/<int:pk>/facturar/",o2c_full_views.entrega_facturar,name="o2c_entrega_facturar"),path("o2c/cxc/<int:pk>/cobrar/",o2c_full_views.cobrar,name="o2c_cobrar"),path("o2c/exportar/<str:tipo>/<str:formato>/",o2c_full_views.exportar,name="o2c_full_exportar"),
     path("o2c/",o2c_views.dashboard,name="o2c_dashboard"),path("clientes/<int:pk>/360/",o2c_views.cliente_360,name="cliente_360"),path("clientes/<int:pk>/360/<str:accion>/",o2c_views.cliente_accion,name="cliente_360_accion"),

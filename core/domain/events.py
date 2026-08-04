@@ -19,7 +19,18 @@ class DomainEvent:
         return self.__class__.__name__
 
     def serializable_payload(self):
-        return asdict(self)
+        data = asdict(self)
+        payload = data.get("payload") or {}
+        data.update({
+            "schema_version": payload.get("schema_version", 1),
+            "aggregate_type": self.agregado_tipo,
+            "aggregate_id": str(self.agregado_id),
+            "actor_id": self.usuario_id,
+            "correlation_id": payload.get("correlation_id", self.clave_idempotente),
+            "causation_id": payload.get("causation_id", ""),
+            "timestamp": self.fecha,
+        })
+        return data
 
 
 class PedidoAprobado(DomainEvent): pass
