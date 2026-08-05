@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Centro de actividad{% endblock %}{% block content %}
+<nav class="ds-breadcrumb" aria-label="Breadcrumb"><a href="{% url 'core:workspace_home' %}">Mi Workspace</a><span>/</span><span aria-current="page">Actividad</span></nav><header class="ds-page-header"><div><h1>Centro de actividad</h1><p>Navegación reciente sin metadata sensible.</p></div></header>
+<form class="ds-filter" method="get"><label>Buscar<input name="q" value="{{ request.GET.q }}"></label><label>Módulo<select name="modulo"><option value="">Todos</option>{% for item in modulos %}<option{% if request.GET.modulo == item %} selected{% endif %}>{{ item }}</option>{% endfor %}</select></label><label>Fecha<input type="date" name="fecha" value="{{ request.GET.fecha }}"></label><button class="ds-btn">Filtrar</button></form>
+<ol class="ds-timeline">{% for item in recientes %}<li><a href="{{ item.url }}"><strong>{{ item.etiqueta }}</strong></a><small>{{ item.modulo }} · {{ item.visitado }}</small></li>{% empty %}<li>Sin actividad reciente.</li>{% endfor %}</ol>
+{% include "components/pagination.html" with page=recientes %}{% endblock %}

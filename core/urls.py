@@ -1,10 +1,18 @@
 from django.urls import path
 
 from . import views
+from . import experience_views
 
 app_name = "core"
 
 urlpatterns = [
+    path("workspace/", experience_views.workspace_home, name="workspace_home"),
+    path("workspace/<str:dominio>/", experience_views.workspace, name="workspace"),
+    path("buscar/", experience_views.busqueda_global, name="busqueda_global"),
+    path("favoritos/toggle/", experience_views.favorito_toggle, name="favorito_toggle"),
+    path("alertas/", experience_views.alertas, name="alertas"),
+    path("alertas/<int:pk>/<str:accion>/", experience_views.alerta_accion, name="alerta_accion"),
+    path("actividad/", experience_views.actividad, name="actividad"),
     path("", views.motor_dashboard, name="motor_dashboard"),
     path("design-system/", views.design_system, name="design_system"),
     path("idempotencia/", views.idempotencias_lista, name="idempotencias"),

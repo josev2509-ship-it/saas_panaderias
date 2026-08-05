@@ -25,6 +25,25 @@
     document.querySelectorAll(".app-menu a").forEach(link => link.hidden = Boolean(query) && !link.textContent.toLocaleLowerCase("es").includes(query));
     document.querySelectorAll(".ds-nav-group").forEach(group => { const visible = Boolean(group.querySelector("a:not([hidden])")); group.hidden = Boolean(query) && !visible; if (query && visible) group.open = true; });
   });
+  document.querySelector(".ds-global-search input")?.addEventListener("keydown", event => {
+    if (event.key === "Enter" && event.target.value.trim().length >= 2) {
+      event.preventDefault();
+      window.location.assign(`/core/buscar/?q=${encodeURIComponent(event.target.value.trim())}`);
+    }
+  });
+  const favoriteButton = document.createElement("button");
+  favoriteButton.type = "button"; favoriteButton.className = "ds-favorite-fab";
+  favoriteButton.title = "Agregar o quitar esta pantalla de favoritos";
+  favoriteButton.setAttribute("aria-label", favoriteButton.title); favoriteButton.textContent = "☆ Favorito";
+  document.querySelector(".ds-main")?.prepend(favoriteButton);
+  favoriteButton.addEventListener("click", async () => {
+    const csrf = document.cookie.split("; ").find(x => x.startsWith("csrftoken="))?.split("=")[1];
+    const data = new URLSearchParams({url: location.pathname, etiqueta: document.title, tipo: "pantalla"});
+    const response = await fetch("/core/favoritos/toggle/", {method:"POST", headers:{"X-CSRFToken":csrf || "", "X-Requested-With":"XMLHttpRequest"}, body:data});
+    if (!response.ok) return;
+    const state = await response.json(); favoriteButton.textContent = state.favorite ? "★ Favorito" : "☆ Favorito";
+    favoriteButton.setAttribute("aria-pressed", String(state.favorite));
+  });
   document.querySelectorAll("[data-ds-menu]").forEach(trigger => {
     const panel = document.getElementById(trigger.getAttribute("aria-controls"));
     trigger.addEventListener("click", () => { panel.hidden = !panel.hidden; trigger.setAttribute("aria-expanded", String(!panel.hidden)); });

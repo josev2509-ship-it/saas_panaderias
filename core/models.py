@@ -129,3 +129,48 @@ class ConciliacionInventario(models.Model):
             ("manage_document_sequences", "Puede administrar secuencias documentales"),
             ("view_transaction_engine", "Puede ver el motor transaccional"),
         ]
+
+
+class FavoritoNavegacion(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tipo = models.CharField(max_length=30, default="pantalla")
+    etiqueta = models.CharField(max_length=120)
+    url = models.CharField(max_length=500)
+    referencia = models.CharField(max_length=100, blank=True)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-creado"]
+        constraints = [models.UniqueConstraint(fields=["empresa", "usuario", "url"], name="core_favorito_usuario_empresa_url_uniq")]
+
+
+class NavegacionReciente(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    modulo = models.CharField(max_length=40)
+    etiqueta = models.CharField(max_length=120)
+    url = models.CharField(max_length=500)
+    visitado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-visitado"]
+        constraints = [models.UniqueConstraint(fields=["empresa", "usuario", "url"], name="core_reciente_usuario_empresa_url_uniq")]
+
+
+class AlertaExperiencia(models.Model):
+    PRIORIDADES = (("CRITICA", "Crítica"), ("ALTA", "Alta"), ("MEDIA", "Media"), ("BAJA", "Baja"))
+    ESTADOS = (("NUEVA", "Nueva"), ("LEIDA", "Leída"), ("POSPUESTA", "Pospuesta"), ("RESUELTA", "Resuelta"))
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    categoria = models.CharField(max_length=30)
+    prioridad = models.CharField(max_length=10, choices=PRIORIDADES, default="MEDIA")
+    titulo = models.CharField(max_length=160)
+    descripcion = models.TextField(blank=True)
+    url_origen = models.CharField(max_length=500, blank=True)
+    estado = models.CharField(max_length=12, choices=ESTADOS, default="NUEVA")
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-creado"]
