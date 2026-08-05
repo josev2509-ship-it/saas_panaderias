@@ -43,6 +43,15 @@ WORKSPACES = {
 QUICK_ACTIONS = {"DIRECTOR": (("Reportes", "comercial:dashboard"),), "COMPRADOR": (("Nueva solicitud", "compras:solicitud_crear"),), "COMERCIAL": (("Nuevo prospecto", "comercial:prospecto_crear"), ("Nuevo cliente", "comercial:cliente_crear"), ("Nueva cotización", "comercial:cotizacion_crear"), ("Nuevo pedido", "comercial:pedido_crear")), "CONTABILIDAD": (("Finanzas", "contabilidad:dashboard_enterprise"), ("Registrar cobro", "comercial:fin_cobro_registrar")), "PRODUCCION": (("Órdenes", "inventario:ordenes_lista"),), "CHOFER": (("Conduces", "buscar_conduces"),), "AUDITOR": (("Actividad", "core:actividad"),), "CONSULTA": ()}
 
 
+ENTERPRISE_360 = {
+    "cliente": (Cliente, "comercial.view_cliente", "nombre_comercial", ["Resumen", "Contactos", "Direcciones", "Cotizaciones", "Pedidos", "Entregas", "Facturas", "Cobros", "Crédito", "Documentos", "Actividad", "Auditoría"], []),
+    "proveedor": (Proveedor, "compras.view_proveedor", "razon_social", ["Resumen", "Contactos", "Direcciones", "Solicitudes", "RFQ", "Ofertas", "Órdenes", "Recepciones", "Facturas", "Pagos", "Retenciones", "Compensaciones", "Documentos", "Actividad", "Auditoría"], []),
+    "pedido": (Pedido, "comercial.view_pedido", "numero", ["Resumen", "Líneas", "Programación", "Reserva", "Preparación", "Despacho", "Entrega", "Facturación", "Cobros", "Documentos", "Actividad", "Auditoría"], ["Pedido", "Aprobación", "Reserva", "Picking", "Packing", "Despacho", "Entrega", "Factura", "Cobro"]),
+    "orden": (OrdenCompraEnterprise, "compras.view_ordencompraenterprise", "numero", ["Resumen", "Líneas", "Adjudicación", "Recepciones", "Devoluciones", "Facturas", "Pagos", "Retenciones", "Compensaciones", "Documentos", "Actividad", "Auditoría"], ["Solicitud", "Expediente", "RFQ", "Comparativo", "Adjudicación", "Orden", "Recepción", "Factura", "Pago", "Conciliación"]),
+    "factura-cliente": (FacturaVenta, "comercial.view_facturaventa", "numero", ["Resumen", "Líneas", "CxC", "Cobros", "Notas", "Factoring", "Contabilidad", "Documentos", "Actividad", "Auditoría"], []),
+    "factura-proveedor": (FacturaProveedor, "contabilidad.view_facturaproveedor", "numero", ["Resumen", "Líneas", "Orden", "Recepción", "CxP", "Pagos", "Notas", "Anticipos", "Retenciones", "Compensaciones", "Contabilidad", "Documentos", "Actividad", "Auditoría"], []),
+}
+
 @login_required
 def workspace_home(request):
     empresa = _empresa(request)
@@ -120,6 +129,20 @@ def actividad(request):
     if request.GET.get("fecha"): qs = qs.filter(visitado__date=request.GET["fecha"])
     page = Paginator(qs, 20).get_page(request.GET.get("page"))
     return render(request, "core/experience/activity.html", {"recientes": page, "modulos": NavegacionReciente.objects.filter(empresa=_empresa(request), usuario=request.user).values_list("modulo", flat=True).distinct()})
+
+
+@login_required
+def enterprise_360(request, tipo, pk):
+    if tipo not in ENTERPRISE_360: return HttpResponseBadRequest("Vista 360 inválida")
+    model, permission, label_field, tabs, timeline = ENTERPRISE_360[tipo]
+    if not request.user.has_perm(permission):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
+    empresa = _empresa(request)
+    objeto = get_object_or_404(model, pk=pk, empresa=empresa)
+    _touch(request, empresa, "360", f"{tipo}: {getattr(objeto, label_field)}")
+    kpis = [("Estado", getattr(objeto, "estado", "Disponible")), ("Total", getattr(objeto, "total", "—")), ("Referencia", getattr(objeto, label_field))]
+    return render(request, "core/experience/enterprise_360.html", {"empresa": empresa, "objeto": objeto, "tipo": tipo, "titulo_360": getattr(objeto, label_field), "tabs_360": tabs, "timeline_360": timeline, "kpis_360": kpis})
 
 
 @require_POST

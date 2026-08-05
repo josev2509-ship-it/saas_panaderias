@@ -13,6 +13,7 @@ urlpatterns = [
     path("alertas/", experience_views.alertas, name="alertas"),
     path("alertas/<int:pk>/<str:accion>/", experience_views.alerta_accion, name="alerta_accion"),
     path("actividad/", experience_views.actividad, name="actividad"),
+    path("360/<str:tipo>/<int:pk>/", experience_views.enterprise_360, name="enterprise_360"),
     path("", views.motor_dashboard, name="motor_dashboard"),
     path("design-system/", views.design_system, name="design_system"),
     path("idempotencia/", views.idempotencias_lista, name="idempotencias"),
