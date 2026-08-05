@@ -44,6 +44,31 @@
     const state = await response.json(); favoriteButton.textContent = state.favorite ? "★ Favorito" : "☆ Favorito";
     favoriteButton.setAttribute("aria-pressed", String(state.favorite));
   });
+  const uxScope = [document.querySelector(".ds-user")?.dataset.userId, document.querySelector(".ds-company")?.dataset.companyId, location.pathname].join("|");
+  document.querySelectorAll("table").forEach((table, tableIndex) => {
+    table.classList.add("ds-enterprise-table"); table.parentElement?.classList.add("ds-enterprise-table-wrap");
+    table.querySelectorAll("th").forEach(th => { th.tabIndex = 0; th.setAttribute("scope", "col"); });
+    if (!table.tHead || table.dataset.enterpriseReady) return; table.dataset.enterpriseReady = "true";
+    const toolbar = document.createElement("div"); toolbar.className = "ds-table-toolbar"; toolbar.setAttribute("role", "toolbar");
+    const search = document.createElement("input"); search.type = "search"; search.placeholder = "Buscar en la tabla"; search.setAttribute("aria-label", "Buscar en la tabla");
+    search.addEventListener("input", () => table.querySelectorAll("tbody tr").forEach(row => row.hidden = !row.textContent.toLocaleLowerCase("es").includes(search.value.toLocaleLowerCase("es"))));
+    const key = `sastre-private-views|${uxScope}|${tableIndex}`;
+    const readViews = () => { try { return JSON.parse(localStorage.getItem(key)) || {views:[], defaultId:null}; } catch { return {views:[], defaultId:null}; } };
+    const writeViews = state => localStorage.setItem(key, JSON.stringify(state));
+    const selector = document.createElement("select"); selector.setAttribute("aria-label", "Vistas guardadas privadas");
+    const renderViews = selected => { const state=readViews(); selector.replaceChildren(new Option("Vistas privadas", ""), ...state.views.map(view => new Option(`${view.id===state.defaultId ? "★ " : ""}${view.name}`, view.id))); selector.value=selected || ""; };
+    selector.addEventListener("change", () => { const view=readViews().views.find(item => item.id===selector.value); if(view){search.value=view.query;search.dispatchEvent(new Event("input"));} });
+    const save = document.createElement("button"); save.type="button"; save.className="ds-btn ds-btn--secondary ds-btn--sm"; save.textContent="Guardar vista";
+    save.addEventListener("click", () => { const name=window.prompt("Nombre de la vista privada"); if(!name?.trim()) return; const state=readViews(); const id=String(Date.now()); state.views.push({id,name:name.trim(),query:search.value}); writeViews(state); renderViews(id); });
+    const rename = document.createElement("button"); rename.type="button"; rename.className="ds-btn ds-btn--tertiary ds-btn--sm"; rename.textContent="Renombrar"; rename.addEventListener("click",()=>{const state=readViews(),view=state.views.find(item=>item.id===selector.value);if(!view)return;const name=window.prompt("Nuevo nombre",view.name);if(!name?.trim())return;view.name=name.trim();writeViews(state);renderViews(view.id);});
+    const makeDefault = document.createElement("button"); makeDefault.type="button"; makeDefault.className="ds-btn ds-btn--tertiary ds-btn--sm"; makeDefault.textContent="Predeterminada"; makeDefault.addEventListener("click",()=>{if(!selector.value)return;const state=readViews();state.defaultId=selector.value;writeViews(state);renderViews(selector.value);});
+    const remove = document.createElement("button"); remove.type="button"; remove.className="ds-btn ds-btn--tertiary ds-btn--sm"; remove.textContent="Eliminar vista"; remove.addEventListener("click",()=>{if(!selector.value)return;const state=readViews();state.views=state.views.filter(item=>item.id!==selector.value);if(state.defaultId===selector.value)state.defaultId=null;writeViews(state);renderViews();});
+    const clear = document.createElement("button"); clear.type="button"; clear.className="ds-btn ds-btn--tertiary ds-btn--sm"; clear.textContent="Limpiar filtro"; clear.addEventListener("click",()=>{search.value="";search.dispatchEvent(new Event("input"));selector.value="";});
+    renderViews(); const initial=readViews(); if(initial.defaultId){selector.value=initial.defaultId;selector.dispatchEvent(new Event("change"));}
+    toolbar.append(search, selector, save, rename, makeDefault, remove, clear); table.parentElement?.before(toolbar);
+  });
+  document.querySelectorAll("form").forEach(form => { form.classList.add("ds-enterprise-form"); form.querySelectorAll("[required]").forEach(field => { const label = form.querySelector(`label[for="${field.id}"]`); if(label && !label.querySelector(".ds-required")){const mark=document.createElement("span");mark.className="ds-required";mark.textContent=" *";mark.setAttribute("aria-hidden","true");label.append(mark);} }); });
+  document.querySelectorAll(".ds-messages .ds-alert").forEach(message => { message.classList.add("ds-toast"); message.setAttribute("role", message.classList.contains("ds-alert--danger") ? "alert" : "status"); });
   document.querySelectorAll("[data-ds-menu]").forEach(trigger => {
     const panel = document.getElementById(trigger.getAttribute("aria-controls"));
     trigger.addEventListener("click", () => { panel.hidden = !panel.hidden; trigger.setAttribute("aria-expanded", String(!panel.hidden)); });
