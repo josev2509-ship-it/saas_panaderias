@@ -21,5 +21,7 @@
   --ds-shadow-lg:0 18px 42px rgba(15,23,42,.12);
   --ds-speed-fast:150ms;--ds-speed:220ms;--ds-sidebar:272px;
   --ds-content:1560px;--ds-topbar:68px;--ds-z-sidebar:900;
-  --ds-z-overlay:850;--ds-z-modal:1000;
+  --ds-z-overlay:850;--ds-z-modal:1000;--ds-space-12:3rem;
+  --ds-shadow-card:0 6px 20px rgba(15,23,42,.07);--ds-shadow-dropdown:0 14px 36px rgba(15,23,42,.14);
+  --ds-shadow-modal:0 24px 64px rgba(15,23,42,.2);--ds-sidebar-compact:84px;--ds-touch:44px;
 }

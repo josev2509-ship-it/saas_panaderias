@@ -4,3 +4,6 @@
 @media(min-width:1600px){.ds-main{padding-left:2.5rem;padding-right:2.5rem}}
 @media(max-width:768px){.ds-grid--4,.detail-grid,.detail-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
+@media(max-width:1100px){.ds-grid--6{grid-template-columns:repeat(2,minmax(0,1fr))}.ds-global-search{width:min(32vw,320px)}}
+@media(max-width:768px){body.ds-sidebar-collapsed .app-sidebar{width:min(88vw,320px)}body.ds-sidebar-collapsed .app-content{margin-left:0}.ds-collapse-toggle,.ds-global-search{display:none}.ds-dashboard-grid{grid-template-columns:1fr}.ds-footer{padding:1rem;flex-direction:column}.ds-topbar-right{gap:.35rem}.ds-user-copy{display:none}}
+@media(max-width:480px){.ds-grid--6{grid-template-columns:1fr}.ds-kpi{min-height:auto}.ds-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ds-hero .ds-page-actions{display:grid}.ds-topbar .ds-icon-button{width:40px;height:40px}}

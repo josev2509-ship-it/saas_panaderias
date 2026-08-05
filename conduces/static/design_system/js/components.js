@@ -6,10 +6,24 @@
   document.querySelector(".ds-sidebar-close")?.addEventListener("click", closeNav);
   document.querySelector(".ds-sidebar-overlay")?.addEventListener("click", closeNav);
   document.addEventListener("keydown", e => { if (e.key === "Escape") { closeNav(); document.querySelectorAll(".ds-modal:not([hidden])").forEach(x => x.hidden = true); } });
+  body.classList.toggle("ds-sidebar-collapsed", localStorage.getItem("sastre-sidebar-collapsed") === "true");
+  document.querySelector(".ds-collapse-toggle")?.addEventListener("click", () => {
+    body.classList.toggle("ds-sidebar-collapsed");
+    localStorage.setItem("sastre-sidebar-collapsed", String(body.classList.contains("ds-sidebar-collapsed")));
+  });
+  document.querySelectorAll(".app-menu a").forEach(link => {
+    if (link.pathname === window.location.pathname) link.setAttribute("aria-current", "page");
+  });
   document.querySelectorAll(".ds-nav-group").forEach((group, index) => {
-    const key = `sastre-nav-${index}`;
-    if (sessionStorage.getItem(key) === "open") group.open = true;
-    group.addEventListener("toggle", () => sessionStorage.setItem(key, group.open ? "open" : "closed"));
+    const key = `sastre-nav-${group.dataset.group || index}`;
+    const hasActive = Boolean(group.querySelector('[aria-current="page"]'));
+    group.open = hasActive || localStorage.getItem(key) === "open";
+    group.addEventListener("toggle", () => localStorage.setItem(key, group.open ? "open" : "closed"));
+  });
+  document.querySelector("[data-menu-search]")?.addEventListener("input", event => {
+    const query = event.target.value.trim().toLocaleLowerCase("es");
+    document.querySelectorAll(".app-menu a").forEach(link => link.hidden = Boolean(query) && !link.textContent.toLocaleLowerCase("es").includes(query));
+    document.querySelectorAll(".ds-nav-group").forEach(group => { const visible = Boolean(group.querySelector("a:not([hidden])")); group.hidden = Boolean(query) && !visible; if (query && visible) group.open = true; });
   });
   document.querySelectorAll("[data-ds-menu]").forEach(trigger => {
     const panel = document.getElementById(trigger.getAttribute("aria-controls"));

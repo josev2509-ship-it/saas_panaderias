@@ -1,0 +1,1 @@
+<article class="ds-alert ds-alert--{{ tone|default:'info' }}"{% if tone == 'danger' %} role="alert"{% endif %}><strong>{{ title }}</strong>{% if text %}<p>{{ text }}</p>{% endif %}{% if href %}<a href="{{ href }}">{{ action|default:"Revisar" }}</a>{% endif %}</article>
