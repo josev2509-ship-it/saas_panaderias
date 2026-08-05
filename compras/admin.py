@@ -6,6 +6,12 @@ from .models import (
     ProveedorLegadoMap, RequisitoDocumentoProveedor, RevisionDocumentoProveedor,
     SolicitudCompra, DetalleSolicitudCompra, HistorialEstadoSolicitudCompra,
     ExpedienteCompra,SolicitudExpedienteCompra,ProcesoRFQ,DetalleRFQ,CriterioEvaluacionRFQ,ReglaParticipacionRFQ,InvitacionProveedorRFQ,HistorialEstadoExpedienteCompra,HistorialEstadoRFQ,
+    OfertaProveedor, LineaOferta, VersionOferta, HistorialOferta, AclaracionOferta,
+    ComparativoCompra, LineaComparativo, EscenarioComparativo, HistorialComparativo,
+    AdjudicacionCompra, DetalleAdjudicacion, HistorialAdjudicacion,
+    OrdenCompraEnterprise, DetalleOrdenCompraEnterprise, VersionOrdenCompra, HistorialOrdenCompra,
+    RecepcionCompra, DetalleRecepcionCompra, InspeccionRecepcion,
+    DevolucionCompra, DetalleDevolucionCompra, WizardSession, WizardStepState, WizardAuditTrail,
 )
 
 
@@ -66,3 +72,14 @@ for model in (CategoriaProveedor,ContactoProveedor,DireccionProveedor,ProductoPr
               ProveedorLegadoMap,RequisitoDocumentoProveedor,
               RevisionDocumentoProveedor,HistorialEstadoProveedor):
     admin.site.register(model,EmpresaScopedAdmin)
+
+for model in (
+    OfertaProveedor, LineaOferta, VersionOferta, HistorialOferta, AclaracionOferta,
+    ComparativoCompra, LineaComparativo, EscenarioComparativo, HistorialComparativo,
+    AdjudicacionCompra, DetalleAdjudicacion, HistorialAdjudicacion,
+    OrdenCompraEnterprise, DetalleOrdenCompraEnterprise, VersionOrdenCompra, HistorialOrdenCompra,
+    RecepcionCompra, DetalleRecepcionCompra, InspeccionRecepcion,
+    DevolucionCompra, DetalleDevolucionCompra,
+    WizardSession, WizardStepState, WizardAuditTrail,
+):
+    admin.site.register(model, EmpresaScopedAdmin if hasattr(model, "empresa") else admin.ModelAdmin)

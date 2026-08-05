@@ -10,3 +10,5 @@ class ComprasConfig(AppConfig):
         from workflow.api import workflow_service
         from .domain.solicitudes.workflow_adapter import SolicitudCompraWorkflowAdapter
         workflow_service.register_adapter("compras.solicitud_compra",SolicitudCompraWorkflowAdapter())
+        from .workflow_adapters import register
+        register()

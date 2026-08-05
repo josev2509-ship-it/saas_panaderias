@@ -8,6 +8,7 @@ from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 from core.application.event_bus import event_bus
 from tesoreria.models import MovimientoTesoreria
+from tesoreria.api import registrar_egreso
 
 from .api import contabilizar_factura_proveedor, contabilizar_pago_proveedor
 from .domain_events import CuentaPorPagarCreada, FacturaProveedorRegistrada, PagoProveedorRegistrado
@@ -31,19 +32,19 @@ def registrar_factura(*, context, factura):
 
 
 @transaction.atomic
-def aplicar_pago(*, context, orden, cuenta_bancaria, monto, referencia):
+def aplicar_pago(*, context, orden, cuenta_bancaria=None, caja=None, monto=0, referencia=""):
     monto = Decimal(str(monto))
     orden = orden.__class__.objects.select_for_update().select_related("solicitud__cuenta").get(pk=orden.pk, empresa=context.empresa)
     cuenta = CuentaPorPagarEnterprise.objects.select_for_update().get(pk=orden.solicitud.cuenta_id, empresa=context.empresa)
-    existente = MovimientoTesoreria.objects.filter(empresa=context.empresa, referencia=referencia, tipo="EGRESO").first()
+    origen_id=f"{orden.pk}:{referencia}"
+    existente = MovimientoTesoreria.objects.filter(empresa=context.empresa, referencia=f"PAGO_PROVEEDOR:{origen_id}", tipo="EGRESO").first()
     if existente:
         return existente
     if monto <= 0 or monto > cuenta.saldo or monto > orden.solicitud.monto:
         raise ValidationError("Monto de pago inválido.")
     anterior = cuenta.saldo
-    movimiento = MovimientoTesoreria.objects.create(empresa=context.empresa, cuenta=cuenta_bancaria, tipo="EGRESO", fecha=timezone.localdate(), monto=monto, referencia=referencia)
-    cuenta_bancaria.saldo -= monto
-    cuenta_bancaria.save(update_fields=["saldo"])
+    movimiento_dto = registrar_egreso(context=context, origen_tipo="PAGO_PROVEEDOR", origen_id=origen_id, fecha=timezone.localdate(), monto=monto, referencia=referencia, cuenta_id=getattr(cuenta_bancaria,"pk",None),caja_id=getattr(caja,"pk",None))
+    movimiento = MovimientoTesoreria.objects.get(pk=movimiento_dto.id, empresa=context.empresa)
     cuenta.saldo -= monto
     cuenta.estado = "PAGADA" if cuenta.saldo == 0 else "PARCIAL"
     cuenta.save(update_fields=["saldo", "estado"])

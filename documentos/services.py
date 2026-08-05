@@ -17,8 +17,15 @@ from comercial.models import (
     CuentaPorCobrar, ReciboCobro, CesionFactoring,
 )
 from inventario.models import OrdenProduccion, PlanProduccion, RecetaProduccion
-from compras.models import CategoriaProveedor, CuentaBancariaProveedor, Proveedor, SolicitudCompra, ExpedienteCompra, ProcesoRFQ, InvitacionProveedorRFQ
-from contabilidad.models import CuentaContable,AsientoContable,CierreContable,FacturaProveedor,CuentaPorPagarEnterprise,OrdenPago
+from compras.models import (
+    AdjudicacionCompra, CategoriaProveedor, ComparativoCompra,
+    CuentaBancariaProveedor, DevolucionCompra, ExpedienteCompra,
+    InvitacionProveedorRFQ, OfertaProveedor, OrdenCompraEnterprise,
+    ProcesoRFQ, Proveedor, RecepcionCompra, SolicitudCompra,
+)
+from contabilidad.models import (AnticipoProveedor,AsientoContable,CierreContable,
+    CuentaContable,CuentaPorPagarEnterprise,FacturaProveedor,NotaCreditoProveedor,
+    NotaDebitoProveedor,OrdenPago,PagoMasivo)
 from tesoreria.models import ConciliacionBancaria
 from presupuesto.models import Presupuesto as PresupuestoEnterprise
 from rrhh.models import Empleado,ContratoEmpleado,SolicitudVacacion,LicenciaEmpleado
@@ -68,6 +75,16 @@ MODELOS_PERMITIDOS = {
     ("compras", "expedientecompra"): ExpedienteCompra,
     ("compras", "procesorfq"): ProcesoRFQ,
     ("compras", "invitacionproveedorrfq"): InvitacionProveedorRFQ,
+    ("compras", "ofertaproveedor"): OfertaProveedor,
+    ("compras", "comparativocompra"): ComparativoCompra,
+    ("compras", "adjudicacioncompra"): AdjudicacionCompra,
+    ("compras", "ordencompraenterprise"): OrdenCompraEnterprise,
+    ("compras", "recepcioncompra"): RecepcionCompra,
+    ("compras", "devolucioncompra"): DevolucionCompra,
+    ("contabilidad", "notacreditoproveedor"): NotaCreditoProveedor,
+    ("contabilidad", "notadebitoproveedor"): NotaDebitoProveedor,
+    ("contabilidad", "anticipoproveedor"): AnticipoProveedor,
+    ("contabilidad", "pagomasivo"): PagoMasivo,
 }
 
 def _emitir_documento_crm(documento,accion,usuario):

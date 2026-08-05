@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import p2p_finance_views, p2p_operational_views, p2p_views, settlements_views, views
 
 app_name="compras"
 urlpatterns=[
@@ -24,10 +24,27 @@ urlpatterns=[
     path("solicitudes/<int:pk>/<str:accion>/",views.solicitud_accion,name="solicitud_accion"),
     path("expedientes/",views.expedientes_lista,name="expedientes_lista"),path("expedientes/<int:pk>/",views.expediente_detalle,name="expediente_detalle"),
     path("rfq/",views.rfq_lista,name="rfq_lista"),path("rfq/<int:pk>/",views.rfq_detalle,name="rfq_detalle"),
-    path("p2p/dashboard/",views.p2p_dashboard,name="p2p_dashboard"),path("p2p/exportar/",views.p2p_exportar,name="p2p_exportar"),
+    path("p2p/dashboard/",p2p_views.dashboard,name="p2p_dashboard"),path("p2p/exportar/",views.p2p_exportar,name="p2p_exportar"),
     path("expedientes/<int:pk>/<str:accion>/",views.expediente_accion,name="expediente_accion"),path("expedientes/<int:expediente_id>/rfq/nueva/",views.rfq_crear_view,name="rfq_crear"),
     path("rfq/<int:pk>/accion/<str:accion>/",views.rfq_accion,name="rfq_accion"),path("invitaciones/<int:pk>/<str:accion>/",views.invitacion_accion,name="invitacion_accion"),
     path("rfq/lineas/<int:pk>/editar/",views.rfq_linea_editar,name="rfq_linea_editar"),
     path("solicitudes/<int:solicitud_id>/crear-expediente/",views.expediente_desde_solicitud_view,name="expediente_desde_solicitud"),path("rfq/<int:pk>/agregar/<str:tipo>/",views.rfq_agregar,name="rfq_agregar"),path("rfq/<int:pk>/extender/",views.rfq_extender_view,name="rfq_extender"),
     path("expedientes/<int:pk>/editar/",views.expediente_editar_view,name="expediente_editar"),path("rfq/<int:pk>/editar/",views.rfq_editar_view,name="rfq_editar"),path("invitaciones/<int:pk>/contacto/",views.invitacion_contacto,name="invitacion_contacto"),
+    path("p2p/exportacion/",p2p_operational_views.exportar,name="p2p_exportacion"),
+    path("p2p/<str:recurso>/",p2p_views.lista,name="p2p_recurso_lista"),path("p2p/<str:recurso>/<int:pk>/",p2p_views.detalle,name="p2p_recurso_detalle"),
+    path("p2p/operar/<str:tipo>/",p2p_operational_views.wizard,name="p2p_wizard"),
+    path("p2p/ofertas/<int:pk>/linea/",p2p_operational_views.linea_oferta,name="p2p_linea_oferta"),
+    path("p2p/accion/<str:recurso>/<int:pk>/<str:accion>/",p2p_operational_views.accion,name="p2p_accion"),
+    path("p2p/wizard-enterprise/iniciar/<str:tipo>/",p2p_operational_views.wizard_enterprise_iniciar,name="p2p_wizard_enterprise_iniciar"),
+    path("p2p/wizard-enterprise/<uuid:sesion_id>/",p2p_operational_views.wizard_enterprise,name="p2p_wizard_enterprise"),
+    path("p2p/finanzas/<str:recurso>/",settlements_views.lista,name="p2p_settlements"),
+    path("p2p/finanzas/compensaciones/crear/",settlements_views.crear_compensacion,name="p2p_compensacion_crear"),path("p2p/finanzas/compensaciones/<int:pk>/<str:accion>/",settlements_views.accion_compensacion,name="p2p_compensacion_accion"),
+    path("p2p/finanzas/anticipos/crear/",settlements_views.crear_anticipo_view,name="p2p_anticipo_crear"),path("p2p/finanzas/anticipos/<int:pk>/<str:accion>/",settlements_views.accion_anticipo,name="p2p_anticipo_accion"),
+    path("p2p/finanzas/retenciones/crear/",settlements_views.crear_retencion,name="p2p_retencion_crear"),path("p2p/finanzas/retenciones/<int:pk>/<str:accion>/",settlements_views.accion_retencion,name="p2p_retencion_accion"),path("p2p/finanzas/certificados/<int:pk>/pdf/",settlements_views.certificado_pdf,name="p2p_certificado_pdf"),
+    path("p2p/cierre/<str:recurso>/",p2p_finance_views.lista,name="p2p_finance_list"),path("p2p/cierre/<str:recurso>/<int:pk>/",p2p_finance_views.detalle,name="p2p_finance_detail"),
+    path("p2p/cierre/notas/crear/",p2p_finance_views.nota_crear,name="p2p_finance_nota_crear"),path("p2p/cierre/notas/<str:tipo>/<int:pk>/<str:accion>/",p2p_finance_views.nota_accion,name="p2p_finance_nota_accion"),
+    path("p2p/cierre/anticipos/crear/",p2p_finance_views.anticipo_crear,name="p2p_finance_anticipo_crear"),path("p2p/cierre/anticipos/<int:pk>/<str:accion>/",p2p_finance_views.anticipo_accion,name="p2p_finance_anticipo_accion"),
+    path("p2p/cierre/retenciones/crear/",p2p_finance_views.retencion_crear,name="p2p_finance_retencion_crear"),path("p2p/cierre/retenciones/<int:pk>/<str:accion>/",p2p_finance_views.retencion_accion,name="p2p_finance_retencion_accion"),
+    path("p2p/cierre/extractos/importar/",p2p_finance_views.extracto_importar,name="p2p_finance_extracto_importar"),path("p2p/cierre/matching/<int:pk>/<str:accion>/",p2p_finance_views.matching_accion,name="p2p_finance_matching_accion"),
+    path("p2p/cierre/documentos/<str:recurso>/<int:pk>/pdf/",p2p_finance_views.pdf,name="p2p_finance_pdf"),path("p2p/cierre/certificados/<int:pk>/pdf/",p2p_finance_views.certificado,name="p2p_finance_certificado"),
 ]

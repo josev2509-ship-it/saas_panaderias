@@ -522,3 +522,5 @@ class HistorialEstadoRFQ(models.Model):
         if self.pk:raise ValidationError("El historial es inmutable.")
         super().save(*a,**k)
     def delete(self,*a,**k):raise ValidationError("El historial no se elimina.")
+
+from .p2p_models import *  # noqa: E402,F401,F403

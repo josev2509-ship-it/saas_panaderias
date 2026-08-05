@@ -117,6 +117,31 @@ def sugerir_coincidencias(*, context, importacion, tolerancia_dias=3):
             sugerencias.append({"linea_id": linea.pk, "movimiento_id": elegido.pk, "tipo": "REFERENCIA" if exacto else "MONTO_FECHA"})
     return sugerencias
 
+def detectar_ambiguedades(*,context,importacion,tolerancia_dias=3):
+    importacion=ImportacionExtractoBancario.objects.get(pk=importacion.pk,empresa=context.empresa);resultado=[]
+    for linea in importacion.lineas.filter(estado="PENDIENTE"):
+        candidatos=list(MovimientoTesoreria.objects.filter(empresa=context.empresa,cuenta=importacion.cuenta,conciliado=False,fecha__range=(linea.fecha-timedelta(days=tolerancia_dias),linea.fecha+timedelta(days=tolerancia_dias)),monto=abs(linea.monto)).order_by("fecha","pk"))
+        if len(candidatos)>1:resultado.append({"linea_id":linea.pk,"candidatos":[{"movimiento_id":x.pk,"fecha":str(x.fecha),"monto":str(x.monto),"referencia":x.referencia} for x in candidatos],"tipo":"AMBIGUO"})
+    return resultado
+
+@transaction.atomic
+def seleccionar_coincidencia_manual(*,context,conciliacion,linea_id,movimiento_id,motivo):
+    if not motivo:raise ValidationError("El motivo de selección manual es obligatorio.")
+    linea=LineaExtractoBancario.objects.select_for_update().get(pk=linea_id,importacion__empresa=context.empresa,importacion__cuenta=conciliacion.cuenta,estado="PENDIENTE");movimiento=MovimientoTesoreria.objects.select_for_update().get(pk=movimiento_id,empresa=context.empresa,cuenta=conciliacion.cuenta,conciliado=False)
+    candidatos=detectar_ambiguedades(context=context,importacion=linea.importacion)
+    permitidos={x["movimiento_id"] for item in candidatos if item["linea_id"]==linea.pk for x in item["candidatos"]}
+    if movimiento.pk not in permitidos:raise ValidationError("El movimiento no es candidato válido para la línea.")
+    resultado=conciliar_linea(context=context,conciliacion=conciliacion,linea_id=linea.pk,movimiento_id=movimiento.pk,tipo="MANUAL")
+    registrar_evento(empresa=context.empresa,usuario=context.usuario,request=context.request,objeto=linea,modulo="tesoreria",accion=EventoAuditoria.Accion.OTRO,descripcion="Coincidencia bancaria ambigua resuelta manualmente.",datos_nuevos={"movimiento_id":movimiento.pk,"motivo":motivo,"correlation_id":context.identificador_solicitud});return resultado
+
+@transaction.atomic
+def reconciliar_linea(*,context,conciliacion,linea_id,movimiento_id,motivo):
+    linea=LineaExtractoBancario.objects.get(pk=linea_id,importacion__empresa=context.empresa)
+    if linea.estado=="CONCILIADA" and linea.movimiento_id==movimiento_id:return linea
+    if linea.estado!="PENDIENTE":raise ValidationError("La línea no está disponible para reconciliar.")
+    resultado=conciliar_linea(context=context,conciliacion=conciliacion,linea_id=linea_id,movimiento_id=movimiento_id,tipo="RECONCILIACION")
+    registrar_evento(empresa=context.empresa,usuario=context.usuario,request=context.request,objeto=resultado,modulo="tesoreria",accion=EventoAuditoria.Accion.OTRO,descripcion="Línea bancaria reconciliada.",datos_nuevos={"motivo":motivo});return resultado
+
 
 @transaction.atomic
 def conciliar_linea(*, context, conciliacion, linea_id, movimiento_id, tipo="MANUAL"):
