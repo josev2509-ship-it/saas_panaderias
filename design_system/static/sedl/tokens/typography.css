@@ -1,0 +1,20 @@
+:root {
+  --sedl-font-sans:Inter,"Segoe UI",Roboto,Arial,sans-serif;--sedl-font-code:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --sedl-type-display-size:3rem;--sedl-type-display-weight:700;--sedl-type-display-line:1.08;--sedl-type-display-track:-.03em;
+  --sedl-type-h1-size:2.25rem;--sedl-type-h1-weight:700;--sedl-type-h1-line:1.15;--sedl-type-h1-track:-.025em;
+  --sedl-type-h2-size:1.75rem;--sedl-type-h2-weight:700;--sedl-type-h2-line:1.2;--sedl-type-h2-track:-.02em;
+  --sedl-type-h3-size:1.375rem;--sedl-type-h3-weight:650;--sedl-type-h3-line:1.3;--sedl-type-h3-track:-.01em;
+  --sedl-type-h4-size:1.125rem;--sedl-type-h4-weight:650;--sedl-type-h4-line:1.35;--sedl-type-h4-track:0;
+  --sedl-type-h5-size:1rem;--sedl-type-h5-weight:650;--sedl-type-h5-line:1.4;--sedl-type-h5-track:0;
+  --sedl-type-body-lg-size:1.125rem;--sedl-type-body-lg-weight:400;--sedl-type-body-lg-line:1.6;--sedl-type-body-lg-track:0;
+  --sedl-type-body-size:1rem;--sedl-type-body-weight:400;--sedl-type-body-line:1.5;--sedl-type-body-track:0;
+  --sedl-type-body-sm-size:.875rem;--sedl-type-body-sm-weight:400;--sedl-type-body-sm-line:1.45;--sedl-type-body-sm-track:0;
+  --sedl-type-label-size:.875rem;--sedl-type-label-weight:600;--sedl-type-label-line:1.3;--sedl-type-label-track:.01em;
+  --sedl-type-caption-size:.75rem;--sedl-type-caption-weight:400;--sedl-type-caption-line:1.4;--sedl-type-caption-track:.01em;
+  --sedl-type-overline-size:.6875rem;--sedl-type-overline-weight:700;--sedl-type-overline-line:1.3;--sedl-type-overline-track:.08em;
+  --sedl-type-code-size:.875rem;--sedl-type-code-weight:400;--sedl-type-code-line:1.5;--sedl-type-code-track:0;
+  --sedl-type-kpi-xs-size:1.25rem;--sedl-type-kpi-xs-weight:700;--sedl-type-kpi-xs-line:1;--sedl-type-kpi-xs-track:-.03em;
+  --sedl-type-kpi-sm-size:1.75rem;--sedl-type-kpi-sm-weight:700;--sedl-type-kpi-sm-line:1;--sedl-type-kpi-sm-track:-.03em;
+  --sedl-type-kpi-md-size:2.5rem;--sedl-type-kpi-md-weight:700;--sedl-type-kpi-md-line:1;--sedl-type-kpi-md-track:-.03em;
+  --sedl-type-kpi-lg-size:3.5rem;--sedl-type-kpi-lg-weight:700;--sedl-type-kpi-lg-line:1;--sedl-type-kpi-lg-track:-.03em;
+}

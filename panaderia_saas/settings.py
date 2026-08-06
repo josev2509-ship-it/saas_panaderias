@@ -15,6 +15,7 @@ SECRET_KEY = os.environ.get(
 )
 
 DEBUG = os.environ.get("DEBUG", "True") == "True"
+SEDL_CATALOG_ENABLED = os.environ.get("SEDL_CATALOG_ENABLED", str(DEBUG)) == "True"
 
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
@@ -32,6 +33,7 @@ CSRF_TRUSTED_ORIGINS = os.environ.get(
 # =========================================================
 
 INSTALLED_APPS = [
+    "design_system.apps.DesignSystemConfig",
     "core.apps.CoreConfig",
     "django.contrib.admin",
     "django.contrib.auth",

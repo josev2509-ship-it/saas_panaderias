@@ -1,0 +1,1 @@
+html{font-family:var(--sedl-font-sans);background:var(--sedl-bg);color:var(--sedl-text)}body{background:var(--sedl-bg);color:var(--sedl-text);font-size:var(--sedl-type-body-size);font-weight:var(--sedl-type-body-weight);line-height:var(--sedl-type-body-line);letter-spacing:var(--sedl-type-body-track)}a{color:var(--sedl-interaction)}code{font-family:var(--sedl-font-code)}

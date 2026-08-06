@@ -1,0 +1,3 @@
+.sedl-hidden{display:none!important}.sedl-block{display:block}.sedl-flex{display:flex}.sedl-grid-display{display:grid}.sedl-grow{flex:1}.sedl-items-center{align-items:center}.sedl-justify-between{justify-content:space-between}.sedl-gap-1{gap:var(--sedl-space-1)}.sedl-gap-2{gap:var(--sedl-space-2)}.sedl-gap-4{gap:var(--sedl-space-4)}.sedl-gap-6{gap:var(--sedl-space-6)}.sedl-text-left{text-align:left}.sedl-text-center{text-align:center}.sedl-text-right{text-align:right}.sedl-truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:767px){.sedl-hide-sm{display:none!important}.sedl-sidebar-layout{grid-template-columns:1fr}.sedl-grid>[class*="sedl-col-"]{grid-column:1/-1}}
+@media(min-width:768px){.sedl-show-sm-only{display:none!important}}

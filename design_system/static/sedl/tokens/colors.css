@@ -1,0 +1,9 @@
+:root {
+  --sedl-primary-50:#eff6ff;--sedl-primary-100:#dbeafe;--sedl-primary-200:#bfdbfe;--sedl-primary-300:#93c5fd;--sedl-primary-400:#60a5fa;--sedl-primary-500:#3b82f6;--sedl-primary-600:#2563eb;--sedl-primary-700:#1d4ed8;--sedl-primary-800:#1e40af;--sedl-primary-900:#1e3a8a;--sedl-primary-950:#172554;
+  --sedl-neutral-0:#ffffff;--sedl-neutral-50:#f8fafc;--sedl-neutral-100:#f1f5f9;--sedl-neutral-200:#e2e8f0;--sedl-neutral-300:#cbd5e1;--sedl-neutral-400:#94a3b8;--sedl-neutral-500:#64748b;--sedl-neutral-600:#475569;--sedl-neutral-700:#334155;--sedl-neutral-800:#1e293b;--sedl-neutral-900:#0f172a;--sedl-neutral-950:#020617;
+  --sedl-green-50:#f0fdf4;--sedl-green-100:#dcfce7;--sedl-green-200:#bbf7d0;--sedl-green-300:#86efac;--sedl-green-400:#4ade80;--sedl-green-500:#22c55e;--sedl-green-600:#16a34a;--sedl-green-700:#15803d;--sedl-green-800:#166534;--sedl-green-900:#14532d;--sedl-green-950:#052e16;
+  --sedl-amber-50:#fffbeb;--sedl-amber-100:#fef3c7;--sedl-amber-200:#fde68a;--sedl-amber-300:#fcd34d;--sedl-amber-400:#fbbf24;--sedl-amber-500:#f59e0b;--sedl-amber-600:#d97706;--sedl-amber-700:#b45309;--sedl-amber-800:#92400e;--sedl-amber-900:#78350f;--sedl-amber-950:#451a03;
+  --sedl-red-50:#fef2f2;--sedl-red-100:#fee2e2;--sedl-red-200:#fecaca;--sedl-red-300:#fca5a5;--sedl-red-400:#f87171;--sedl-red-500:#ef4444;--sedl-red-600:#dc2626;--sedl-red-700:#b91c1c;--sedl-red-800:#991b1b;--sedl-red-900:#7f1d1d;--sedl-red-950:#450a0a;
+  --sedl-cyan-50:#ecfeff;--sedl-cyan-100:#cffafe;--sedl-cyan-200:#a5f3fc;--sedl-cyan-300:#67e8f9;--sedl-cyan-400:#22d3ee;--sedl-cyan-500:#06b6d4;--sedl-cyan-600:#0891b2;--sedl-cyan-700:#0e7490;--sedl-cyan-800:#155e75;--sedl-cyan-900:#164e63;--sedl-cyan-950:#083344;
+  --sedl-black-a40:#02061766;--sedl-black-a70:#020617b3;--sedl-focus-ring:#2563eb66;
+}

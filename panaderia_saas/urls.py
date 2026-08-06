@@ -5,6 +5,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
+    path("_sedl/catalog/", include("design_system.urls")),
     path("workflow/", include("workflow.urls")),
     path("compras/", include("compras.urls")),
     path("catalogos/", include("catalogos.urls")),
