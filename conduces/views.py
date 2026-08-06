@@ -317,6 +317,153 @@ def clasificar_categoria_factura(producto):
 @login_required(login_url="login_usuario")
 def inicio(request):
     empresa = obtener_empresa(request)
+    if not empresa:
+        messages.error(request, "Debe configurar su empresa antes de continuar.")
+        return redirect("login_usuario")
+
+    from comercial.models import Pedido
+    from comercial.models_o2c4 import CuentaPorCobrar, EntregaComercial, FacturaVenta, ReciboCobro
+    from compras.p2p_models import OrdenCompraEnterprise
+    from contabilidad.models import AplicacionPago, CuentaPorPagarEnterprise
+    from core.models import NavegacionReciente
+    from inventario.models import OrdenProduccion, PlanProduccion, ProductoInventario
+
+    hoy = timezone.localdate()
+    inicio_mes = hoy.replace(day=1)
+    fin_eventos = hoy + timedelta(days=7)
+
+    ventas = FacturaVenta.objects.filter(empresa=empresa).aggregate(
+        mes=Sum("total", filter=Q(fecha__range=(inicio_mes, hoy))),
+    )
+    cobros = ReciboCobro.objects.filter(empresa=empresa).exclude(
+        estado__in=["ANULADO", "REVERTIDO"]
+    ).aggregate(mes=Sum("monto", filter=Q(fecha__range=(inicio_mes, hoy))))
+    compras = OrdenCompraEnterprise.objects.filter(empresa=empresa).exclude(
+        estado="CANCELADA"
+    ).aggregate(
+        mes=Sum("total", filter=Q(fecha__range=(inicio_mes, hoy))),
+        aprobar=Count("id", filter=Q(estado__in=["BORRADOR", "PENDIENTE_APROBACION"])),
+    )
+    pagos = AplicacionPago.objects.filter(orden__empresa=empresa).exclude(
+        orden__estado="ANULADA"
+    ).aggregate(mes=Sum("monto", filter=Q(orden__creado_en__date__range=(inicio_mes, hoy))))
+    cxc = CuentaPorCobrar.objects.filter(empresa=empresa).aggregate(
+        saldo_total=Sum("saldo", filter=~Q(estado__in=["COBRADA", "CANCELADA"])),
+        vencidas=Count("id", filter=Q(fecha_vencimiento__lt=hoy, saldo__gt=0)),
+        corriente=Sum("saldo", filter=Q(bucket_aging="CORRIENTE")),
+        vencida=Sum("saldo", filter=~Q(bucket_aging="CORRIENTE")),
+    )
+    cxp = CuentaPorPagarEnterprise.objects.filter(empresa=empresa).aggregate(
+        saldo_total=Sum("saldo", filter=~Q(estado__in=["PAGADA", "ANULADA"])),
+        por_vencer=Count("id", filter=Q(vence_el__range=(hoy, fin_eventos), saldo__gt=0)),
+        corriente=Sum("saldo", filter=Q(bucket_aging="CORRIENTE")),
+        vencida=Sum("saldo", filter=~Q(bucket_aging="CORRIENTE")),
+    )
+    pedidos = Pedido.objects.filter(empresa=empresa).aggregate(
+        hoy=Count("id", filter=Q(fecha_pedido=hoy)),
+        urgentes=Count(
+            "id",
+            filter=Q(prioridad="URGENTE")
+            & ~Q(estado__in=["ENTREGADO", "FACTURADO", "CANCELADO"]),
+        ),
+    )
+    entregas = EntregaComercial.objects.filter(empresa=empresa).aggregate(
+        pendientes=Count("id", filter=Q(estado__in=["PENDIENTE", "EN_RUTA", "EN_SITIO"])),
+    )
+    planes = PlanProduccion.objects.filter(empresa=empresa).aggregate(
+        atrasados=Count(
+            "id",
+            filter=Q(fecha_plan__lt=hoy) & ~Q(estado__in=["CERRADO", "CANCELADO"]),
+        ),
+    )
+    produccion = OrdenProduccion.objects.filter(
+        empresa=empresa, fecha_programada=hoy
+    ).aggregate(planificada=Sum("cantidad_planificada"), realizada=Sum("cantidad_producida"))
+    inventario = ProductoInventario.objects.filter(empresa=empresa, activo=True).aggregate(
+        criticos=Count("id", filter=Q(stock_actual__lte=F("stock_minimo"))),
+    )
+
+    zero = Decimal("0")
+    money = lambda value: value or zero
+    kpis = (
+        {"label": "Ventas del mes", "value": money(ventas["mes"]), "kind": "currency", "period": "Mes actual", "icon": "i-chart", "tone": "primary", "route": "comercial:dashboard"},
+        {"label": "Cobros del mes", "value": money(cobros["mes"]), "kind": "currency", "period": "Mes actual", "icon": "i-bank", "tone": "success", "route": "comercial:o2c_full_dashboard"},
+        {"label": "Compras del mes", "value": money(compras["mes"]), "kind": "currency", "period": "Mes actual", "icon": "i-cart", "tone": "neutral", "route": "compras:p2p_dashboard"},
+        {"label": "Pagos del mes", "value": money(pagos["mes"]), "kind": "currency", "period": "Mes actual", "icon": "i-bank", "tone": "neutral", "route": "contabilidad:dashboard_enterprise"},
+        {"label": "CxC pendiente", "value": money(cxc["saldo_total"]), "kind": "currency", "period": "Saldo abierto", "icon": "i-file", "tone": "warning", "route": "comercial:o2c_full_dashboard"},
+        {"label": "CxP pendiente", "value": money(cxp["saldo_total"]), "kind": "currency", "period": "Saldo abierto", "icon": "i-file", "tone": "warning", "route": "contabilidad:dashboard_enterprise"},
+        {"label": "Producción del día", "value": money(produccion["realizada"]), "kind": "number", "period": "Unidades realizadas", "icon": "i-box", "tone": "success", "route": "inventario:produccion_dashboard"},
+        {"label": "Inventario crítico", "value": inventario["criticos"], "kind": "number", "period": "Productos bajo mínimo", "icon": "i-box", "tone": "danger", "route": "inventario:dashboard"},
+    )
+    attention_candidates = (
+        ("CRÍTICA", "Facturas vencidas", cxc["vencidas"], "Cuentas por cobrar fuera de plazo", "comercial:o2c_full_dashboard", "danger"),
+        ("ALTA", "Pagos por vencer", cxp["por_vencer"], "Próximos 7 días", "contabilidad:dashboard_enterprise", "warning"),
+        ("ALTA", "Pedidos urgentes", pedidos["urgentes"], "Pedidos abiertos con prioridad urgente", "comercial:pedidos_dashboard", "warning"),
+        ("MEDIA", "Entregas pendientes", entregas["pendientes"], "Pendientes, en ruta o en sitio", "comercial:o2c_full_dashboard", "info"),
+        ("ALTA", "Producción atrasada", planes["atrasados"], "Planes anteriores sin cierre", "inventario:produccion_dashboard", "warning"),
+        ("CRÍTICA", "Inventario crítico", inventario["criticos"], "Productos por debajo del mínimo", "inventario:dashboard", "danger"),
+    )
+    attention = [
+        {"priority": priority, "title": title, "count": count, "reference": reference, "date": hoy, "route": route, "tone": tone}
+        for priority, title, count, reference, route, tone in attention_candidates
+        if count
+    ][:6]
+
+    activity = list(
+        NavegacionReciente.objects.filter(empresa=empresa, usuario=request.user)
+        .only("modulo", "etiqueta", "url", "visitado")[:8]
+    )
+    upcoming = []
+    for item in Pedido.objects.filter(
+        empresa=empresa, fecha_entrega__range=(hoy, fin_eventos)
+    ).only("numero", "fecha_entrega").order_by("fecha_entrega")[:4]:
+        upcoming.append({"date": item.fecha_entrega, "type": "Entrega", "reference": item.numero, "route": "comercial:pedidos_lista"})
+    for item in CuentaPorCobrar.objects.filter(
+        empresa=empresa, fecha_vencimiento__range=(hoy, fin_eventos), saldo__gt=0
+    ).select_related("factura").only("fecha_vencimiento", "factura__numero").order_by("fecha_vencimiento")[:3]:
+        upcoming.append({"date": item.fecha_vencimiento, "type": "Cobro", "reference": item.factura.numero, "route": "comercial:o2c_full_dashboard"})
+    for item in CuentaPorPagarEnterprise.objects.filter(
+        empresa=empresa, vence_el__range=(hoy, fin_eventos), saldo__gt=0
+    ).select_related("factura").only("vence_el", "factura__numero").order_by("vence_el")[:3]:
+        upcoming.append({"date": item.vence_el, "type": "Pago", "reference": item.factura.numero, "route": "contabilidad:dashboard_enterprise"})
+    upcoming = sorted(upcoming, key=lambda item: item["date"])[:7]
+
+    quick_actions = [
+        {"label": "Nuevo cliente", "route": "comercial:cliente_crear", "icon": "i-users", "allowed": request.user.has_perm("comercial.add_cliente")},
+        {"label": "Nueva cotización", "route": "comercial:cotizacion_crear", "icon": "i-file", "allowed": request.user.has_perm("comercial.add_cotizacionventa")},
+        {"label": "Nuevo pedido", "route": "comercial:pedido_crear", "icon": "i-cart", "allowed": request.user.has_perm("comercial.add_pedido")},
+        {"label": "Generar conduce", "route": "generar_conduces", "icon": "i-file", "allowed": empresa.modulo_conduces},
+        {"label": "Registrar compra", "route": "compras:solicitud_crear", "icon": "i-cart", "allowed": empresa.modulo_compras and request.user.has_perm("compras.add_solicitudcompra")},
+        {"label": "Facturar", "route": "facturacion", "icon": "i-file", "allowed": empresa.modulo_facturacion},
+        {"label": "Registrar cobro", "route": "comercial:fin_cobro_registrar", "icon": "i-bank", "allowed": request.user.has_perm("comercial.registrar_cobro")},
+        {"label": "Registrar pago", "route": "contabilidad:dashboard_enterprise", "icon": "i-bank", "allowed": request.user.has_perm("contabilidad.add_ordenpago")},
+        {"label": "Ver reportes", "route": "comercial:o2c_reportes", "icon": "i-chart", "allowed": request.user.has_perm("comercial.view_facturaventa")},
+    ]
+    quick_actions = [item for item in quick_actions if item["allowed"]]
+    hour = timezone.localtime().hour
+    greeting = "Buenos días" if hour < 12 else "Buenas tardes" if hour < 19 else "Buenas noches"
+    chart_data = {
+        "sales": [float(money(ventas["mes"])), float(money(cobros["mes"]))],
+        "purchases": [float(money(compras["mes"])), float(money(pagos["mes"]))],
+        "production": [float(money(produccion["planificada"])), float(money(produccion["realizada"]))],
+        "aging": [float(money(cxc["corriente"])), float(money(cxc["vencida"])), float(money(cxp["corriente"])), float(money(cxp["vencida"]))],
+    }
+    return render(request, "inicio.html", {
+        "empresa": empresa, "greeting": greeting, "today": hoy,
+        "orders_today": pedidos["hoy"], "pending_deliveries": entregas["pendientes"],
+        "kpis": kpis, "attention": attention, "activity": activity,
+        "upcoming": upcoming, "quick_primary": quick_actions[:6],
+        "quick_more": quick_actions[6:], "chart_data": chart_data,
+        "has_financial_chart": any(chart_data["sales"]),
+        "has_purchase_chart": any(chart_data["purchases"]),
+        "has_production_chart": any(chart_data["production"]),
+        "has_aging_chart": any(chart_data["aging"]),
+    })
+
+
+@login_required(login_url="login_usuario")
+def _inicio_legacy(request):
+    empresa = obtener_empresa(request)
 
     if not empresa:
         messages.error(request, "Debe configurar su empresa antes de continuar.")
