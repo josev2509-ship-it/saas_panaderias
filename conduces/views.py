@@ -8,7 +8,7 @@ from .utils import suscripcion_requerida
 from django.http import HttpResponse, FileResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import transaction
-from django.db.models import Q, Sum, Count
+from django.db.models import Q, Sum, Count, F
 from django.db.models.functions import TruncMonth
 from django.contrib import messages
 from django.utils import timezone
@@ -375,6 +375,37 @@ def inicio(request):
         .order_by("-mes")
     )
 
+    # Resumen ejecutivo de solo lectura sobre contratos ya certificados.
+    from comercial.models_o2c4 import CuentaPorCobrar, EntregaComercial, FacturaVenta, ReciboCobro
+    from compras.p2p_models import OrdenCompraEnterprise
+    from contabilidad.models import CuentaPorPagarEnterprise, FacturaProveedor, OrdenPago
+    from core.models import AlertaExperiencia, NavegacionReciente
+    from inventario.models import PlanProduccion, ProductoInventario
+
+    def amount(model, field, **filters):
+        return model.objects.filter(empresa=empresa, **filters).aggregate(value=Sum(field))["value"] or 0
+
+    demo_kpis = (
+        ("Ventas", amount(FacturaVenta, "total"), "comercial:o2c_full_dashboard", "currency"),
+        ("Compras", amount(FacturaProveedor, "total"), "compras:p2p_dashboard", "currency"),
+        ("Producción", PlanProduccion.objects.filter(empresa=empresa).exclude(estado="CANCELADO").count(), "inventario:produccion_dashboard", "number"),
+        ("Inventario crítico", ProductoInventario.objects.filter(empresa=empresa, activo=True, stock_actual__lte=F("stock_minimo")).count(), "inventario:productos", "number"),
+        ("CxC", amount(CuentaPorCobrar, "saldo"), "comercial:o2c_full_dashboard", "currency"),
+        ("CxP", amount(CuentaPorPagarEnterprise, "saldo"), "contabilidad:dashboard_enterprise", "currency"),
+        ("Cobros", ReciboCobro.objects.filter(empresa=empresa).exclude(estado="ANULADO").count(), "comercial:o2c_full_dashboard", "number"),
+        ("Pagos", OrdenPago.objects.filter(empresa=empresa).exclude(estado="ANULADA").count(), "contabilidad:dashboard_enterprise", "number"),
+    )
+    attention = (
+        ("Facturas vencidas", FacturaVenta.objects.filter(empresa=empresa, estado="VENCIDA").count(), "danger"),
+        ("Pagos pendientes", CuentaPorPagarEnterprise.objects.filter(empresa=empresa, estado__in=["PENDIENTE", "VENCIDA"]).count(), "warning"),
+        ("Inventario crítico", ProductoInventario.objects.filter(empresa=empresa, activo=True, stock_actual__lte=F("stock_minimo")).count(), "danger"),
+        ("Entregas pendientes", EntregaComercial.objects.filter(empresa=empresa, estado__in=["PENDIENTE", "EN_RUTA", "EN_SITIO"]).count(), "info"),
+        ("Producción atrasada", PlanProduccion.objects.filter(empresa=empresa, fecha_plan__lt=hoy).exclude(estado__in=["CERRADO", "CANCELADO"]).count(), "warning"),
+        ("Órdenes por aprobar", OrdenCompraEnterprise.objects.filter(empresa=empresa, estado__in=["BORRADOR", "PENDIENTE_APROBACION"]).count(), "info"),
+    )
+    demo_alerts = AlertaExperiencia.objects.filter(empresa=empresa).exclude(estado="RESUELTA")[:5]
+    demo_activity = NavegacionReciente.objects.filter(empresa=empresa, usuario=request.user)[:6]
+
     return render(request, "inicio.html", {
         "empresa": empresa,
         "total_raciones": total_raciones,
@@ -388,6 +419,11 @@ def inicio(request):
         "labels_productos": labels_productos,
         "data_productos": data_productos,
         "resumen_meses": resumen_meses,
+        "demo_kpis": demo_kpis,
+        "attention": attention,
+        "demo_alerts": demo_alerts,
+        "demo_activity": demo_activity,
+        "today": hoy,
     })
 
 
