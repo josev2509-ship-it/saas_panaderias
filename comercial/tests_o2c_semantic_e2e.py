@@ -44,7 +44,7 @@ class O2CSemanticE2ETest(O2CMulticurrencyFlowsTest):
         # 11 Cobro parcial USD.
         usd=registrar_cobro(context=self.ctx,cliente=self.client,moneda=self.usd,monto=20,metodo="TRANSFERENCIA",tasa_cambio=61,dimensiones=dims);aplicar_cobro(context=self.ctx,recibo_id=usd.pk,cuenta_id=factura.cuenta_cobrar.pk,monto=20,monto_cuenta=20);integrar_cobro(context=self.ctx,recibo_id=usd.pk,cuenta_bancaria_id=self.bank_usd.pk)
         # 12 Cobro parcial DOP con diferencia cambiaria.
-        dop=registrar_cobro(context=self.ctx,cliente=self.client,moneda=self.dop,monto=1220,metodo="TRANSFERENCIA",dimensiones=dims);aplicar_cobro(context=self.ctx,recibo_id=dop.pk,cuenta_id=factura.cuenta_cobrar.pk,monto=1220,monto_cuenta=20);integrar_cobro(context=self.ctx,recibo_id=dop.pk,cuenta_bancaria_id=self.bank_dop.pk)
+        dop=registrar_cobro(context=self.ctx,cliente=self.client,moneda=self.dop,monto=1220,metodo="TRANSFERENCIA",fecha=date(2026,8,2),dimensiones=dims);aplicar_cobro(context=self.ctx,recibo_id=dop.pk,cuenta_id=factura.cuenta_cobrar.pk,monto=1220,monto_cuenta=20);integrar_cobro(context=self.ctx,recibo_id=dop.pk,cuenta_bancaria_id=self.bank_dop.pk)
         # 13-14 Notas heredan snapshot y dimensiones.
         nc=emitir_nota_credito_integrada(context=self.ctx,factura_id=factura.pk,monto=10,motivo="NC E2E");nd=emitir_nota_debito_integrada(context=self.ctx,factura_id=factura.pk,monto=5,motivo="ND E2E");self.assertTrue(nc["nota_id"] and nd["nota_id"])
         # 15 Factoring parcial sobre otra factura.
