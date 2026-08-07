@@ -4,9 +4,10 @@
 
 {% block content %}
 
-<div class="app-page">
+<div class="app-page el-page" data-enterprise-list>
+    {% include "components/enterprise_list_command_bar.html" %}
 
-    <div class="topbar">
+    <div class="topbar el-legacy-header" data-enterprise-page-header>
         <div>
             <h1>Materia prima e inventario</h1>
             <p>Control de productos, stock, costos, mínimos y trazabilidad.</p>

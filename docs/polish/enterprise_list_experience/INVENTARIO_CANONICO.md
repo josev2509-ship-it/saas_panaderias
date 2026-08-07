@@ -1,0 +1,43 @@
+# Inventario canónico
+
+| Dominio | Pantalla | Ruta / url_name | Vista | Template | Agregado | Tipo | Acciones / permisos | Filtros / exportación | Componente | Estado |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Comercial | Prospectos | `/comercial/crm/prospectos/` · `prospectos_lista` | `crm_views.prospectos_lista` | `comercial/crm/lista.html` | Prospecto | Canónica | Crear, detalle, masivas existentes; permisos CRM | q, estado, vendedor; exportación CRM | Sí | Migrada |
+| Comercial | Oportunidades | `/comercial/crm/oportunidades/` · `oportunidades_lista` | `crm_views.oportunidades_lista` | `comercial/crm/lista.html` | Oportunidad | Canónica | Crear, detalle, seguimiento existentes | q, etapa, vendedor; exportación CRM | Sí | Migrada |
+| Comercial | Clientes | `/comercial/clientes/` · `clientes_lista` | `views.clientes_lista` | `comercial/clientes_lista.html` | Cliente | Canónica | Crear/detalle según permisos | q, tipo, estado, condición | Sí | Migrada |
+| Comercial | Cotizaciones | `/comercial/cotizaciones/` · `cotizaciones_lista` | `o2c_views.cotizaciones_lista` | `comercial/o2c/lista.html` | CotizacionVenta | Canónica | Crear/detalle certificados | Listado paginado; exportación O2C existente | Sí | Migrada |
+| Comercial | Pedidos | `/comercial/pedidos/` · `pedidos_lista` | `pedidos_views.pedidos_lista` | `comercial/pedidos_lista.html` | Pedido | Canónica | Crear/detalle según permisos | q, estado, prioridad, condición, moneda, fechas | Sí | Migrada |
+| Comercial | Programación | `/comercial/programacion-comercial/` · `programacion_comercial` | `o2c_views.programacion` | `comercial/o2c/programacion.html` | ProgramacionComercial | Canónica | Cambiar período; detalle de pedido | día/semana/mes | Sí | Migrada |
+| Comercial | Facturas venta | `/comercial/o2c/facturas/` · `o2c_full_lista` | `o2c_full_views.listado` | `comercial/o2c_full/lista.html` | FacturaVenta | Canónica | Acciones certificadas del recurso | búsqueda local; CSV existente | Sí | Migrada |
+| Comercial | CxC | `/comercial/o2c/cxc/` · `o2c_full_lista` | `o2c_full_views.listado` | `comercial/o2c_full/lista.html` | CuentaPorCobrar | Canónica | Cobrar existente | búsqueda local; CSV existente | Sí | Migrada |
+| Comercial | Cobros | `/comercial/o2c/cobros/` · `o2c_full_lista` | `o2c_full_views.listado` | `comercial/o2c_full/lista.html` | ReciboCobro | Canónica | Sólo acciones existentes | búsqueda local; CSV existente | Sí | Migrada |
+| Compras | Proveedores | `/compras/proveedores/` · `lista` | `views.lista` | `compras/lista.html` | Proveedor | Canónica | Crear/detalle/exportar por permiso | q, estado, riesgo; CSV | Sí | Migrada |
+| Compras | Solicitudes | `/compras/solicitudes/` · `solicitudes_lista` | `views.solicitudes_lista` | `compras/solicitudes/lista.html` | SolicitudCompra | Canónica | Crear/detalle/exportar por permiso | formulario certificado; CSV | Sí | Migrada |
+| Compras | Expedientes | `/compras/expedientes/` · `expedientes_lista` | `views.expedientes_lista` | `compras/expedientes/lista.html` | ExpedienteCompra | Canónica | Detalle; exportación P2P | búsqueda local; CSV P2P | Sí | Migrada |
+| Compras | RFQ | `/compras/rfq/` · `rfq_lista` | `views.rfq_lista` | `compras/rfq/lista.html` | ProcesoRFQ | Canónica | Detalle existente | búsqueda local | Sí | Migrada |
+| Compras | Ofertas | `/compras/p2p/ofertas/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | OfertaProveedor | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Compras | Comparativos | `/compras/p2p/comparativos/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | ComparativoCompra | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Compras | Adjudicaciones | `/compras/p2p/adjudicaciones/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | AdjudicacionCompra | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Compras | Órdenes compra | `/compras/p2p/ordenes/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | OrdenCompraEnterprise | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Compras | Recepciones | `/compras/p2p/recepciones/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | RecepcionCompra | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Compras | Facturas proveedor | `/compras/p2p/facturas/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | FacturaProveedor | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Compras | CxP | `/compras/p2p/cxp/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | CuentaPorPagarEnterprise | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Compras | Pagos | `/compras/p2p/pagos/` · `p2p_recurso_lista` | `p2p_views.lista` | `compras/p2p/recurso_lista.html` | PagoProveedor | Canónica | Detalle existente | estado; exportación P2P | Sí | Migrada |
+| Operaciones | Conduces | `/buscar-conduces/` · `buscar_conduces` | `conduces.views.buscar_conduces` | `buscar_conduces.html` | Conduce | Canónica | Ver/editar/reportar según permisos | búsqueda, centro, fechas, estado | Sí | Migrada |
+| Operaciones | Despachos | `/comercial/o2c/despachos/` · `o2c_full_lista` | `o2c_full_views.listado` | `comercial/o2c_full/lista.html` | DespachoComercial | Canónica | Emitir conduce existente | búsqueda local; CSV | Sí | Migrada |
+| Operaciones | Entregas | `/comercial/o2c/entregas/` · `o2c_full_lista` | `o2c_full_views.listado` | `comercial/o2c_full/lista.html` | EntregaComercial | Canónica | Facturar existente | búsqueda local; CSV | Sí | Migrada |
+| Operaciones | Incidencias | — | — | — | — | NO APLICA | No existe ruta canónica de lista | — | — | Evidenciado |
+| Inventario | Productos / materias primas | `/inventario/productos/` · `productos` | `views.productos_inventario` | `inventario/productos.html` | ProductoInventario | Canónica | Editar/kardex/importar según permisos | búsqueda y filtros existentes; PDF/XLSX | Sí | Migrada |
+| Inventario | Movimientos | `/inventario/movimientos/` · `movimientos` | `views.movimientos` | `inventario/movimientos.html` | MovimientoInventario | Canónica | Registro separado existente | búsqueda local | Sí | Migrada |
+| Inventario | Lotes | — | — | — | LoteInventario | NO APLICA | Sin ruta canónica independiente | — | — | Evidenciado |
+| Inventario | Vencimientos | — | — | — | LoteInventario | NO APLICA | Sin ruta canónica independiente | — | — | Evidenciado |
+| Producción | Planificación | `/inventario/produccion/planes/` · `planes_lista` | `produccion_views.planes_lista` | `inventario/planes_lista.html` | PlanProduccion | Canónica | Crear/generar existentes | q | Sí | Migrada |
+| Producción | Órdenes | `/inventario/produccion/ordenes/` · `ordenes_lista` | `produccion_views.ordenes_lista` | `inventario/ordenes_lista.html` | OrdenProduccion | Canónica | Crear/detalle existentes | q | Sí | Migrada |
+| Producción | Necesidades | `/inventario/produccion/necesidades/` · `necesidades_materia_prima` | `produccion_views.necesidades_materia_prima` | `inventario/necesidades.html` | NecesidadMateriaPrima | Canónica | Sólo consulta | búsqueda local | Sí | Migrada |
+| Producción | Control calidad | — | — | — | — | NO APLICA | Sin ruta canónica de listado | — | — | Evidenciado |
+| Finanzas | Tesorería / movimientos | — | — | — | MovimientoTesoreria | NO APLICA | Sin ruta canónica independiente | — | — | Evidenciado |
+| Finanzas | Bancos y cajas | — | — | — | CuentaBancaria/Caja | NO APLICA | Sin ruta canónica independiente | — | — | Evidenciado |
+| Finanzas | Conciliaciones | `/compras/p2p/cierre/conciliaciones/` · `p2p_finance_list` | `p2p_finance_views.lista` | `compras/p2p/finance_list.html` | ConciliacionBancaria | Canónica | Detalle existente | estado; búsqueda local | Sí | Migrada |
+| Finanzas | Asientos | — | — | — | AsientoContable | NO APLICA | Sin ruta canónica de lista | — | — | Evidenciado |
+| Finanzas | Estados financieros | `/contabilidad/reportes/` · `reportes_financieros` | `views.reportes_financieros` | `contabilidad/reportes_financieros.html` | Reportes calculados | Legacy/no lista | Navegación a informes | parámetros propios | — | Fuera del patrón tabla |
+| Finanzas | Reportes principales | `/contabilidad/reportes/` · `reportes_financieros` | `views.reportes_financieros` | `contabilidad/reportes_financieros.html` | Reportes calculados | Legacy/no lista | Navegación existente | parámetros propios | — | Fuera del patrón tabla |

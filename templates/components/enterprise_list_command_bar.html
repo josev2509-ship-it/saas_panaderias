@@ -1,0 +1,12 @@
+<div class="el-command-bar" data-enterprise-command-bar>
+  <label class="el-search"><span class="ds-sr-only">Buscar en la lista</span><svg><use href="#i-search"/></svg><input type="search" data-el-search placeholder="Buscar en esta lista" value="{{ request.GET.q }}"></label>
+  <div class="el-command-actions">
+    <button type="button" class="ds-btn ds-btn--secondary" data-el-filters aria-expanded="false">Filtros</button>
+    <button type="button" class="ds-btn ds-btn--secondary" data-el-columns aria-expanded="false">Columnas</button>
+    <label class="el-density-label">Densidad<select data-el-density aria-label="Densidad de tabla"><option value="comfortable">Cómoda</option><option value="compact">Compacta</option></select></label>
+    {% if export_url %}<a class="ds-btn ds-btn--secondary" href="{{ export_url }}">Exportar</a>{% endif %}
+    <button type="button" class="ds-btn ds-btn--tertiary" data-el-refresh>Actualizar</button>
+  </div>
+  <div class="el-chip-row" data-el-chips hidden><span class="el-chip">Filtros activos</span><button type="button" data-el-clear>Limpiar todos</button></div>
+  <aside class="el-popover" data-el-column-panel hidden aria-label="Configurar columnas"><strong>Columnas visibles</strong><div data-el-column-options></div><button type="button" data-el-restore>Restaurar</button></aside>
+</div>

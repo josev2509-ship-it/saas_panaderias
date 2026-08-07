@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 {% include "comercial/_styles.html" %}
-<div class="com-page">
-  <header class="com-hero"><div><h1>Clientes</h1><p>Gestión comercial por empresa.</p></div><a class="com-btn" href="{% url 'comercial:cliente_crear' %}">Nuevo cliente</a></header>
+{% url 'comercial:cliente_crear' as crear_cliente_url %}
+<div class="com-page el-page" data-enterprise-list>
+  {% include "components/enterprise_list_header.html" with title="Clientes" description="Gestión comercial por empresa." context_label="Comercial" count=total primary_url=crear_cliente_url primary_label="Nuevo cliente" %}
+  {% include "components/enterprise_list_command_bar.html" %}
   <div class="com-grid"><div class="com-card metric"><span>Total</span><strong>{{ total }}</strong></div><div class="com-card metric"><span>Activos</span><strong>{{ activos }}</strong></div><div class="com-card metric"><span>A crédito</span><strong>{{ credito }}</strong></div><div class="com-card metric"><span>Bloqueados</span><strong>{{ bloqueados }}</strong></div></div>
   <section class="com-card">
     <form method="get" class="filters">

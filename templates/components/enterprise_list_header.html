@@ -1,0 +1,9 @@
+<header class="el-page-header" data-enterprise-page-header>
+  <div>
+    <nav class="el-breadcrumbs" aria-label="Migas de pan"><a href="{% url 'inicio' %}">Inicio</a><span>/</span><span>{{ context_label|default:"Gestión" }}</span><span>/</span><span aria-current="page">{{ title }}</span></nav>
+    <div class="el-title-row"><h1>{{ title }}</h1><span class="el-count" aria-label="Total de registros">{{ count|default:0 }} registros</span></div>
+    <p>{{ description|default:"Consulta y gestiona los registros disponibles para tu empresa." }}</p>
+    <small>Contexto: {{ context_label|default:"Empresa activa" }} · Actualizado al cargar esta página</small>
+  </div>
+  {% if primary_url %}<a class="ds-btn el-primary" href="{{ primary_url }}">{{ primary_label|default:"Crear" }}</a>{% endif %}
+</header>

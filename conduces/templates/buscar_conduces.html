@@ -3,9 +3,10 @@
 
 {% block content %}
 
-<div class="app-page">
+<div class="app-page el-page" data-enterprise-list>
+    {% include "components/enterprise_list_command_bar.html" %}
 
-    <div class="topbar">
+    <div class="topbar el-legacy-header" data-enterprise-page-header>
         <div>
             <h1>Gestión de conduces</h1>
             <p>Consulta, edita, visualiza, elimina y genera reportes de conduces.</p>

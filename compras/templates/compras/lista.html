@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% load design_system %}
-{% block content %}<div class="ds-page">
-{% include "components/page_header.html" with title="Proveedores" subtitle="Búsqueda, riesgo y estado documental" %}
+{% block content %}{% url 'compras:crear' as crear_proveedor_url %}{% url 'compras:exportar' as exportar_proveedor_url %}<div class="ds-page el-page" data-enterprise-list>
+{% if perms.compras.add_proveedor %}{% include "components/enterprise_list_header.html" with title="Proveedores" description="Búsqueda, riesgo y estado documental." context_label="Compras" count=proveedores.paginator.count primary_url=crear_proveedor_url primary_label="Nuevo proveedor" %}{% else %}{% include "components/enterprise_list_header.html" with title="Proveedores" description="Búsqueda, riesgo y estado documental." context_label="Compras" count=proveedores.paginator.count %}{% endif %}
+{% if perms.compras.exportar_proveedores %}{% include "components/enterprise_list_command_bar.html" with export_url=exportar_proveedor_url %}{% else %}{% include "components/enterprise_list_command_bar.html" %}{% endif %}
 <form method="get" class="ds-card ds-filter-bar">
 <input class="form-control" name="q" value="{{ filtros.q }}" placeholder="Código, nombre o RNC">
 <select class="form-control" name="estado"><option value="">Todos los estados</option>{% for value,label in estados %}<option value="{{ value }}" {% if filtros.estado == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>

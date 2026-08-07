@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="app-page">
-    <h1>Movimientos de inventario</h1>
+<div class="app-page el-page" data-enterprise-list>
+    {% include "components/enterprise_list_header.html" with title="Movimientos de inventario" description="Trazabilidad de entradas, salidas y ajustes." context_label="Inventario" %}
+    {% include "components/enterprise_list_command_bar.html" %}
+    <div class="el-table-shell"><table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th data-el-numeric>Cantidad</th><th>Usuario</th></tr></thead><tbody>{% for movimiento in movimientos %}<tr><td>{{ movimiento.fecha|date:"Y-m-d H:i" }}</td><td>{{ movimiento.producto }}</td><td><span class="el-status">{{ movimiento.get_tipo_display }}</span></td><td data-el-numeric>{{ movimiento.cantidad }}</td><td>{{ movimiento.usuario|default:"—" }}</td></tr>{% empty %}<tr><td colspan="5">Todavía no existen registros.</td></tr>{% endfor %}</tbody></table></div>
 </div>
 {% endblock %}
