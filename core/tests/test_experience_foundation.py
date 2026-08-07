@@ -25,7 +25,7 @@ class EnterpriseExperienceFoundationTests(SimpleTestCase):
 
     def test_shell_has_accessible_regions_and_breadcrumb_support(self):
         for marker in ('aria-label="Navegación principal"', 'id="contenido-principal"',
-                       'class="ds-topbar"', 'class="ds-footer"', 'ds-breadcrumb'):
+                       'class="ds-topbar"', 'class="ds-footer"', 'v2-topbar'):
             self.assertIn(marker, self.base + self.dashboard)
 
     def test_menu_respects_existing_permission_guards(self):
@@ -46,7 +46,7 @@ class EnterpriseExperienceFoundationTests(SimpleTestCase):
         for route in ("comercial:dashboard", "comercial:o2c_full_dashboard",
                       "inventario:produccion_dashboard", "inventario:dashboard"):
             self.assertIn(route, self.dashboard)
-        self.assertIn("components/empty_state.html", self.dashboard)
+        self.assertIn('class="v2-empty"', self.dashboard)
         self.assertIn("Sin resumen disponible", self.dashboard)
         self.assertNotIn("action-icon", self.dashboard)
 

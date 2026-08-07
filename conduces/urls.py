@@ -27,6 +27,7 @@ urlpatterns = [
 
     # ================= CENTROS =================
     path('carga-centros/', obtener_vista('pantalla_carga_centros'), name='carga_centros'),
+    path('centros/', obtener_vista('pantalla_carga_centros'), name='lista_centros'),
     path('cargar-centros/', obtener_vista('cargar_centros_excel'), name='cargar_centros_excel'),
     path('plantilla-centros/', obtener_vista('descargar_plantilla_centros'), name='plantilla_centros'),
 

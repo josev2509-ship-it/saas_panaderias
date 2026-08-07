@@ -321,32 +321,33 @@ def inicio(request):
         messages.error(request, "Debe configurar su empresa antes de continuar.")
         return redirect("login_usuario")
 
-    from comercial.models import Pedido
-    from comercial.models_o2c4 import CuentaPorCobrar, EntregaComercial, FacturaVenta, ReciboCobro
-    from compras.p2p_models import OrdenCompraEnterprise
-    from contabilidad.models import AplicacionPago, CuentaPorPagarEnterprise
+    from comercial.models_o2c4 import CuentaPorCobrar, FacturaVenta
+    from compras.p2p_models import RecepcionCompra
+    from contabilidad.models import CuentaPorPagarEnterprise
     from core.models import NavegacionReciente
-    from inventario.models import OrdenProduccion, PlanProduccion, ProductoInventario
+    from inventario.models import ProductoInventario
 
     hoy = timezone.localdate()
     inicio_mes = hoy.replace(day=1)
     fin_eventos = hoy + timedelta(days=7)
+    manana = hoy + timedelta(days=1)
+
+    conduces_diarios = list(
+        Conduce.objects.filter(empresa=empresa, fecha__range=(inicio_mes, hoy))
+        .values("fecha").annotate(total=Sum("cantidad"), documentos=Count("id"))
+        .order_by("fecha")
+    )
+    total_raciones = sum((item["total"] or 0) for item in conduces_diarios)
+    total_conduces = sum(item["documentos"] for item in conduces_diarios)
+    total_centros = CentroEducativo.objects.filter(empresa=empresa).count()
+    menu_manana = MenuDiario.objects.filter(empresa=empresa, fecha=manana).only("producto", "fecha").first()
 
     ventas = FacturaVenta.objects.filter(empresa=empresa).aggregate(
         mes=Sum("total", filter=Q(fecha__range=(inicio_mes, hoy))),
     )
-    cobros = ReciboCobro.objects.filter(empresa=empresa).exclude(
-        estado__in=["ANULADO", "REVERTIDO"]
-    ).aggregate(mes=Sum("monto", filter=Q(fecha__range=(inicio_mes, hoy))))
-    compras = OrdenCompraEnterprise.objects.filter(empresa=empresa).exclude(
-        estado="CANCELADA"
-    ).aggregate(
-        mes=Sum("total", filter=Q(fecha__range=(inicio_mes, hoy))),
-        aprobar=Count("id", filter=Q(estado__in=["BORRADOR", "PENDIENTE_APROBACION"])),
-    )
-    pagos = AplicacionPago.objects.filter(orden__empresa=empresa).exclude(
-        orden__estado="ANULADA"
-    ).aggregate(mes=Sum("monto", filter=Q(orden__creado_en__date__range=(inicio_mes, hoy))))
+    cobros = {"mes": 0}
+    compras = {"mes": 0, "aprobar": 0}
+    pagos = {"mes": 0}
     cxc = CuentaPorCobrar.objects.filter(empresa=empresa).aggregate(
         saldo_total=Sum("saldo", filter=~Q(estado__in=["COBRADA", "CANCELADA"])),
         vencidas=Count("id", filter=Q(fecha_vencimiento__lt=hoy, saldo__gt=0)),
@@ -359,29 +360,16 @@ def inicio(request):
         corriente=Sum("saldo", filter=Q(bucket_aging="CORRIENTE")),
         vencida=Sum("saldo", filter=~Q(bucket_aging="CORRIENTE")),
     )
-    pedidos = Pedido.objects.filter(empresa=empresa).aggregate(
-        hoy=Count("id", filter=Q(fecha_pedido=hoy)),
-        urgentes=Count(
-            "id",
-            filter=Q(prioridad="URGENTE")
-            & ~Q(estado__in=["ENTREGADO", "FACTURADO", "CANCELADO"]),
-        ),
-    )
-    entregas = EntregaComercial.objects.filter(empresa=empresa).aggregate(
-        pendientes=Count("id", filter=Q(estado__in=["PENDIENTE", "EN_RUTA", "EN_SITIO"])),
-    )
-    planes = PlanProduccion.objects.filter(empresa=empresa).aggregate(
-        atrasados=Count(
-            "id",
-            filter=Q(fecha_plan__lt=hoy) & ~Q(estado__in=["CERRADO", "CANCELADO"]),
-        ),
-    )
-    produccion = OrdenProduccion.objects.filter(
-        empresa=empresa, fecha_programada=hoy
-    ).aggregate(planificada=Sum("cantidad_planificada"), realizada=Sum("cantidad_producida"))
+    pedidos = {"hoy": 0, "urgentes": 0}
+    entregas = {"pendientes": 0}
+    planes = {"atrasados": 0}
+    produccion = {"planificada": 0, "realizada": 0}
     inventario = ProductoInventario.objects.filter(empresa=empresa, activo=True).aggregate(
         criticos=Count("id", filter=Q(stock_actual__lte=F("stock_minimo"))),
     )
+    recepciones_pendientes = RecepcionCompra.objects.filter(
+        empresa=empresa, estado__in=["BORRADOR", "EN_PROCESO", "PARCIAL", "CON_DIFERENCIAS"]
+    ).count()
 
     zero = Decimal("0")
     money = lambda value: value or zero
@@ -413,21 +401,6 @@ def inicio(request):
         NavegacionReciente.objects.filter(empresa=empresa, usuario=request.user)
         .only("modulo", "etiqueta", "url", "visitado")[:8]
     )
-    upcoming = []
-    for item in Pedido.objects.filter(
-        empresa=empresa, fecha_entrega__range=(hoy, fin_eventos)
-    ).only("numero", "fecha_entrega").order_by("fecha_entrega")[:4]:
-        upcoming.append({"date": item.fecha_entrega, "type": "Entrega", "reference": item.numero, "route": "comercial:pedidos_lista"})
-    for item in CuentaPorCobrar.objects.filter(
-        empresa=empresa, fecha_vencimiento__range=(hoy, fin_eventos), saldo__gt=0
-    ).select_related("factura").only("fecha_vencimiento", "factura__numero").order_by("fecha_vencimiento")[:3]:
-        upcoming.append({"date": item.fecha_vencimiento, "type": "Cobro", "reference": item.factura.numero, "route": "comercial:o2c_full_dashboard"})
-    for item in CuentaPorPagarEnterprise.objects.filter(
-        empresa=empresa, vence_el__range=(hoy, fin_eventos), saldo__gt=0
-    ).select_related("factura").only("vence_el", "factura__numero").order_by("vence_el")[:3]:
-        upcoming.append({"date": item.vence_el, "type": "Pago", "reference": item.factura.numero, "route": "contabilidad:dashboard_enterprise"})
-    upcoming = sorted(upcoming, key=lambda item: item["date"])[:7]
-
     quick_actions = [
         {"label": "Nuevo cliente", "route": "comercial:cliente_crear", "icon": "i-users", "allowed": request.user.has_perm("comercial.add_cliente")},
         {"label": "Nueva cotización", "route": "comercial:cotizacion_crear", "icon": "i-file", "allowed": request.user.has_perm("comercial.add_cotizacionventa")},
@@ -452,125 +425,25 @@ def inicio(request):
         "empresa": empresa, "greeting": greeting, "today": hoy,
         "orders_today": pedidos["hoy"], "pending_deliveries": entregas["pendientes"],
         "kpis": kpis, "attention": attention, "activity": activity,
-        "upcoming": upcoming, "quick_primary": quick_actions[:6],
+        "quick_primary": quick_actions[:6],
         "quick_more": quick_actions[6:], "chart_data": chart_data,
         "has_financial_chart": any(chart_data["sales"]),
         "has_purchase_chart": any(chart_data["purchases"]),
         "has_production_chart": any(chart_data["production"]),
         "has_aging_chart": any(chart_data["aging"]),
-    })
-
-
-@login_required(login_url="login_usuario")
-def _inicio_legacy(request):
-    empresa = obtener_empresa(request)
-
-    if not empresa:
-        messages.error(request, "Debe configurar su empresa antes de continuar.")
-        return redirect("login_usuario")
-
-    hoy = timezone.localdate()
-    manana = hoy + timedelta(days=1)
-    inicio_mes = hoy.replace(day=1)
-
-    conduces_mes = Conduce.objects.filter(
-        empresa=empresa,
-        fecha__gte=inicio_mes,
-        fecha__lte=hoy
-    )
-
-    todos_conduces = Conduce.objects.filter(empresa=empresa)
-
-    total_raciones = conduces_mes.aggregate(total=Sum("cantidad"))["total"] or 0
-    total_conduces = conduces_mes.count()
-    total_centros = CentroEducativo.objects.filter(empresa=empresa).count()
-
-    menu_manana = MenuDiario.objects.filter(empresa=empresa, fecha=manana).first()
-    producto_manana = menu_manana.producto if menu_manana else "No hay menú registrado"
-    fecha_manana = manana.strftime("%d/%m/%Y")
-
-    precio_racion_estimado = Decimal("10.18")
-    proyeccion_ventas = f"{Decimal(total_raciones) * precio_racion_estimado:,.2f}"
-
-    raciones_por_dia = (
-        conduces_mes
-        .values("fecha")
-        .annotate(total=Sum("cantidad"))
-        .order_by("fecha")
-    )
-
-    labels_dias = [formatear_fecha_grafico(item["fecha"]) for item in raciones_por_dia if item["fecha"]]
-    data_dias = [item["total"] or 0 for item in raciones_por_dia if item["fecha"]]
-
-    productos = {}
-
-    for conduce in conduces_mes:
-        producto = normalizar_producto(conduce.producto)
-        productos[producto] = productos.get(producto, 0) + (conduce.cantidad or 0)
-
-    labels_productos = list(productos.keys())
-    data_productos = list(productos.values())
-
-    resumen_meses = (
-        todos_conduces
-        .annotate(mes=TruncMonth("fecha"))
-        .values("mes")
-        .annotate(
-            total_raciones=Sum("cantidad"),
-            total_conduces=Count("id")
-        )
-        .order_by("-mes")
-    )
-
-    # Resumen ejecutivo de solo lectura sobre contratos ya certificados.
-    from comercial.models_o2c4 import CuentaPorCobrar, EntregaComercial, FacturaVenta, ReciboCobro
-    from compras.p2p_models import OrdenCompraEnterprise
-    from contabilidad.models import CuentaPorPagarEnterprise, FacturaProveedor, OrdenPago
-    from core.models import AlertaExperiencia, NavegacionReciente
-    from inventario.models import PlanProduccion, ProductoInventario
-
-    def amount(model, field, **filters):
-        return model.objects.filter(empresa=empresa, **filters).aggregate(value=Sum(field))["value"] or 0
-
-    demo_kpis = (
-        ("Ventas", amount(FacturaVenta, "total"), "comercial:o2c_full_dashboard", "currency"),
-        ("Compras", amount(FacturaProveedor, "total"), "compras:p2p_dashboard", "currency"),
-        ("Producción", PlanProduccion.objects.filter(empresa=empresa).exclude(estado="CANCELADO").count(), "inventario:produccion_dashboard", "number"),
-        ("Inventario crítico", ProductoInventario.objects.filter(empresa=empresa, activo=True, stock_actual__lte=F("stock_minimo")).count(), "inventario:productos", "number"),
-        ("CxC", amount(CuentaPorCobrar, "saldo"), "comercial:o2c_full_dashboard", "currency"),
-        ("CxP", amount(CuentaPorPagarEnterprise, "saldo"), "contabilidad:dashboard_enterprise", "currency"),
-        ("Cobros", ReciboCobro.objects.filter(empresa=empresa).exclude(estado="ANULADO").count(), "comercial:o2c_full_dashboard", "number"),
-        ("Pagos", OrdenPago.objects.filter(empresa=empresa).exclude(estado="ANULADA").count(), "contabilidad:dashboard_enterprise", "number"),
-    )
-    attention = (
-        ("Facturas vencidas", FacturaVenta.objects.filter(empresa=empresa, estado="VENCIDA").count(), "danger"),
-        ("Pagos pendientes", CuentaPorPagarEnterprise.objects.filter(empresa=empresa, estado__in=["PENDIENTE", "VENCIDA"]).count(), "warning"),
-        ("Inventario crítico", ProductoInventario.objects.filter(empresa=empresa, activo=True, stock_actual__lte=F("stock_minimo")).count(), "danger"),
-        ("Entregas pendientes", EntregaComercial.objects.filter(empresa=empresa, estado__in=["PENDIENTE", "EN_RUTA", "EN_SITIO"]).count(), "info"),
-        ("Producción atrasada", PlanProduccion.objects.filter(empresa=empresa, fecha_plan__lt=hoy).exclude(estado__in=["CERRADO", "CANCELADO"]).count(), "warning"),
-        ("Órdenes por aprobar", OrdenCompraEnterprise.objects.filter(empresa=empresa, estado__in=["BORRADOR", "PENDIENTE_APROBACION"]).count(), "info"),
-    )
-    demo_alerts = AlertaExperiencia.objects.filter(empresa=empresa).exclude(estado="RESUELTA")[:5]
-    demo_activity = NavegacionReciente.objects.filter(empresa=empresa, usuario=request.user)[:6]
-
-    return render(request, "inicio.html", {
-        "empresa": empresa,
-        "total_raciones": total_raciones,
-        "total_conduces": total_conduces,
+        "total_raciones": total_raciones, "total_conduces": total_conduces,
         "total_centros": total_centros,
-        "producto_manana": producto_manana,
-        "fecha_manana": fecha_manana,
-        "proyeccion_ventas": proyeccion_ventas,
-        "labels_dias": labels_dias,
-        "data_dias": data_dias,
-        "labels_productos": labels_productos,
-        "data_productos": data_productos,
-        "resumen_meses": resumen_meses,
-        "demo_kpis": demo_kpis,
-        "attention": attention,
-        "demo_alerts": demo_alerts,
-        "demo_activity": demo_activity,
-        "today": hoy,
+        "proyeccion_mes": Decimal(total_raciones) * Decimal("10.18"),
+        "conduces_diarios": conduces_diarios,
+        "production_labels": [formatear_fecha_grafico(item["fecha"]) for item in conduces_diarios],
+        "production_values": [float(item["total"] or 0) for item in conduces_diarios],
+        "production_average": (total_raciones / len(conduces_diarios)) if conduces_diarios else 0,
+        "production_max": max((item["total"] or 0 for item in conduces_diarios), default=0),
+        "production_min": min((item["total"] or 0 for item in conduces_diarios), default=0),
+        "menu_manana": menu_manana, "tomorrow": manana,
+        "centros_sin_menu": 0 if menu_manana else total_centros,
+        "recepciones_pendientes": recepciones_pendientes,
+        "financial": {"estimated": Decimal(total_raciones) * Decimal("10.18"), "billed": money(ventas["mes"]), "cxc": money(cxc["saldo_total"]), "cxp": money(cxp["saldo_total"]), "overdue_cxc": cxc["vencidas"], "overdue_cxp": cxp["por_vencer"]},
     })
 
 

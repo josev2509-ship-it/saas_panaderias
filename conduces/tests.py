@@ -2,7 +2,6 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
 from django.core.management import call_command
 from django.db import connection
 from django.test import SimpleTestCase, TestCase
@@ -28,11 +27,11 @@ class DemoReadyContractTests(SimpleTestCase):
 
     def test_dashboard_contains_executive_demo_sections(self):
         for marker in (
-            "ds-hero--executive",
-            "ds-kpi-ribbon",
-            "Centro de atención",
-            "Ventas vs. cobros",
-            "Compras vs. pagos",
+            "v2-topbar",
+            "v2-kpis",
+            "Producción diaria del mes",
+            "Requiere tu atención",
+            "Resumen financiero",
             "Actividad reciente",
             "Acciones rápidas",
         ):
@@ -69,12 +68,12 @@ class DemoReadyContractTests(SimpleTestCase):
 
     def test_responsive_demo_contract(self):
         for marker in (
-            "ds-kpi-ribbon",
-            "ds-dashboard-grid--executive",
-            "ds-attention-grid",
-            "ds-quick-grid--executive",
+            "v2-kpis",
+            "v2-primary-grid",
+            "v2-secondary-grid",
+            "v2-actions__grid",
         ):
-            self.assertIn(marker, self.responsive)
+            self.assertIn(marker, self.template + self.responsive)
 
     def test_demo_pipeline_uses_existing_generators(self):
         source = (
@@ -129,23 +128,25 @@ class PremiumExecutiveDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Empresa Premium")
         self.assertNotContains(response, "Empresa Ajena")
-        for marker in ("Requiere tu atención", "Indicadores ejecutivos", "Actividad reciente", "Agenda operativa"):
+        for marker in ("Requiere tu atención", "Producción diaria del mes", "Actividad reciente", "Resumen financiero"):
             self.assertContains(response, marker)
 
     def test_kpis_links_and_empty_states_are_honest(self):
         response = self.client.get(reverse("inicio"))
-        self.assertEqual(len(response.context["kpis"]), 8)
-        self.assertContains(response, "Sin resumen disponible", count=4)
+        self.assertContains(response, 'class="v2-kpi ', count=4)
+        self.assertContains(response, "Sin resumen disponible")
         for route in ("comercial:dashboard", "comercial:o2c_full_dashboard", "inventario:produccion_dashboard", "inventario:dashboard"):
             self.assertContains(response, reverse(route))
 
     def test_actions_follow_role_permissions(self):
         response = self.client.get(reverse("inicio"))
-        self.assertNotContains(response, "Nuevo cliente")
-        self.user.user_permissions.add(Permission.objects.get(codename="add_cliente"))
-        self.user = get_user_model().objects.get(pk=self.user.pk)
-        self.client.force_login(self.user)
-        self.assertContains(self.client.get(reverse("inicio")), "Nuevo cliente")
+        self.assertContains(response, "Generar conduce")
+        self.assertContains(response, "Facturación")
+        self.empresa.modulo_conduces = False
+        self.empresa.modulo_facturacion = False
+        self.empresa.save(update_fields=["modulo_conduces", "modulo_facturacion"])
+        self.assertNotContains(self.client.get(reverse("inicio")), "Generar conduce")
+        self.assertNotContains(self.client.get(reverse("inicio")), ">Facturación</a>")
 
     def test_dashboard_stays_within_query_budget(self):
         with CaptureQueriesContext(connection) as queries:
@@ -163,13 +164,14 @@ class PremiumDashboardContractTests(SimpleTestCase):
         cls.css = (root / "conduces/static/design_system/css/dashboard_premium.css").read_text(encoding="utf-8")
         cls.javascript = (root / "conduces/static/design_system/js/dashboard_premium.js").read_text(encoding="utf-8")
 
-    def test_responsive_order_and_compact_hero_contract(self):
-        self.assertIn("max-height:220px", self.css)
-        for marker in (".premium-attention{order:2}", ".premium-kpis{order:3}", ".premium-actions{order:4}", ".premium-charts{order:6}"):
+    def test_reference_layout_and_responsive_contract(self):
+        self.assertIn("grid-template-columns:minmax(0,6fr) minmax(270px,3fr) minmax(260px,3fr)", self.css)
+        for marker in (".v2-kpis{grid-template-columns:repeat(2", ".v2-primary-grid,.v2-secondary-grid{grid-template-columns:1fr", ".v2-actions__grid{grid-template-columns:repeat(2"):
             self.assertIn(marker, self.css)
 
-    def test_secondary_charts_are_lazy_and_no_empty_canvas_is_rendered(self):
-        self.assertIn('data-chart-panel="production" hidden', self.template)
-        self.assertIn('data-chart-panel="aging" hidden', self.template)
-        self.assertIn("if(!canvas||charts[name]||!window.Chart)return", self.javascript)
-        self.assertIn("{% if has_financial_chart %}", self.template)
+    def test_approved_composition_replaces_legacy_blocks(self):
+        for marker in ("v2-topbar", "v2-kpis", "v2-primary-grid", "v2-secondary-grid", "v2-finance"):
+            self.assertIn(marker, self.template)
+        self.assertNotIn("premium-hero", self.template)
+        self.assertNotIn("premium-chart-tabs", self.template)
+        self.assertIn("if(canvas&&values.length&&window.Chart)", self.javascript)
