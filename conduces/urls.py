@@ -91,12 +91,6 @@ urlpatterns = [
 
     # ================= NOTA ACLARATORIA =================
     path("nota-aclaratoria/pdf/", views.generar_nota_aclaratoria_pdf, name="generar_nota_aclaratoria_pdf"),
-    path("relacion-general/pdf/", views.generar_relacion_general_pdf, name="generar_relacion_general_pdf"),
-    path(
-    "nota-aclaratoria/pdf/",
-    views.generar_nota_aclaratoria_pdf,
-    name="generar_nota_aclaratoria_pdf"
-),
 path(
     "nota-aclaratoria/preparar/",
     views.preparar_nota_aclaratoria,

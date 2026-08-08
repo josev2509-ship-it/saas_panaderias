@@ -63,7 +63,11 @@ def cobrar(request,pk):
     c=_c(request);cuenta=get_object_or_404(CuentaPorCobrar,pk=pk,empresa=c.empresa);m=Decimal(request.POST["monto"]);r=registrar_cobro(context=c,cliente=cuenta.cliente,moneda=cuenta.moneda,monto=m,metodo=request.POST.get("metodo","TRANSFERENCIA"));aplicar_cobro(context=c,recibo_id=r.pk,cuenta_id=cuenta.pk,monto=m);return redirect("comercial:o2c_full_lista",tipo="cxc")
 @login_required
 def exportar(request,tipo,formato):
-    e=_e(request);mapa={"facturas":FacturaVenta,"cxc":CuentaPorCobrar,"cobros":ReciboCobro,"entregas":EntregaComercial,"despachos":DespachoComercial};rows=[[x.pk,getattr(x,"numero",x.pk),getattr(x,"estado","")] for x in mapa[tipo].objects.filter(empresa=e)]
+    e=_e(request);mapa={"facturas":FacturaVenta,"cxc":CuentaPorCobrar,"cobros":ReciboCobro,"entregas":EntregaComercial,"despachos":DespachoComercial}
+    if tipo not in mapa:
+        from .o2c_views import exportar as exportar_legacy
+        return exportar_legacy(request,tipo,formato)
+    rows=[[x.pk,getattr(x,"numero",x.pk),getattr(x,"estado","")] for x in mapa[tipo].objects.filter(empresa=e)]
     if formato=="csv":
         r=HttpResponse(content_type="text/csv");w=csv.writer(r);w.writerow(["ID","Número","Estado"]);[w.writerow(row) for row in rows];return r
     if formato=="xlsx":
