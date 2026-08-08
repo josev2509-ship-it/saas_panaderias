@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% load humanize %}
+{% block content %}<div class="app-page"><header class="topbar"><div><h1>Presupuestos</h1><p>Planificación financiera anual y montos aprobados.</p></div><a class="btn" href="{% url 'contabilidad:crear_presupuesto' %}">Nuevo presupuesto</a></header>
+<section class="table-card"><table><thead><tr><th>Nombre</th><th>Año</th><th>Descripción</th><th>Monto estimado</th></tr></thead><tbody>{% for item in presupuestos %}<tr><td>{{ item.nombre }}</td><td>{{ item.año }}</td><td>{{ item.descripcion|default:"—" }}</td><td>RD$ {{ item.monto_estimado|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td colspan="4">No hay presupuestos registrados.</td></tr>{% endfor %}</tbody></table></section></div>{% endblock %}

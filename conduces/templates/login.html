@@ -3,7 +3,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Iniciar sesión | SaaS Panaderías</title>
+    <title>Iniciar sesión | SASTRE ERP Enterprise</title>
 
     <style>
         * {
@@ -267,6 +267,10 @@ color: #7c2d12;
     cursor: pointer;
     font-size: 16px;
     opacity: 0.7;
+    border: 0;
+    background: transparent;
+    color: #1d4ed8;
+    font-weight: 700;
 }
 
 .toggle-password:hover {
@@ -292,10 +296,10 @@ color: #7c2d12;
 
     <div class="login-left">
         <div class="brand">
-            <div class="brand-icon">🥖</div>
+            <div class="brand-icon" aria-hidden="true">SE</div>
             <div class="brand-text">
-                <strong>SaaS Panaderías</strong>
-                <span>Gestión inteligente para suplidores</span>
+                <strong>SASTRE ERP</strong>
+                <span>Enterprise Business Platform</span>
             </div>
         </div>
 
@@ -307,10 +311,10 @@ color: #7c2d12;
         </p>
 
         <div class="feature-list">
-            <div class="feature">✔ Genera conduces diarios, semanales o mensuales</div>
-            <div class="feature">✔ Controla matrículas, centros y cantidades entregadas</div>
-            <div class="feature">✔ Prepara relaciones diarias y generales para facturación</div>
-            <div class="feature">✔ Exporta reportes en PDF y Excel</div>
+            <div class="feature">Operación comercial integrada de extremo a extremo</div>
+            <div class="feature">Compras, inventario y producción en una sola plataforma</div>
+            <div class="feature">Tesorería, contabilidad y conciliación conectadas</div>
+            <div class="feature">Documentos y trazabilidad empresarial</div>
         </div>
 
         <div class="stats">
@@ -356,9 +360,7 @@ color: #7c2d12;
     <div class="password-wrapper">
         <input id="password" type="password" name="password" placeholder="Ingresa tu contraseña" required>
 
-        <span class="toggle-password" onclick="togglePassword()">
-            👁️
-        </span>
+        <button class="toggle-password" type="button" onclick="togglePassword(event)" aria-controls="password" aria-label="Mostrar contraseña">Mostrar</button>
     </div>
 </div>
 
@@ -375,7 +377,7 @@ color: #7c2d12;
         </form>
 
         <div class="mini-info">
-            🔐 Acceso seguro | 📊 Gestión de conduces | 📄 Reportes automáticos
+            Acceso seguro · Operación integrada · Reportes empresariales
         </div>
 
         <div class="links">
@@ -384,22 +386,26 @@ color: #7c2d12;
         </div>
 
         <div class="footer-note">
-            Plataforma diseñada para ayudar a panaderías y suplidores a organizar sus entregas,
-            documentos y controles administrativos de manera profesional.
+            SASTRE ERP Enterprise centraliza la operación de su empresa con seguridad,
+            trazabilidad y una experiencia consistente en todos los módulos.
         </div>
     </div>
 
 </div>
 <script>
-function togglePassword() {
+function togglePassword(event) {
     const input = document.getElementById("password");
 
     if (!input) return;
 
     if (input.type === "password") {
         input.type = "text";
+        event.currentTarget.textContent = "Ocultar";
+        event.currentTarget.setAttribute("aria-label", "Ocultar contraseña");
     } else {
         input.type = "password";
+        event.currentTarget.textContent = "Mostrar";
+        event.currentTarget.setAttribute("aria-label", "Mostrar contraseña");
     }
 }
 </script>

@@ -1,1 +1,21 @@
-{% extends "base.html" %}{% block content %}<h1>Order-to-Cash</h1><div class="metric-grid">{% for k,v in kpis.items %}<article class="metric-card"><strong>{{ v }}</strong><span>{{ k }}</span></article>{% endfor %}</div><nav>{% for t in 'reservas,preparaciones,picking,packing,despachos,conduces,entregas,facturas,cxc,cobros,factoring'.split %}<a href="{% url 'comercial:o2c_full_lista' t %}">{{ t|title }}</a>{% endfor %}</nav>{% endblock %}
+{% extends "base.html" %}
+{% block content %}
+<div class="app-page">
+  <header class="topbar"><div><h1>Order-to-Cash</h1><p>Visión integral del ciclo comercial, logístico y financiero.</p></div></header>
+  <section class="metric-grid" aria-label="Indicadores O2C">
+    {% for key, value in kpis.items %}<article class="metric-card"><strong>{{ value }}</strong><span>{{ key }}</span></article>{% empty %}<article class="metric-card"><strong>0</strong><span>Operaciones activas</span></article>{% endfor %}
+  </section>
+  <section class="card"><h2>Espacio de trabajo O2C</h2><nav class="form-actions" aria-label="Etapas Order-to-Cash">
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'reservas' %}">Reservas</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'preparaciones' %}">Preparaciones</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'picking' %}">Picking</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'packing' %}">Packing</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'despachos' %}">Despachos</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'entregas' %}">Entregas</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'facturas' %}">Facturas</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'cxc' %}">Cuentas por cobrar</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'cobros' %}">Cobros</a>
+    <a class="btn btn-light" href="{% url 'comercial:o2c_full_lista' 'factoring' %}">Factoring</a>
+  </nav></section>
+</div>
+{% endblock %}

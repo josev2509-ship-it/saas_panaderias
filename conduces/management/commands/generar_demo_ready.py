@@ -2,6 +2,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
 from conduces.models import Empresa
+from catalogos.models import Moneda, MonedaEmpresa
 
 
 TARGETS = {
@@ -39,6 +40,15 @@ class Command(BaseCommand):
             self.stdout.write(f"Empresa {empresa.pk}; objetivos: {TARGETS}")
             self.stdout.write("Pipeline certificado: " + ", ".join(PIPELINE))
             return
+        moneda, _ = Moneda.objects.get_or_create(
+            codigo="DOP",
+            defaults={"nombre": "Peso dominicano", "simbolo": "RD$"},
+        )
+        MonedaEmpresa.objects.get_or_create(
+            empresa=empresa,
+            moneda=moneda,
+            defaults={"es_base": True, "activa": True},
+        )
         for command in PIPELINE:
             call_command(command, empresa=empresa.pk)
         self.stdout.write(self.style.SUCCESS(

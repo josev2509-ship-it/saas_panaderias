@@ -27,7 +27,11 @@ urlpatterns = [
     path("o2c/finanzas/conciliaciones/lineas/<int:pk>/revertir/", financial_views.conciliacion_revertir, name="fin_conciliacion_revertir"),
     path("o2c/finanzas/exportar/<str:tipo>/<str:formato>/", financial_views.exportacion_financiera, name="fin_exportar"),
     path("o2c/finanzas/facturas/<int:pk>/reintentar/", financial_views.reintentar_integracion, name="fin_reintentar"),
-    path("o2c/",o2c_full_views.dashboard,name="o2c_full_dashboard"),path("o2c/<str:tipo>/",o2c_full_views.listado,name="o2c_full_lista"),
+    path("o2c/",o2c_full_views.dashboard,name="o2c_full_dashboard"),
+    # Las rutas literales deben preceder al listado genérico para no quedar
+    # capturadas como un tipo O2C inexistente.
+    path("o2c/reportes/",o2c_views.reportes,name="o2c_reportes"),
+    path("o2c/<str:tipo>/",o2c_full_views.listado,name="o2c_full_lista"),
     path("o2c/pedido/<int:pk>/reservar/",o2c_full_views.pedido_reservar,name="o2c_pedido_reservar"),path("o2c/reserva/<int:pk>/preparar/",o2c_full_views.reserva_preparar,name="o2c_reserva_preparar"),path("o2c/preparacion/<int:pk>/validar/",o2c_full_views.preparacion_validar,name="o2c_preparacion_validar"),path("o2c/picking/<int:pk>/completar/",o2c_full_views.picking_completar,name="o2c_picking_completar"),path("o2c/packing/<int:pk>/despachar/",o2c_full_views.packing_despachar,name="o2c_packing_despachar"),path("o2c/despacho/<int:pk>/conduce/",o2c_full_views.despacho_conduce,name="o2c_despacho_conduce"),path("o2c/conduce/<int:pk>/entregar/",o2c_full_views.conduce_entregar,name="o2c_conduce_entregar"),path("o2c/entrega/<int:pk>/facturar/",o2c_full_views.entrega_facturar,name="o2c_entrega_facturar"),path("o2c/cxc/<int:pk>/cobrar/",o2c_full_views.cobrar,name="o2c_cobrar"),path("o2c/exportar/<str:tipo>/<str:formato>/",o2c_full_views.exportar,name="o2c_full_exportar"),
     path("o2c/",o2c_views.dashboard,name="o2c_dashboard"),path("clientes/<int:pk>/360/",o2c_views.cliente_360,name="cliente_360"),path("clientes/<int:pk>/360/<str:accion>/",o2c_views.cliente_accion,name="cliente_360_accion"),
     path("productos-comerciales/",o2c_views.productos_lista,name="productos_comerciales"),path("productos-comerciales/nuevo/",o2c_views.producto_form,name="producto_comercial_crear"),path("productos-comerciales/<int:pk>/",o2c_views.producto_detalle,name="producto_detalle"),path("productos-comerciales/<int:pk>/editar/",o2c_views.producto_form,name="producto_editar"),
