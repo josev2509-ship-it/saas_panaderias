@@ -8,14 +8,10 @@
     <div class="topbar">
         <div>
             <h1>Gastos / Reporte 606</h1>
-            <p>Registro de facturas de gastos, ITBIS y cuentas por pagar.</p>
+            <p>Vista fiscal canónica derivada de facturas de proveedor P2P.</p>
         </div>
 
         <div class="form-actions">
-            <a href="{% url 'contabilidad:crear_factura_606' %}" class="btn">
-                + Registrar factura 606
-            </a>
-
             <a href="{% url 'contabilidad:exportar_606_excel' %}" class="btn btn-light">
                 Exportar 606
             </a>
@@ -51,20 +47,20 @@
             <tbody>
                 {% for factura in facturas_606 %}
                 <tr>
-                    <td>{{ factura.proveedor.nombre }}</td>
-                    <td>{{ factura.proveedor.rnc }}</td>
-                    <td>{{ factura.numero_comprobante }}</td>
-                    <td>{{ factura.fecha_comprobante|date:"d/m/Y" }}</td>
-                    <td>RD$ {{ factura.monto_facturado|floatformat:2|intcomma }}</td>
-                    <td>RD$ {{ factura.itbis_facturado|floatformat:2|intcomma }}</td>
-                    <td>RD$ {{ factura.retencion_renta|floatformat:2|intcomma }}</td>
-                    <td>RD$ {{ factura.retencion_itbis|floatformat:2|intcomma }}</td>
-                    <td>RD$ {{ factura.total_pagado|floatformat:2|intcomma }}</td>
+                    <td>{{ factura.proveedor.razon_social }}</td>
+                    <td>{{ factura.proveedor.rnc_identificacion|default:"—" }}</td>
+                    <td>{{ factura.ncf|default:"—" }}</td>
+                    <td>{{ factura.fecha|date:"d/m/Y" }}</td>
+                    <td>RD$ {{ factura.subtotal|floatformat:2|intcomma }}</td>
+                    <td>RD$ {{ factura.impuesto|floatformat:2|intcomma }}</td>
+                    <td>RD$ {{ factura.retenciones|floatformat:2|intcomma }}</td>
+                    <td>RD$ 0.00</td>
+                    <td>RD$ {{ factura.total|floatformat:2|intcomma }}</td>
                     <td>{{ factura.estado }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="10">No hay facturas 606 registradas.</td>
+                    <td colspan="10">No hay facturas P2P disponibles para el 606.</td>
                 </tr>
                 {% endfor %}
             </tbody>

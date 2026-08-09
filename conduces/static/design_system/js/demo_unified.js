@@ -21,7 +21,7 @@
   main.querySelectorAll('form').forEach(form => {
     if (form.querySelector('input[type="password"],input:not([type]),input[type="text"],select,textarea')) form.dataset.demoForm = 'true';
     const actions = [...form.querySelectorAll('button[type="submit"],button:not([type]),input[type="submit"]')];
-    if (actions.length && !actions[0].closest('.el-command-bar,.ds-filter-bar,.filters')) actions[actions.length - 1].parentElement?.classList.add('ds-demo-form-actions');
+    if (actions.length && !actions[0].closest('table,.el-row-menu,.el-command-bar,.ds-filter-bar,.filters')) actions[actions.length - 1].parentElement?.classList.add('ds-demo-form-actions');
   });
   main.querySelectorAll('td, .empty, .ds-empty-state').forEach(node => {
     if (/^(sin |no hay |todavía no |aún no )/i.test(node.textContent.trim())) node.classList.add('ds-demo-empty');

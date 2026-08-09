@@ -79,6 +79,21 @@
         gap: 12px;
         flex-wrap: wrap;
     }
+
+    @media (max-width: 768px) {
+        .finance-hero {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .quick-actions {
+            width: 100%;
+        }
+
+        .quick-actions .btn {
+            flex: 1 1 100%;
+        }
+    }
 </style>
 
 <div class="app-page">

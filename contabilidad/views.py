@@ -120,12 +120,13 @@ def crear_deuda_socio(request):
 
 @login_required
 def gastos(request):
-    from .models import Factura606
+    from conduces.services import obtener_empresa_usuario
+    from .models import FacturaProveedor
 
-    facturas_606 = Factura606.objects.select_related(
-        "proveedor",
-        "tipo_bienes_servicios"
-    ).all().order_by("-fecha_comprobante")
+    empresa = obtener_empresa_usuario(request)
+    facturas_606 = FacturaProveedor.objects.filter(empresa=empresa).select_related(
+        "proveedor", "moneda__moneda"
+    ).order_by("-fecha", "-id")
 
     return render(
         request,
@@ -143,7 +144,59 @@ def crear_gasto(request):
 
 @login_required
 def exportar_606_excel(request):
-    return HttpResponse("Exportar 606 pendiente")
+    from openpyxl import Workbook
+    from conduces.services import obtener_empresa_usuario
+    from .models import FacturaProveedor
+
+    empresa = obtener_empresa_usuario(request)
+    facturas = FacturaProveedor.objects.filter(empresa=empresa).select_related(
+        "proveedor", "moneda__moneda"
+    ).prefetch_related("retenciones_aplicadas").order_by("fecha", "id")
+    periodo = request.GET.get("periodo", "").strip()
+    if periodo:
+        try:
+            anio, mes = (int(value) for value in periodo.split("-", 1))
+            facturas = facturas.filter(fecha__year=anio, fecha__month=mes)
+        except (TypeError, ValueError):
+            return HttpResponse("El período debe usar el formato AAAA-MM.", status=400)
+
+    headers = (
+        "RNC/Cédula", "Tipo ID", "Tipo Bienes y Servicios", "NCF", "NCF Modificado",
+        "Fecha Comprobante", "Fecha Pago", "Monto Servicios", "Monto Bienes", "Total Facturado",
+        "ITBIS Facturado", "ITBIS Retenido", "ITBIS Sujeto Proporcionalidad", "ITBIS Llevado al Costo",
+        "ITBIS por Adelantar", "ITBIS Percibido", "Retención Renta", "ISR Percibido", "ISC",
+        "Otros Impuestos/Tasas", "Propina Legal", "Forma de Pago",
+    )
+
+    def safe(value):
+        text = "" if value is None else str(value)
+        return "'" + text if text[:1] in "=+-@" else value
+
+    book = Workbook(); sheet = book.active; sheet.title = "DGII 606"; sheet.append(headers)
+    for factura in facturas:
+        dgii = factura.dimensiones or {}
+        identificacion = factura.proveedor.rnc_normalizado or factura.proveedor.rnc_identificacion
+        tipo_id = {"JURIDICA": "1", "GUBERNAMENTAL": "1", "FISICA": "2", "EXTRANJERA": "3"}.get(factura.proveedor.tipo_persona, "")
+        retenciones = list(factura.retenciones_aplicadas.exclude(estado__in=["ANULADA", "REVERTIDA", "RECHAZADA"]))
+        itbis_retenido = sum((item.monto for item in retenciones if item.tipo == "ITBIS"), Decimal("0"))
+        renta_retenida = sum((item.monto for item in retenciones if item.tipo == "ISR"), Decimal("0"))
+        sheet.append(tuple(safe(value) for value in (
+            identificacion, tipo_id, dgii.get("dgii_tipo_bienes_servicios", ""), factura.ncf,
+            dgii.get("dgii_ncf_modificado", ""), factura.fecha.strftime("%Y%m%d"), dgii.get("dgii_fecha_pago", ""),
+            dgii.get("dgii_servicios", 0), dgii.get("dgii_bienes", 0), factura.total, factura.impuesto,
+            itbis_retenido, dgii.get("dgii_itbis_proporcionalidad", 0), dgii.get("dgii_itbis_costo", 0),
+            dgii.get("dgii_itbis_adelantar", 0), dgii.get("dgii_itbis_percibido", 0), renta_retenida,
+            dgii.get("dgii_isr_percibido", 0), dgii.get("dgii_isc", 0), dgii.get("dgii_otros_impuestos", factura.cargos),
+            dgii.get("dgii_propina", 0), dgii.get("dgii_forma_pago", ""),
+        )))
+    sheet.freeze_panes = "A2"; sheet.auto_filter.ref = sheet.dimensions
+    for column in sheet.columns:
+        sheet.column_dimensions[column[0].column_letter].width = min(28, max(12, max(len(str(cell.value or "")) for cell in column) + 2))
+    from io import BytesIO
+    stream = BytesIO(); book.save(stream)
+    response = HttpResponse(stream.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="DGII_606_{periodo or "todos"}.xlsx"'
+    return response
 
 
 @login_required

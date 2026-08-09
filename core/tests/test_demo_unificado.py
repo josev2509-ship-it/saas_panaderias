@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.templatetags.static import static
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
@@ -98,3 +99,46 @@ class DemoUnificadoRouteSmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="username"')
         self.assertContains(response, 'name="password"')
+
+    def test_demo_generator_is_complete_and_idempotent(self):
+        from comercial.models import CuentaPorCobrar, EntregaComercial, FacturaVenta, Pedido, ReciboCobro
+        from contabilidad.models import AsientoContable
+        from conduces.models import CentroEducativo, Conduce, Factura, MenuDiario
+        from inventario.models import MovimientoInventario, OrdenProduccion, PlanProduccion, RecetaProduccion
+
+        empresa = Empresa.objects.get(usuario=self.user)
+        call_command("generar_demo_ready", empresa=empresa.pk, verbosity=0)
+        first = (
+            Pedido.objects.filter(empresa=empresa).count(),
+            EntregaComercial.objects.filter(empresa=empresa).count(),
+            FacturaVenta.objects.filter(empresa=empresa).count(),
+            CuentaPorCobrar.objects.filter(empresa=empresa).count(),
+            ReciboCobro.objects.filter(empresa=empresa).count(),
+            AsientoContable.objects.filter(empresa=empresa).count(),
+            CentroEducativo.objects.filter(empresa=empresa).count(),
+            MenuDiario.objects.filter(empresa=empresa).count(),
+            Conduce.objects.filter(empresa=empresa).count(),
+            Factura.objects.filter(empresa=empresa).count(),
+            RecetaProduccion.objects.filter(empresa=empresa).count(),
+            PlanProduccion.objects.filter(empresa=empresa).count(),
+            OrdenProduccion.objects.filter(empresa=empresa).count(),
+            MovimientoInventario.objects.filter(empresa=empresa).count(),
+        )
+        call_command("generar_demo_ready", empresa=empresa.pk, verbosity=0)
+        self.assertEqual(first, (
+            Pedido.objects.filter(empresa=empresa).count(),
+            EntregaComercial.objects.filter(empresa=empresa).count(),
+            FacturaVenta.objects.filter(empresa=empresa).count(),
+            CuentaPorCobrar.objects.filter(empresa=empresa).count(),
+            ReciboCobro.objects.filter(empresa=empresa).count(),
+            AsientoContable.objects.filter(empresa=empresa).count(),
+            CentroEducativo.objects.filter(empresa=empresa).count(),
+            MenuDiario.objects.filter(empresa=empresa).count(),
+            Conduce.objects.filter(empresa=empresa).count(),
+            Factura.objects.filter(empresa=empresa).count(),
+            RecetaProduccion.objects.filter(empresa=empresa).count(),
+            PlanProduccion.objects.filter(empresa=empresa).count(),
+            OrdenProduccion.objects.filter(empresa=empresa).count(),
+            MovimientoInventario.objects.filter(empresa=empresa).count(),
+        ))
+        self.assertTrue(all(value > 0 for value in first))
