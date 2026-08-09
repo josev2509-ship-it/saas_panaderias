@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.contrib.auth.models import User
+from django.templatetags.static import static
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
@@ -88,8 +89,8 @@ class DemoUnificadoRouteSmokeTests(TestCase):
 
     def test_demo_pages_load_unified_assets(self):
         response = self.client.get(reverse("comercial:clientes_lista"))
-        self.assertContains(response, "demo_unified.css")
-        self.assertContains(response, "demo_unified.js")
+        self.assertContains(response, static("design_system/css/demo_unified.css"))
+        self.assertContains(response, static("design_system/js/demo_unified.js"))
 
     def test_login_remains_anonymous_and_functional(self):
         self.client.logout()

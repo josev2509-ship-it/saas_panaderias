@@ -4,6 +4,7 @@ from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
+from django.templatetags.static import static
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
@@ -88,7 +89,7 @@ class CatalogSecurityTests(TestCase):
         response = self.client.get(reverse("sedl:catalog"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "SEDL Core Foundation v1")
-        self.assertContains(response, "sedl/sedl.css")
+        self.assertContains(response, static("sedl/sedl.css"))
 
     @override_settings(SEDL_CATALOG_ENABLED=False)
     def test_catalog_can_be_disabled(self):
