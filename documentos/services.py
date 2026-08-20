@@ -28,7 +28,7 @@ from contabilidad.models import (AnticipoProveedor,AsientoContable,CierreContabl
     NotaDebitoProveedor,OrdenPago,PagoMasivo)
 from tesoreria.models import ConciliacionBancaria
 from presupuesto.models import Presupuesto as PresupuestoEnterprise
-from rrhh.models import Empleado,ContratoEmpleado,SolicitudVacacion,LicenciaEmpleado
+from rrhh.models import Empleado,ContratoEmpleado,SolicitudVacacion,LicenciaEmpleado,AccionDisciplinaria,Capacitacion,SalidaEmpleado
 from nomina.models import Nomina,LiquidacionLaboral,PrestacionLaboral
 from activos.models import ActivoFijo,SeguroActivo,GarantiaActivo,BajaActivo,RevaluacionActivo
 from mantenimiento.models import OrdenMantenimiento
@@ -36,6 +36,7 @@ from mantenimiento.models import OrdenMantenimiento
 from .models import Documento, extension_por_contenido
 
 MODELOS_PERMITIDOS = {
+    ("rrhh","acciondisciplinaria"):AccionDisciplinaria,("rrhh","capacitacion"):Capacitacion,("rrhh","salidaempleado"):SalidaEmpleado,
     ("contabilidad","cuentacontable"):CuentaContable,("contabilidad","asientocontable"):AsientoContable,("contabilidad","cierrecontable"):CierreContable,("contabilidad","facturaproveedor"):FacturaProveedor,("contabilidad","cuentaporpagarenterprise"):CuentaPorPagarEnterprise,("contabilidad","ordenpago"):OrdenPago,("tesoreria","conciliacionbancaria"):ConciliacionBancaria,("presupuesto","presupuesto"):PresupuestoEnterprise,("rrhh","empleado"):Empleado,("rrhh","contratoempleado"):ContratoEmpleado,("rrhh","solicitudvacacion"):SolicitudVacacion,("rrhh","licenciaempleado"):LicenciaEmpleado,("nomina","nomina"):Nomina,("nomina","liquidacionlaboral"):LiquidacionLaboral,("nomina","prestacionlaboral"):PrestacionLaboral,("activos","activofijo"):ActivoFijo,("activos","seguroactivo"):SeguroActivo,("activos","garantiaactivo"):GarantiaActivo,("activos","bajaactivo"):BajaActivo,("activos","revaluacionactivo"):RevaluacionActivo,("mantenimiento","ordenmantenimiento"):OrdenMantenimiento,
     ("comercial", "cliente"): Cliente,
     ("comercial", "pedido"): Pedido,
