@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 from zipfile import ZipFile
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -12,9 +13,11 @@ from openpyxl import load_workbook
 from conduces.models import Empresa
 from rrhh.models import CentroTrabajo, Departamento, Empleado, HoraExtra, Puesto, SaldoVacacion
 
-from .documents import payroll_pdf, payroll_xlsx, payslip_pdf, payslips_zip, settlement_pdf
+from .documents import loan_statement_pdf, payroll_pdf, payroll_xlsx, payslip_pdf, payslips_zip, settlement_pdf
+from .forms import PrestamoForm
+from .loan_services import finalize_payroll_loans, prepare_loan, reverse_payroll_loans
 from .labor_settlement import calculate_settlement
-from .models import ConceptoNomina, LiquidacionLaboral, NovedadNomina, PeriodoNomina, TipoNomina
+from .models import ConceptoNomina, CuotaPrestamoEmpleado, LiquidacionLaboral, NovedadNomina, PeriodoNomina, PrestamoEmpleado, TipoNomina
 from .payroll_engine import calculate_isr_annual, ensure_legal_parameters, money, process_payroll
 
 
@@ -163,3 +166,53 @@ class LaborSettlementEngineTests(PayrollRDEngineTests):
         self.assertTrue(settlement.requiere_revision)
         self.assertEqual(settlement.estado, "REVISION")
         self.assertIn("protegido", settlement.motivo_revision.lower())
+
+
+class PayrollProfessionalExperienceTests(PayrollRDEngineTests):
+    def test_multiple_loans_recalculation_and_final_balance_are_idempotent(self):
+        employee = self.employee("LOAN", "60000")
+        period = self.period()
+        loans = []
+        for amount, installments in (("30000", 10), ("12000", 4)):
+            loan = PrestamoEmpleado(empresa=self.company, empleado=employee, principal=Decimal(amount), saldo=0, cuotas=installments, estado="ACTIVO", primera_nomina=period)
+            loans.append(prepare_loan(loan, usuario=self.user))
+        payroll = process_payroll(empresa=self.company, periodo=period)
+        detail = payroll.detalles.get(empleado=employee)
+        self.assertEqual(detail.otros_descuentos, Decimal("6000.00"))
+        self.assertEqual(CuotaPrestamoEmpleado.objects.filter(nomina=payroll).count(), 2)
+        process_payroll(empresa=self.company, periodo=period)
+        self.assertEqual(CuotaPrestamoEmpleado.objects.filter(nomina=payroll).count(), 2)
+        for loan in loans:
+            loan.refresh_from_db(); self.assertEqual(loan.saldo, loan.principal)
+        finalize_payroll_loans(payroll)
+        for loan in loans:
+            loan.refresh_from_db(); self.assertEqual(loan.saldo, loan.principal - loan.monto_cuota)
+        reverse_payroll_loans(payroll)
+        for loan in loans:
+            loan.refresh_from_db(); self.assertEqual(loan.saldo, loan.principal)
+
+    def test_private_payslip_excludes_other_employee_and_loan_pdf_is_tenant_safe(self):
+        employee = self.employee("PRIVATE", "50000")
+        other = self.employee("OTHER", "200000")
+        period = self.period()
+        loan = prepare_loan(PrestamoEmpleado(empresa=self.company, empleado=employee, principal=Decimal("10000"), saldo=0, cuotas=5, estado="ACTIVO", primera_nomina=period), usuario=self.user)
+        payroll = process_payroll(empresa=self.company, periodo=period)
+        captured = {}
+        def capture_pdf(title, company, story, **kwargs):
+            captured["text"] = " ".join(getattr(item, "text", "") for item in story)
+            return b"%PDF"
+        with patch("nomina.documents._build_pdf", side_effect=capture_pdf):
+            pdf = payslip_pdf(payroll.detalles.get(empleado=employee))
+        text = captured["text"]
+        self.assertIn("PRIVATE", text)
+        self.assertNotIn("OTHER", text)
+        self.assertTrue(loan_statement_pdf(loan).startswith(b"%PDF"))
+        response = self.client.get(reverse("nomina:prestamo_pdf", args=[loan.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_loan_form_filters_cross_tenant_records(self):
+        employee = self.employee("FORM", "40000")
+        period = self.period()
+        form = PrestamoForm(empresa=self.company)
+        self.assertQuerySetEqual(form.fields["empleado"].queryset, [employee])
+        self.assertQuerySetEqual(form.fields["primera_nomina"].queryset, [period])

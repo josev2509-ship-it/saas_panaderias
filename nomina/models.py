@@ -80,10 +80,23 @@ class NovedadNomina(Base):
 
 
 class PrestamoEmpleado(Base):
-    empleado = models.ForeignKey("rrhh.Empleado", on_delete=models.PROTECT)
+    TIPOS = [("PRESTAMO", "Préstamo"), ("ADELANTO", "Adelanto"), ("UNICO", "Descuento único"), ("RECURRENTE", "Descuento recurrente"), ("OTRO", "Otro")]
+    ESTADOS = [("BORRADOR", "Borrador"), ("ACTIVO", "Activo"), ("PAGADO", "Pagado"), ("SUSPENDIDO", "Suspendido"), ("CANCELADO", "Cancelado")]
+    codigo = models.CharField(max_length=30, blank=True)
+    empleado = models.ForeignKey("rrhh.Empleado", on_delete=models.PROTECT, related_name="prestamos_descuentos")
+    tipo = models.CharField(max_length=15, choices=TIPOS, default="PRESTAMO")
+    fecha = models.DateField(null=True, blank=True)
     principal = models.DecimalField(max_digits=18, decimal_places=2)
     saldo = models.DecimalField(max_digits=18, decimal_places=2)
     cuotas = models.PositiveIntegerField()
+    monto_cuota = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    primera_nomina = models.ForeignKey("PeriodoNomina", on_delete=models.PROTECT, null=True, blank=True)
+    observacion = models.TextField(blank=True)
+    documento_soporte = models.FileField(upload_to="nomina/prestamos/", blank=True)
+    estado = models.CharField(max_length=15, choices=ESTADOS, default="BORRADOR")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("empresa", "codigo"), name="nomina_prestamo_empresa_codigo_uniq")]
 
 
 class CuotaPrestamoEmpleado(models.Model):
@@ -91,6 +104,14 @@ class CuotaPrestamoEmpleado(models.Model):
     numero = models.PositiveIntegerField()
     monto = models.DecimalField(max_digits=18, decimal_places=2)
     pagada = models.BooleanField(default=False)
+    nomina = models.ForeignKey("Nomina", on_delete=models.PROTECT, null=True, blank=True, related_name="cuotas_prestamos")
+    fecha = models.DateField(null=True, blank=True)
+    saldo_anterior = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    saldo_posterior = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    estado = models.CharField(max_length=15, default="PROVISIONAL", choices=[("PROVISIONAL","Provisional"),("APLICADA","Aplicada"),("REVERSADA","Reversada")])
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("prestamo", "nomina"), condition=models.Q(nomina__isnull=False), name="nomina_cuota_prestamo_nomina_uniq")]
 
 
 class EmbargoEmpleado(Base):

@@ -7,6 +7,7 @@ from auditoria.models import EventoAuditoria
 from conduces.models import Empresa
 from documentos.models import Documento,TipoDocumento
 from .models import Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,Empleado,HistorialLaboral,ParticipacionCapacitacion,Puesto,SalidaEmpleado,SolicitudVacacion
+from .forms import EmpleadoForm
 
 class RRHHCoreTests(TestCase):
  @classmethod
@@ -24,7 +25,7 @@ class RRHHCoreTests(TestCase):
   response=self.client.get(reverse("rrhh:empleados"));self.assertContains(response,"Ana Pérez");self.assertNotContains(response,"Otro Tenant")
  def test_employee_creation_is_tenant_safe_and_audited(self):
   response=self.client.post(reverse("rrhh:empleado_crear"),{"codigo":"E-002","nombres":"Luis","apellidos":"Díaz","identificacion":"003","puesto":self.pos.pk,"departamento":self.dep.pk,"centro":self.centro.pk,"fecha_ingreso":date.today(),"salario":"45000","forma_pago":"TRANSFERENCIA","frecuencia_pago":"MENSUAL","estado":"ACTIVO"})
-  self.assertEqual(response.status_code,302);nuevo=Empleado.objects.get(codigo="E-002");self.assertEqual(nuevo.empresa,self.empresa);self.assertTrue(HistorialLaboral.objects.filter(empleado=nuevo,accion="INGRESO").exists());self.assertTrue(EventoAuditoria.objects.filter(empresa=self.empresa,object_id=nuevo.pk,modulo="rrhh").exists())
+  self.assertEqual(response.status_code,302);nuevo=Empleado.objects.get(identificacion="003");self.assertEqual(nuevo.codigo,"EMP-000001");self.assertEqual(nuevo.empresa,self.empresa);self.assertTrue(HistorialLaboral.objects.filter(empleado=nuevo,accion="INGRESO").exists());self.assertTrue(EventoAuditoria.objects.filter(empresa=self.empresa,object_id=nuevo.pk,modulo="rrhh").exists())
  def test_other_tenant_employee_is_404(self):self.assertEqual(self.client.get(reverse("rrhh:empleado_360",args=[self.ajeno.pk])).status_code,404)
  def test_vacation_state_requires_post_and_records_history(self):
   vac=SolicitudVacacion.objects.create(empresa=self.empresa,empleado=self.emp,desde=date.today(),hasta=date.today()+timedelta(days=2),dias=3)
@@ -53,3 +54,9 @@ class RRHHCoreTests(TestCase):
  def test_critical_post_rejects_missing_csrf(self):
   vac=SolicitudVacacion.objects.create(empresa=self.empresa,empleado=self.emp,desde=date.today(),hasta=date.today(),dias=1)
   client=Client(enforce_csrf_checks=True);client.force_login(self.user);response=client.post(reverse("rrhh:recurso_estado",args=["vacaciones",vac.pk]),{"estado":"APROBADA"});self.assertEqual(response.status_code,403)
+ def test_employee_sequence_is_progressive_and_tenant_isolated(self):
+  a=Empleado.siguiente_codigo(self.empresa);b=Empleado.siguiente_codigo(self.empresa);other=Empleado.siguiente_codigo(self.other)
+  self.assertEqual((a,b,other),("EMP-000001","EMP-000002","EMP-000001"))
+ def test_duplicate_identification_is_a_form_error(self):
+  form=EmpleadoForm({"nombres":"Duplicado","apellidos":"Seguro","identificacion":"001","puesto":self.pos.pk,"departamento":self.dep.pk,"centro":self.centro.pk,"fecha_ingreso":date.today(),"salario":"1000","forma_pago":"TRANSFERENCIA","frecuencia_pago":"MENSUAL","estado":"ACTIVO"},empresa=self.empresa)
+  self.assertFalse(form.is_valid());self.assertIn("identificacion",form.errors)

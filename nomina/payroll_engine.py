@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from rrhh.models import Empleado, HoraExtra
 
+from .loan_services import provision_payroll_loans
 from .models import ConceptoNomina, DetalleNominaEmpleado, LineaDetalleNomina, Nomina, NovedadNomina, ParametroLegalNomina
 
 ZERO = Decimal("0.00")
@@ -79,6 +80,7 @@ def _canonical_concepts(empresa):
         "AFP": _concept(empresa, "AFP", "AFP/SVDS trabajador", "DEDUCCION", origen="LEGAL"),
         "SFS": _concept(empresa, "SFS", "SFS trabajador", "DEDUCCION", origen="LEGAL"),
         "ISR": _concept(empresa, "ISR", "ISR asalariado", "DEDUCCION", origen="LEGAL"),
+        "PRESTAMO": _concept(empresa, "PRESTAMO", "Préstamos y descuentos", "DEDUCCION", origen="PRESTAMO"),
         "SFS_PATRONAL": _concept(empresa, "SFS_PATRONAL", "SFS empleador", "APORTE", origen="LEGAL"),
         "SVDS_PATRONAL": _concept(empresa, "SVDS_PATRONAL", "SVDS empleador", "APORTE", origen="LEGAL"),
         "SRL": _concept(empresa, "SRL", "Riesgos laborales", "APORTE", origen="LEGAL"),
@@ -106,7 +108,8 @@ def process_payroll(*, empresa, periodo, usuario=None):
         extras = HoraExtra.objects.filter(empresa=empresa, empleado=employee, fecha__range=(periodo.desde, periodo.hasta)).filter(Q(estado="APROBADA") | Q(estado="APLICADA", nomina_id=payroll.pk))
         overtime = money(extras.aggregate(value=Sum("monto"))["value"] or ZERO)
         other_income = money(sum((n.monto for n in additions if n.concepto.tipo == "INGRESO"), ZERO))
-        other_deductions = money(sum((n.monto for n in additions if n.concepto.tipo == "DEDUCCION"), ZERO))
+        loan_deductions, loan_quotas = provision_payroll_loans(payroll=payroll, employee=employee)
+        other_deductions = money(sum((n.monto for n in additions if n.concepto.tipo == "DEDUCCION"), ZERO) + loan_deductions)
         manual_employer = money(sum((n.monto for n in additions if n.concepto.tipo == "APORTE"), ZERO))
         gross = money(salary_period + overtime + other_income)
         tss_base_period = salary_period + sum((n.monto for n in additions if n.concepto.tipo == "INGRESO" and n.concepto.cotiza_tss), ZERO)
@@ -134,6 +137,8 @@ def process_payroll(*, empresa, periodo, usuario=None):
         _add_line(detail, concepts["HORA_EXTRA"], overtime, fuente="horas_extra_aprobadas", ids=list(extras.values_list("pk", flat=True)), gravable=True, cotiza_tss=False)
         for addition in additions:
             _add_line(detail, addition.concepto, addition.monto, fuente="novedad_nomina", novedad_id=addition.pk, gravable=addition.concepto.gravable, cotiza_tss=addition.concepto.cotiza_tss)
+        for quota in loan_quotas:
+            _add_line(detail, concepts["PRESTAMO"], quota.monto, fuente="prestamo", prestamo_id=quota.prestamo_id, cuota_id=quota.pk, numero=quota.numero, total=quota.prestamo.cuotas, saldo_posterior=str(quota.saldo_posterior))
         for code, amount in (("AFP", afp), ("SFS", sfs), ("ISR", isr), ("SFS_PATRONAL", sfs_employer), ("SVDS_PATRONAL", svds_employer), ("SRL", srl_employer), ("INFOTEP", infotep_employer)):
             _add_line(detail, concepts[code], amount, fuente="motor_legal", parametro_version=legal.version)
         extras.filter(estado="APROBADA").update(estado="APLICADA", nomina_id=payroll.pk)

@@ -1,4 +1,5 @@
 from io import BytesIO
+from decimal import Decimal
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from openpyxl import Workbook
@@ -6,9 +7,11 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from django.utils import timezone
 
 from .models import PlantillaDocumentoRRHH, ReciboNomina
+from .loan_services import loan_totals
 
 
 def _money(value):
@@ -45,8 +48,11 @@ def payslip_pdf(detail):
     styles = getSampleStyleSheet()
     income_rows = [["Ingresos", "Monto"], ["Salario", _money(detail.salario_periodo)], ["Horas extra", _money(detail.horas_extra)], ["Otros ingresos", _money(detail.otros_ingresos)], ["Total bruto", _money(detail.ingresos)]]
     deduction_rows = [["Deducciones empleado", "Monto"], ["AFP/SVDS", _money(detail.afp_empleado)], ["SFS", _money(detail.sfs_empleado)], ["ISR", _money(detail.isr)], ["Otros descuentos", _money(detail.otros_descuentos)], ["Total deducciones", _money(detail.deducciones)]]
-    employer_rows = [["Costo patronal", "Monto"], ["SFS empleador", _money(detail.sfs_empleador)], ["SVDS empleador", _money(detail.svds_empleador)], ["SRL", _money(detail.srl_empleador)], ["INFOTEP", _money(detail.infotep_empleador)], ["Total patronal", _money(detail.aportes)]]
-    story = [Paragraph(template.encabezado, styles["Normal"]) if template and template.encabezado else Spacer(1, 1), Paragraph(f"Nómina: {detail.nomina.numero} · Período: {period['desde']} a {period['hasta']}", styles["Normal"]), Paragraph(f"Empleado: {employee['nombre']} · Código: {employee['codigo']} · Cédula: {employee['identificacion']}", styles["Normal"]), Paragraph(f"Puesto: {employee['puesto']} · Ingreso: {employee['fecha_ingreso']}", styles["Normal"]), Spacer(1, 4 * mm), _styled_table(income_rows, [110 * mm, 55 * mm]), Spacer(1, 4 * mm), _styled_table(deduction_rows, [110 * mm, 55 * mm]), Spacer(1, 4 * mm), _styled_table(employer_rows, [110 * mm, 55 * mm]), Spacer(1, 5 * mm), Paragraph(f"<b>Neto pagado: {_money(detail.neto)}</b>", styles["Heading2"]), Paragraph((template.pie if template else "") or "Documento generado desde el snapshot histórico de la nómina.", styles["Normal"])]
+    loan_notes = []
+    for line in detail.lineas.filter(snapshot__fuente="prestamo"):
+        s = line.snapshot
+        loan_notes.append(Paragraph(f"Préstamo empleado · Cuota {s.get('numero')}/{s.get('total')} &nbsp;&nbsp; <b>{_money(line.monto)}</b><br/>Saldo pendiente después de esta cuota: {_money(Decimal(s.get('saldo_posterior', '0')))}", styles["Normal"]))
+    story = [Paragraph(template.encabezado, styles["Normal"]) if template and template.encabezado else Spacer(1, 1), Paragraph(f"Nómina: {detail.nomina.numero} · Período: {period['desde']} a {period['hasta']}", styles["Normal"]), Paragraph(f"Empleado: {employee['nombre']} · Código: {employee['codigo']} · Cédula: {employee['identificacion']}", styles["Normal"]), Paragraph(f"Puesto: {employee['puesto']} · Ingreso: {employee['fecha_ingreso']} · Salario mensual: {_money(Decimal(employee['salario_mensual']))}", styles["Normal"]), Spacer(1, 4 * mm), _styled_table(income_rows, [110 * mm, 55 * mm]), Spacer(1, 4 * mm), _styled_table(deduction_rows, [110 * mm, 55 * mm]), Spacer(1, 3 * mm)] + loan_notes + [Spacer(1, 5 * mm), Paragraph(f"<b>NETO A PAGAR: {_money(detail.neto)}</b>", styles["Heading2"]), Paragraph((template.pie if template else "") or "Documento privado generado desde el snapshot histórico de la nómina.", styles["Normal"])]
     ReciboNomina.objects.update_or_create(detalle=detail, defaults={"numero": f"VOL-{detail.nomina.numero}-{employee['codigo']}", "snapshot": snap})
     return _build_pdf("Volante de pago", detail.nomina.empresa, story)
 
@@ -57,8 +63,16 @@ def payroll_pdf(payroll):
     for detail in payroll.detalles.select_related("empleado").order_by("empleado__apellidos"):
         rows.append([f"{detail.empleado.codigo} · {detail.empleado.nombres} {detail.empleado.apellidos}", _money(detail.ingresos), _money(detail.afp_empleado), _money(detail.sfs_empleado), _money(detail.isr), _money(detail.otros_descuentos), _money(detail.neto)])
     rows.append(["TOTALES", _money(payroll.total_ingresos), _money(payroll.total_afp), _money(payroll.total_sfs), _money(payroll.total_isr), _money(payroll.total_otros_descuentos), _money(payroll.total_neto)])
-    employer = [["Resumen patronal", "Monto"], ["SFS + SVDS + SRL + INFOTEP", _money(payroll.total_aportes_patronales)], ["Costo total empresa", _money(payroll.total_ingresos + payroll.total_aportes_patronales)]]
-    story = [Paragraph(f"Referencia: {payroll.numero} · Estado: {payroll.estado}", styles["Normal"]), Paragraph(f"Período: {payroll.periodo.desde} a {payroll.periodo.hasta}", styles["Normal"]), Spacer(1, 4 * mm), _styled_table(rows, font_size=7), Spacer(1, 5 * mm), _styled_table(employer, [95 * mm, 65 * mm])]
+    details = list(payroll.detalles.select_related("empleado").order_by("empleado__apellidos"))
+    story = [Paragraph(f"Referencia: {payroll.numero} · Estado: {payroll.estado}", styles["Normal"]), Paragraph(f"Período: {payroll.periodo.desde} a {payroll.periodo.hasta}", styles["Normal"]), Spacer(1, 4 * mm), _styled_table(rows, font_size=7)]
+    incomes = [["Empleado", "Horas extra", "Otros ingresos", "Total adicional"]] + [[f"{d.empleado.codigo} · {d.empleado.nombres} {d.empleado.apellidos}", _money(d.horas_extra), _money(d.otros_ingresos), _money(d.horas_extra+d.otros_ingresos)] for d in details if d.horas_extra or d.otros_ingresos]
+    if len(incomes) > 1:
+        story += [PageBreak(), Paragraph("OTROS INGRESOS", styles["Heading2"]), _styled_table(incomes)]
+    discounts = [["Empleado", "Otros descuentos", "AFP", "SFS", "ISR"]] + [[f"{d.empleado.codigo} · {d.empleado.nombres} {d.empleado.apellidos}", _money(d.otros_descuentos), _money(d.afp_empleado), _money(d.sfs_empleado), _money(d.isr)] for d in details if d.otros_descuentos]
+    if len(discounts) > 1:
+        story += [PageBreak(), Paragraph("OTROS DESCUENTOS", styles["Heading2"]), _styled_table(discounts)]
+    obligations = [["RESUMEN DE OBLIGACIONES", "Monto"], ["AFP trabajadores", _money(payroll.total_afp)], ["SFS trabajadores", _money(payroll.total_sfs)], ["ISR", _money(payroll.total_isr)], ["Aportes patronales TSS/INFOTEP", _money(payroll.total_aportes_patronales)], ["Neto a pagar", _money(payroll.total_neto)], ["Costo total empresa", _money(payroll.total_ingresos + payroll.total_aportes_patronales)]]
+    story += [PageBreak(), Paragraph("RESUMEN DE OBLIGACIONES", styles["Heading2"]), _styled_table(obligations, [105 * mm, 55 * mm])]
     return _build_pdf("Resumen consolidado de nómina", payroll.empresa, story, landscape_page=True)
 
 
@@ -101,3 +115,35 @@ def settlement_pdf(settlement, *, letter=False):
         rows.append(["TOTAL", "", "", "", _money(settlement.total), ""])
         story = [Paragraph(f"Empleado: {employee['nombre']} · Cédula: {employee['identificacion']} · Código: {employee['codigo']}", styles["Normal"]), Paragraph(f"Ingreso: {employee['fecha_ingreso']} · Salida: {settlement.fecha_salida} · Tipo: {settlement.tipo_terminacion}", styles["Normal"]), Paragraph(f"Salario promedio: {_money(settlement.salario_promedio)} · Salario diario: {_money(settlement.salario_diario)}", styles["Normal"]), Spacer(1, 4 * mm), _styled_table(rows, font_size=7), Spacer(1, 4 * mm), Paragraph(settlement.motivo_revision or "Cálculo automático sujeto a verificación de la información registrada.", styles["Normal"])]
     return _build_pdf(title, settlement.empresa, story, landscape_page=not letter)
+
+
+def loan_statement_pdf(loan):
+    styles = getSampleStyleSheet()
+    totals = loan_totals(loan)
+    rows = [["Nómina", "Fecha", "Cuota", "Monto", "Saldo resultante"]]
+    for item in loan.cuotas_detalle.filter(estado="APLICADA").select_related("nomina").order_by("numero"):
+        rows.append([item.nomina.numero, str(item.fecha or "—"), f"{item.numero}/{loan.cuotas}", _money(item.monto), _money(item.saldo_posterior)])
+    if len(rows) == 1:
+        rows.append(["—", "—", "Sin cuotas aplicadas", _money(0), _money(loan.saldo)])
+    story = [Paragraph(f"Empleado: <b>{loan.empleado.nombres} {loan.empleado.apellidos}</b> · Código {loan.empleado.codigo}", styles["Normal"]),
+             Paragraph(f"Préstamo: {loan.codigo} · Monto original: {_money(loan.principal)} · Cuota: {_money(loan.monto_cuota)}", styles["Normal"]),
+             Paragraph(f"Cuotas pagadas: {totals['cuotas_pagadas']} · Pendientes: {totals['cuotas_pendientes']} · Total pagado: {_money(totals['pagado'])} · Saldo: <b>{_money(loan.saldo)}</b>", styles["Normal"]),
+             Spacer(1, 5 * mm), _styled_table(rows, [42*mm, 30*mm, 30*mm, 35*mm, 38*mm])]
+    return _build_pdf("Estado de préstamo", loan.empresa, story)
+
+
+def employee_document_pdf(employee, kind):
+    styles = getSampleStyleSheet()
+    template = _template(employee.empresa, kind)
+    labels = {"CONTRATO": "Contrato de trabajo", "LABORAL": "Carta laboral", "CONSULAR": "Carta para fines consulares", "BANCARIA": "Carta para apertura de cuenta bancaria", "ANEXO": "Descripción de funciones"}
+    values = {"empresa": employee.empresa.nombre, "rnc": employee.empresa.rnc or "—", "direccion_empresa": employee.empresa.direccion or "—", "empleado": f"{employee.nombres} {employee.apellidos}", "identificacion": employee.identificacion, "codigo_empleado": employee.codigo, "puesto": employee.puesto.nombre, "departamento": employee.departamento.nombre, "salario": _money(employee.salario), "fecha_ingreso": str(employee.fecha_ingreso), "tipo_contrato": employee.tipo_contrato or "No especificado"}
+    body = (template.cuerpo if template and template.cuerpo else "Documento emitido a solicitud de la parte interesada con base en la información laboral registrada.")
+    for key, value in values.items():
+        body = body.replace("{{" + key + "}}", str(value))
+    story = [Paragraph(f"Fecha: {timezone.localdate()}", styles["Normal"]), Spacer(1, 5*mm), Paragraph(body.replace("\n", "<br/>"), styles["BodyText"])]
+    if kind == "ANEXO":
+        description = employee.puesto.descripciones_funciones.filter(empresa=employee.empresa, activa=True).order_by("-version").first()
+        if description:
+            story += [Spacer(1, 4*mm), Paragraph(f"<b>Objetivo</b><br/>{description.objetivo}", styles["BodyText"]), Paragraph(f"<b>Funciones</b><br/>{description.funciones}", styles["BodyText"]), Paragraph(f"<b>Responsabilidades</b><br/>{description.responsabilidades}", styles["BodyText"]), Paragraph(f"Versión {description.version} · Vigente desde {description.vigente_desde}", styles["Normal"])]
+    story += [Spacer(1, 18*mm), Paragraph(f"{(template.firmante if template else '') or 'Responsable de Gestión Humana'}<br/>{(template.cargo_firmante if template else '') or 'Gestión Humana'}", styles["Normal"])]
+    return _build_pdf(labels.get(kind, "Documento laboral"), employee.empresa, story)

@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import ConceptoNomina, LiquidacionLaboral, NovedadNomina, PeriodoNomina, PlantillaDocumentoRRHH
+from .models import ConceptoNomina, LiquidacionLaboral, NovedadNomina, PeriodoNomina, PlantillaDocumentoRRHH, PrestamoEmpleado
 
 
 class TenantForm(forms.ModelForm):
@@ -9,7 +9,7 @@ class TenantForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
-        for name in ("tipo", "empleado", "concepto", "periodo"):
+        for name in ("tipo", "empleado", "concepto", "periodo", "primera_nomina"):
             field = self.fields.get(name)
             if field is not None and hasattr(field, "queryset"):
                 field.queryset = field.queryset.filter(empresa=empresa)
@@ -54,3 +54,18 @@ class PlantillaDocumentoForm(TenantForm):
     class Meta:
         model = PlantillaDocumentoRRHH
         exclude = ("empresa", "creado_en")
+
+
+class PrestamoForm(TenantForm):
+    class Meta:
+        model = PrestamoEmpleado
+        fields = ("tipo", "empleado", "fecha", "principal", "cuotas", "monto_cuota", "primera_nomina", "observacion", "documento_soporte", "estado")
+        widgets = {"fecha": forms.DateInput(attrs={"type": "date"}), "observacion": forms.Textarea(attrs={"rows": 3})}
+
+    def clean(self):
+        data = super().clean()
+        if data.get("principal") and data["principal"] <= 0:
+            self.add_error("principal", "El monto debe ser mayor que cero.")
+        if data.get("cuotas") and data["cuotas"] <= 0:
+            self.add_error("cuotas", "Debe indicar al menos una cuota.")
+        return data

@@ -5,18 +5,22 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponse
+from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 from conduces.services import obtener_empresa_usuario
-from rrhh.models import HistorialLaboral
+from rrhh.models import Empleado, HistorialLaboral
+from documentos.models import TipoDocumento
+from documentos.services import crear_documento_asociado
 
-from .documents import payroll_pdf, payroll_xlsx, payslip_pdf, payslips_zip, settlement_pdf
-from .forms import ConceptoForm, LiquidacionForm, NovedadForm, PeriodoForm, PlantillaDocumentoForm
+from .documents import employee_document_pdf, loan_statement_pdf, payroll_pdf, payroll_xlsx, payslip_pdf, payslips_zip, settlement_pdf
+from .forms import ConceptoForm, LiquidacionForm, NovedadForm, PeriodoForm, PlantillaDocumentoForm, PrestamoForm
+from .loan_services import finalize_payroll_loans, loan_totals, prepare_loan
 from .labor_settlement import calculate_settlement
-from .models import ConceptoNomina, DetalleNominaEmpleado, HistorialNomina, LiquidacionLaboral, Nomina, NovedadNomina, PeriodoNomina, PlantillaDocumentoRRHH
+from .models import ConceptoNomina, DetalleNominaEmpleado, HistorialNomina, LiquidacionLaboral, Nomina, NovedadNomina, PeriodoNomina, PlantillaDocumentoRRHH, PrestamoEmpleado
 from .services import procesar_nomina
 
 
@@ -95,6 +99,8 @@ def estado(request, pk):
     previous = obj.estado
     obj.estado = new
     obj.save(update_fields=["estado"])
+    if new in {"CERRADA", "PAGADA"}:
+        finalize_payroll_loans(obj)
     HistorialNomina.objects.create(nomina=obj, estado_anterior=previous, estado_nuevo=new)
     _audit(request, obj, "Estado de nómina actualizado.", {"estado": previous}, {"estado": new})
     return redirect("nomina:detalle", obj.pk)
@@ -256,3 +262,58 @@ def plantilla_editar(request, pk=None):
         _audit(request, item, "Plantilla documental RRHH actualizada.")
         return redirect("nomina:plantillas")
     return render(request, "rrhh/form.html", {"form": form, "titulo": "Plantilla documental RRHH"})
+
+
+@login_required
+@permission_required("nomina.view_prestamoempleado", raise_exception=True)
+def prestamos(request):
+    objects = PrestamoEmpleado.objects.filter(empresa=_e(request)).select_related("empleado").order_by("-fecha", "-pk")
+    return render(request, "nomina/prestamos.html", {"objetos": objects})
+
+
+@login_required
+@permission_required("nomina.add_prestamoempleado", raise_exception=True)
+@transaction.atomic
+def prestamo_crear(request):
+    form = PrestamoForm(request.POST or None, request.FILES or None, empresa=_e(request))
+    if request.method == "POST" and form.is_valid():
+        obj = form.save(commit=False)
+        obj.empresa = _e(request)
+        prepare_loan(obj, usuario=request.user)
+        _audit(request, obj, "Préstamo o descuento creado.", after={"codigo": obj.codigo, "principal": str(obj.principal)})
+        messages.success(request, "Préstamo registrado con saldo y calendario controlados.")
+        return redirect("nomina:prestamo_detalle", obj.pk)
+    return render(request, "rrhh/form.html", {"form": form, "titulo": "Nuevo préstamo o descuento"})
+
+
+@login_required
+@permission_required("nomina.view_prestamoempleado", raise_exception=True)
+def prestamo_detalle(request, pk):
+    obj = get_object_or_404(PrestamoEmpleado.objects.select_related("empleado"), empresa=_e(request), pk=pk)
+    return render(request, "nomina/prestamo_detalle.html", {"obj": obj, "totales": loan_totals(obj), "historial": obj.cuotas_detalle.filter(estado="APLICADA").select_related("nomina").order_by("numero")})
+
+
+@login_required
+@permission_required("nomina.view_prestamoempleado", raise_exception=True)
+def prestamo_pdf(request, pk):
+    obj = get_object_or_404(PrestamoEmpleado.objects.select_related("empleado"), empresa=_e(request), pk=pk)
+    return _download(loan_statement_pdf(obj), "application/pdf", f"estado-{obj.codigo}.pdf", inline=request.GET.get("download") != "1")
+
+
+@login_required
+@permission_required("nomina.view_plantilladocumentorrhh", raise_exception=True)
+def documento_empleado(request, empleado_id, tipo):
+    kind = tipo.upper()
+    allowed = {"CONTRATO", "LABORAL", "CONSULAR", "BANCARIA", "ANEXO"}
+    if kind not in allowed:
+        return HttpResponse("Tipo documental no permitido.", status=404)
+    employee = get_object_or_404(Empleado.objects.select_related("empresa", "puesto", "departamento"), empresa=_e(request), pk=empleado_id)
+    content = employee_document_pdf(employee, kind)
+    if request.method == "POST":
+        doc_type, _ = TipoDocumento.objects.get_or_create(empresa=_e(request), codigo=f"RRHH-{kind}", defaults={"nombre": f"Documento laboral {kind.title()}"})
+        document = crear_documento_asociado(empresa=_e(request), objeto=employee, usuario=request.user, request=request,
+            archivo=ContentFile(content, name=f"{kind.lower()}-{employee.codigo}.pdf"), titulo=f"{kind.title()} · {employee.nombres} {employee.apellidos}", tipo_documento=doc_type)
+        _audit(request, employee, f"Documento laboral {kind} generado y archivado.", after={"documento_id": document.pk})
+        messages.success(request, "Documento generado y vinculado al expediente digital.")
+        return redirect("documentos:detalle", document.pk)
+    return _download(content, "application/pdf", f"{kind.lower()}-{employee.codigo}.pdf", inline=True)

@@ -27,4 +27,9 @@ urlpatterns = [
     path("plantillas/", views.plantillas, name="plantillas"),
     path("plantillas/nueva/", views.plantilla_editar, name="plantilla_crear"),
     path("plantillas/<int:pk>/", views.plantilla_editar, name="plantilla_editar"),
+    path("prestamos/", views.prestamos, name="prestamos"),
+    path("prestamos/nuevo/", views.prestamo_crear, name="prestamo_crear"),
+    path("prestamos/<int:pk>/", views.prestamo_detalle, name="prestamo_detalle"),
+    path("prestamos/<int:pk>/estado.pdf", views.prestamo_pdf, name="prestamo_pdf"),
+    path("documentos/empleados/<int:empleado_id>/<str:tipo>/", views.documento_empleado, name="documento_empleado"),
 ]

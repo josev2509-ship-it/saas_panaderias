@@ -15,8 +15,8 @@ from documentos.forms import DocumentoForm
 from documentos.models import Documento
 from documentos.services import crear_documento_asociado
 from nomina.models import DetalleNominaEmpleado,LiquidacionLaboral,Nomina
-from .forms import CapacitacionForm,ContratoForm,DisciplinaForm,EmpleadoForm,LicenciaForm,ParticipacionForm,SalidaForm,VacacionForm
-from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,ContratoEmpleado,Empleado,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudVacacion
+from .forms import CapacitacionForm,ContratoForm,DescripcionPuestoForm,DisciplinaForm,EmpleadoForm,LicenciaForm,ParticipacionForm,SalidaForm,VacacionForm
+from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,ContratoEmpleado,DescripcionPuesto,Empleado,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudVacacion
 
 def _empresa(r):return obtener_empresa_usuario(r)
 def _empleado(r,pk):return get_object_or_404(Empleado.objects.select_related("puesto","departamento","centro","supervisor"),pk=pk,empresa=_empresa(r))
@@ -53,20 +53,26 @@ def empleado_form(request,pk=None):
  antes={"puesto":obj.puesto_id,"departamento":obj.departamento_id,"salario":str(obj.salario),"estado":obj.estado} if obj else None
  form=EmpleadoForm(request.POST or None,request.FILES or None,instance=obj,empresa=_empresa(request))
  if request.method=="POST" and form.is_valid():
-  obj=form.save(commit=False);obj.empresa=_empresa(request);obj.save();nuevos={"puesto":obj.puesto_id,"departamento":obj.departamento_id,"salario":str(obj.salario),"estado":obj.estado};HistorialLaboral.objects.create(empleado=obj,accion="ACTUALIZACION" if antes else "INGRESO",snapshot={"antes":antes,"despues":nuevos});_audit(request,obj,EventoAuditoria.Accion.EDITAR if antes else EventoAuditoria.Accion.CREAR,"Empleado actualizado." if antes else "Empleado creado.",antes,nuevos);messages.success(request,"Empleado guardado correctamente.");return redirect("rrhh:empleado_360",obj.pk)
- return render(request,"rrhh/form.html",{"form":form,"titulo":"Editar empleado" if obj else "Ingreso de empleado","objeto":obj})
+  obj=form.save(commit=False);obj.empresa=_empresa(request)
+  if not obj.pk:obj.codigo=Empleado.siguiente_codigo(obj.empresa)
+  if form.cleaned_data.get("eliminar_foto") and obj.foto:obj.foto.delete(save=False);obj.foto=""
+  obj.save();nuevos={"codigo":obj.codigo,"puesto":obj.puesto_id,"departamento":obj.departamento_id,"salario":str(obj.salario),"estado":obj.estado};HistorialLaboral.objects.create(empleado=obj,accion="ACTUALIZACION" if antes else "INGRESO",snapshot={"antes":antes,"despues":nuevos});_audit(request,obj,EventoAuditoria.Accion.EDITAR if antes else EventoAuditoria.Accion.CREAR,"Empleado actualizado." if antes else "Empleado creado.",antes,nuevos);messages.success(request,"Empleado guardado correctamente.");return redirect("rrhh:empleado_360",obj.pk)
+ groups=[("Datos personales",("foto","nombres","apellidos","identificacion","fecha_nacimiento","sexo","estado_civil","nacionalidad","eliminar_foto")),("Contacto",("telefono","correo","direccion","contacto_emergencia")),("Datos laborales",("fecha_ingreso","departamento","puesto","supervisor","centro","tipo_contrato","salario","frecuencia_pago","forma_pago","estado")),("Información bancaria",("banco","tipo_cuenta_bancaria","cuenta_bancaria_cifrada")),("Información adicional",("licencia_conducir","categoria_licencia","vence_licencia","observaciones"))]
+ sections=[(title,[form[name] for name in names if name in form.fields]) for title,names in groups]
+ return render(request,"rrhh/form.html",{"form":form,"titulo":"Editar empleado" if obj else "Ingreso de empleado","objeto":obj,"form_sections":sections,"codigo_automatico":not obj})
 
 @login_required
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def empleado_360(request,pk):
  emp=_empleado(request,pk);e=_empresa(request);h=timezone.localdate();inicio=h.replace(day=1);ct=ContentType.objects.get_for_model(Empleado);saldo=SaldoVacacion.objects.filter(empleado=emp).first()
- return render(request,"rrhh/empleado_360.html",{"empleado":emp,"antiguedad_dias":(h-emp.fecha_ingreso).days,"saldo":saldo,"horas_extra":HoraExtra.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).aggregate(v=Sum("horas"))["v"] or 0,"ausencias":AusenciaEmpleado.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).count(),"tardanzas":RegistroAsistencia.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio,minutos_tardanza__gt=0).count(),"contratos":emp.contratos.order_by("-inicio"),"vacaciones":SolicitudVacacion.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"licencias":LicenciaEmpleado.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"ponches":RegistroAsistencia.objects.filter(empresa=e,empleado=emp).order_by("-fecha")[:30],"extras":HoraExtra.objects.filter(empresa=e,empleado=emp).order_by("-fecha"),"disciplinas":emp.acciones_disciplinarias.order_by("-fecha"),"cursos":emp.capacitaciones.select_related("capacitacion"),"documentos":Documento.objects.filter(empresa=e,content_type=ct,object_id=emp.pk),"prestaciones":LiquidacionLaboral.objects.filter(empresa=e,empleado=emp),"tss":NovedadTSS.objects.filter(empresa=e,empleado=emp),"historial":emp.historial.order_by("-fecha"),"auditoria":EventoAuditoria.objects.filter(empresa=e,content_type=ct,object_id=emp.pk)[:50],"nominas":DetalleNominaEmpleado.objects.filter(empleado=emp,nomina__empresa=e).select_related("nomina")[:24],"salida":SalidaEmpleado.objects.filter(empleado=emp).first()})
+ from nomina.models import PrestamoEmpleado
+ return render(request,"rrhh/empleado_360.html",{"empleado":emp,"antiguedad_dias":(h-emp.fecha_ingreso).days,"saldo":saldo,"horas_extra":HoraExtra.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).aggregate(v=Sum("horas"))["v"] or 0,"ausencias":AusenciaEmpleado.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).count(),"tardanzas":RegistroAsistencia.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio,minutos_tardanza__gt=0).count(),"contratos":emp.contratos.order_by("-inicio"),"vacaciones":SolicitudVacacion.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"licencias":LicenciaEmpleado.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"ponches":RegistroAsistencia.objects.filter(empresa=e,empleado=emp).order_by("-fecha")[:30],"extras":HoraExtra.objects.filter(empresa=e,empleado=emp).order_by("-fecha"),"disciplinas":emp.acciones_disciplinarias.order_by("-fecha"),"cursos":emp.capacitaciones.select_related("capacitacion"),"documentos":Documento.objects.filter(empresa=e,content_type=ct,object_id=emp.pk),"prestamos":PrestamoEmpleado.objects.filter(empresa=e,empleado=emp).order_by("-fecha"),"prestaciones":LiquidacionLaboral.objects.filter(empresa=e,empleado=emp),"tss":NovedadTSS.objects.filter(empresa=e,empleado=emp),"historial":emp.historial.order_by("-fecha"),"auditoria":EventoAuditoria.objects.filter(empresa=e,content_type=ct,object_id=emp.pk)[:50],"nominas":DetalleNominaEmpleado.objects.filter(empleado=emp,nomina__empresa=e).select_related("nomina")[:24],"salida":SalidaEmpleado.objects.filter(empleado=emp).first()})
 
 @login_required
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def reportes(request):return render(request,"rrhh/reportes.html")
 
-MAPPING={"contratos":(ContratoEmpleado,ContratoForm),"vacaciones":(SolicitudVacacion,VacacionForm),"licencias":(LicenciaEmpleado,LicenciaForm),"amonestaciones":(AccionDisciplinaria,DisciplinaForm),"cursos":(Capacitacion,CapacitacionForm),"salidas":(SalidaEmpleado,SalidaForm)}
+MAPPING={"contratos":(ContratoEmpleado,ContratoForm),"funciones":(DescripcionPuesto,DescripcionPuestoForm),"vacaciones":(SolicitudVacacion,VacacionForm),"licencias":(LicenciaEmpleado,LicenciaForm),"amonestaciones":(AccionDisciplinaria,DisciplinaForm),"cursos":(Capacitacion,CapacitacionForm),"salidas":(SalidaEmpleado,SalidaForm)}
 @login_required
 def recurso_lista(request,recurso):
  if recurso not in MAPPING:return HttpResponse(status=404)
