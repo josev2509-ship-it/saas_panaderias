@@ -4,7 +4,9 @@ from django.core.management.base import BaseCommand,CommandError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from conduces.models import Empresa
-from nomina.models import ConceptoNomina,LiquidacionLaboral,PeriodoNomina,TipoNomina
+from nomina.models import ConceptoNomina,LiquidacionLaboral,Nomina,NovedadNomina,PeriodoNomina,PlantillaDocumentoRRHH,TipoNomina
+from nomina.labor_settlement import calculate_settlement
+from nomina.payroll_engine import ensure_legal_parameters
 from nomina.services import procesar_nomina
 from documentos.models import Documento,TipoDocumento
 from documentos.services import crear_documento_asociado
@@ -23,9 +25,29 @@ class Command(BaseCommand):
   ContratoEmpleado.objects.get_or_create(empresa=e,empleado=emp,inicio=emp.fecha_ingreso,defaults={"tipo":"INDEFINIDO","salario":emp.salario,"puesto":p,"estado":"ACTIVO"});SaldoVacacion.objects.update_or_create(empleado=emp,defaults={"disponibles":Decimal("8"),"tomados":Decimal("4")});SolicitudVacacion.objects.get_or_create(empresa=e,empleado=emp,desde=hoy+timedelta(days=10),defaults={"hasta":hoy+timedelta(days=12),"dias":3,"estado":"APROBADA"})
   curso,_=Capacitacion.objects.get_or_create(empresa=e,nombre="Seguridad laboral Demo",inicio=hoy,defaults={"fin":hoy,"horas":4});ParticipacionCapacitacion.objects.get_or_create(capacitacion=curso,empleado=emp,defaults={"resultado":"Aprobado"})
   LicenciaEmpleado.objects.get_or_create(empresa=e,empleado=emp,tipo="MÉDICA",desde=hoy-timedelta(days=20),defaults={"hasta":hoy-timedelta(days=19),"motivo":"Escenario sintético","estado":"APROBADA"});AccionDisciplinaria.objects.get_or_create(empresa=e,empleado=emp,tipo="VERBAL",fecha=hoy-timedelta(days=30),defaults={"motivo":"Escenario sintético","estado":"CERRADA"})
-  ponche,_=RegistroAsistencia.objects.get_or_create(empresa=e,empleado=emp,fecha=hoy,defaults={"minutos_tardanza":10,"horas_trabajadas":8,"origen":"DEMO"});IncidenciaAsistencia.objects.get_or_create(empresa=e,registro=ponche,tipo="TARDANZA",defaults={"descripcion":"Escenario sintético","minutos":10});HoraExtra.objects.get_or_create(empresa=e,empleado=emp,fecha=hoy,defaults={"horas":2,"monto":Decimal("500"),"estado":"APROBADA"});NovedadTSS.objects.get_or_create(empresa=e,empleado=emp,periodo=hoy.strftime("%Y-%m"),tipo="ALTA",defaults={"fecha_efectiva":emp.fecha_ingreso,"salario_reportable":emp.salario})
-  tipo,_=TipoNomina.objects.get_or_create(empresa=e,nombre="Mensual Demo",defaults={"periodicidad":"MENSUAL"});periodo,_=PeriodoNomina.objects.get_or_create(empresa=e,tipo=tipo,desde=hoy.replace(day=1),defaults={"hasta":hoy,"estado":"ABIERTO"});ConceptoNomina.objects.get_or_create(empresa=e,codigo="SALARIO",defaults={"nombre":"Salario","tipo":"INGRESO"});ConceptoNomina.objects.get_or_create(empresa=e,codigo="HORA_EXTRA",defaults={"nombre":"Horas extra","tipo":"INGRESO"});procesar_nomina(empresa=e,periodo=periodo);LiquidacionLaboral.objects.get_or_create(empresa=e,empleado=emp,fecha=hoy,defaults={"total":0,"estado":"BORRADOR"})
-  SalidaEmpleado.objects.get_or_create(empresa=e,empleado=inactivo,defaults={"fecha_salida":hoy-timedelta(days=60),"tipo":"RENUNCIA","motivo":"Escenario sintético","ultima_fecha_laborada":hoy-timedelta(days=60),"responsable":"RRHH Demo","estado":"FINALIZADA"});ReingresoEmpleado.objects.get_or_create(empresa=e,empleado=emp,fecha_reingreso=emp.fecha_ingreso,defaults={"puesto":p,"departamento":d,"centro":c,"salario":emp.salario,"tipo_contrato":"INDEFINIDO","observaciones":"Historial sintético"})
+  ponche=RegistroAsistencia.objects.filter(empresa=e,empleado=emp,fecha=hoy,origen="DEMO").order_by("pk").first() or RegistroAsistencia.objects.create(empresa=e,empleado=emp,fecha=hoy,minutos_tardanza=10,horas_trabajadas=8,origen="DEMO");IncidenciaAsistencia.objects.get_or_create(empresa=e,registro=ponche,tipo="TARDANZA",defaults={"descripcion":"Escenario sintético","minutos":10});extra=HoraExtra.objects.filter(empresa=e,empleado=emp,fecha=hoy).order_by("pk").first() or HoraExtra.objects.create(empresa=e,empleado=emp,fecha=hoy,horas=2,monto=Decimal("500"),estado="APROBADA");NovedadTSS.objects.get_or_create(empresa=e,empleado=emp,periodo=hoy.strftime("%Y-%m"),tipo="ALTA",defaults={"fecha_efectiva":emp.fecha_ingreso,"salario_reportable":emp.salario})
+  tipo=TipoNomina.objects.filter(empresa=e,nombre="Mensual Demo").order_by("pk").first() or TipoNomina.objects.create(empresa=e,nombre="Mensual Demo",periodicidad="MENSUAL")
+  bloqueados=Nomina.objects.filter(empresa=e,estado__in=("APROBADA","CERRADA","PAGADA")).values_list("periodo_id",flat=True)
+  periodo=PeriodoNomina.objects.filter(empresa=e,tipo=tipo,desde=hoy.replace(day=1)).exclude(pk__in=bloqueados).order_by("pk").first() or PeriodoNomina.objects.create(empresa=e,tipo=tipo,desde=hoy.replace(day=1),hasta=hoy,estado="ABIERTO")
+  def concepto(codigo,**defaults):
+   obj=ConceptoNomina.objects.filter(empresa=e,codigo=codigo).order_by("pk").first()
+   if obj:
+    for clave,valor in defaults.items():setattr(obj,clave,valor)
+    obj.save()
+    return obj
+   return ConceptoNomina.objects.create(empresa=e,codigo=codigo,**defaults)
+  concepto("SALARIO",nombre="Salario",tipo="INGRESO",gravable=True,cotiza_tss=True,cotiza_infotep=True,origen="SALARIO")
+  concepto("HORA_EXTRA",nombre="Horas extra",tipo="INGRESO",gravable=True,cotiza_tss=False,origen="ASISTENCIA")
+  incentivo=concepto("INCENTIVO_DEMO",nombre="Incentivo demo",tipo="INGRESO",gravable=True,cotiza_tss=False,origen="NOVEDAD")
+  descuento=concepto("DESCUENTO_DEMO",nombre="Descuento demo",tipo="DEDUCCION",origen="NOVEDAD")
+  for concepto_novedad,monto in ((incentivo,Decimal("1500")),(descuento,Decimal("350"))):
+   novedad=NovedadNomina.objects.filter(empresa=e,empleado=emp,periodo=periodo,concepto=concepto_novedad).order_by("pk").first()
+   if novedad:NovedadNomina.objects.filter(pk=novedad.pk).update(monto=monto,estado="APROBADA")
+   else:NovedadNomina.objects.create(empresa=e,empleado=emp,periodo=periodo,concepto=concepto_novedad,monto=monto,estado="APROBADA")
+  ensure_legal_parameters(e,periodo.hasta);procesar_nomina(empresa=e,periodo=periodo)
+  salida,_=SalidaEmpleado.objects.get_or_create(empresa=e,empleado=inactivo,defaults={"fecha_salida":hoy-timedelta(days=60),"tipo":"RENUNCIA","motivo":"Escenario sintético","ultima_fecha_laborada":hoy-timedelta(days=60),"responsable":"RRHH Demo","estado":"FINALIZADA"});ReingresoEmpleado.objects.get_or_create(empresa=e,empleado=emp,fecha_reingreso=emp.fecha_ingreso,defaults={"puesto":p,"departamento":d,"centro":c,"salario":emp.salario,"tipo_contrato":"INDEFINIDO","observaciones":"Historial sintético"});liquidacion,_=LiquidacionLaboral.objects.get_or_create(empresa=e,empleado=inactivo,fecha=salida.fecha_salida,defaults={"fecha_salida":salida.fecha_salida,"tipo_terminacion":"RENUNCIA"});calculate_settlement(settlement=liquidacion)
+  for plantilla_tipo in ("VOLANTE","NOMINA","PRESTACIONES","LIQUIDACION"):
+   PlantillaDocumentoRRHH.objects.get_or_create(empresa=e,tipo=plantilla_tipo,defaults={"encabezado":"Documento empresarial de Gestión Humana","firmante":"Responsable RRHH Demo","cargo_firmante":"Gestión Humana","pie":"Generado por SASTRE ERP Enterprise"})
   doc_tipo,_=TipoDocumento.objects.get_or_create(empresa=e,codigo="DEMO-RRHH",defaults={"nombre":"Documento RRHH Demo"})
   if not Documento.objects.filter(empresa=e,titulo="Documento sintético RRHH",object_id=emp.pk).exists():crear_documento_asociado(empresa=e,objeto=emp,archivo=SimpleUploadedFile("rrhh-demo.pdf",b"%PDF-1.4\n%%EOF",content_type="application/pdf"),usuario=e.usuario,titulo="Documento sintético RRHH",tipo_documento=doc_tipo,fecha_documento=hoy)
   self.stdout.write(self.style.SUCCESS("Demo RRHH creada/actualizada sin datos personales reales."))

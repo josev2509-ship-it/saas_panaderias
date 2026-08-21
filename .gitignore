@@ -5,3 +5,5 @@ db.sqlite3
 *.log
 *.env
 .DS_Store
+media/documentos/
+media/rrhh/
