@@ -26,6 +26,7 @@ urlpatterns = [
 
     # Documentos protegidos
     path("documentos/", include("documentos.urls")),
+    path("rrhh/nomina/", include("nomina.urls")),
     path("rrhh/", include("rrhh.urls")),
 
     # 🔐 RESET DE CONTRASEÑA

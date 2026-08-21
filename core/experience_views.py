@@ -16,6 +16,7 @@ from compras.p2p_models import OrdenCompraEnterprise, RecepcionCompra
 from conduces.models import Conduce
 from documentos.models import Documento
 from contabilidad.models import FacturaProveedor
+from rrhh.models import Empleado
 from .models import AlertaExperiencia, FavoritoNavegacion, NavegacionReciente
 
 
@@ -112,6 +113,9 @@ def busqueda_global(request):
             groups.append(("Conduces", [(x.numero or str(x.pk), reverse("vista_conduce", args=[x.pk])) for x in Conduce.objects.filter(empresa=empresa, numero__icontains=query)[:8]]))
         if request.user.has_perm("documentos.view_documento"):
             groups.append(("Documentos", [(x.titulo, reverse("documentos:detalle", args=[x.pk])) for x in Documento.objects.filter(empresa=empresa, confidencial=False, titulo__icontains=query)[:8]]))
+        if request.user.has_perm("rrhh.view_empleado"):
+            empleados=Empleado.objects.filter(empresa=empresa).filter(Q(codigo__icontains=query)|Q(nombres__icontains=query)|Q(apellidos__icontains=query)|Q(identificacion__icontains=query)|Q(puesto__nombre__icontains=query)|Q(departamento__nombre__icontains=query)|Q(correo__icontains=query)|Q(telefono__icontains=query)).distinct()[:8]
+            groups.append(("Empleados", [(f"{x.codigo} · {x.nombres} {x.apellidos}",reverse("rrhh:empleado_360",args=[x.pk])) for x in empleados]))
     return render(request, "core/experience/search.html", {"empresa": empresa, "query": query, "resultados": [(k, v) for k, v in groups if v]})
 
 

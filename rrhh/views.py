@@ -14,9 +14,9 @@ from conduces.services import obtener_empresa_usuario
 from documentos.forms import DocumentoForm
 from documentos.models import Documento
 from documentos.services import crear_documento_asociado
-from nomina.models import DetalleNominaEmpleado
+from nomina.models import DetalleNominaEmpleado,LiquidacionLaboral,Nomina
 from .forms import CapacitacionForm,ContratoForm,DisciplinaForm,EmpleadoForm,LicenciaForm,ParticipacionForm,SalidaForm,VacacionForm
-from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,ContratoEmpleado,Empleado,HistorialLaboral,HoraExtra,LicenciaEmpleado,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudVacacion
+from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,ContratoEmpleado,Empleado,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudVacacion
 
 def _empresa(r):return obtener_empresa_usuario(r)
 def _empleado(r,pk):return get_object_or_404(Empleado.objects.select_related("puesto","departamento","centro","supervisor"),pk=pk,empresa=_empresa(r))
@@ -32,7 +32,7 @@ def dashboard(request):
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def empleados(request):
  qs=Empleado.objects.filter(empresa=_empresa(request)).select_related("puesto","departamento","centro").order_by("apellidos","nombres");q=request.GET.get("q","").strip()
- if q:qs=qs.filter(models.Q(codigo__icontains=q)|models.Q(nombres__icontains=q)|models.Q(apellidos__icontains=q)|models.Q(identificacion__icontains=q))
+ if q:qs=qs.filter(models.Q(codigo__icontains=q)|models.Q(nombres__icontains=q)|models.Q(apellidos__icontains=q)|models.Q(identificacion__icontains=q)|models.Q(puesto__nombre__icontains=q)|models.Q(departamento__nombre__icontains=q)|models.Q(correo__icontains=q)|models.Q(telefono__icontains=q))
  return render(request,"rrhh/lista.html",{"titulo":"Empleados","objetos":qs,"tipo":"empleados","q":q})
 
 @login_required
@@ -60,7 +60,11 @@ def empleado_form(request,pk=None):
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def empleado_360(request,pk):
  emp=_empleado(request,pk);e=_empresa(request);h=timezone.localdate();inicio=h.replace(day=1);ct=ContentType.objects.get_for_model(Empleado);saldo=SaldoVacacion.objects.filter(empleado=emp).first()
- return render(request,"rrhh/empleado_360.html",{"empleado":emp,"antiguedad_dias":(h-emp.fecha_ingreso).days,"saldo":saldo,"horas_extra":HoraExtra.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).aggregate(v=Sum("horas"))["v"] or 0,"ausencias":AusenciaEmpleado.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).count(),"contratos":emp.contratos.order_by("-inicio"),"vacaciones":SolicitudVacacion.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"licencias":LicenciaEmpleado.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"ponches":RegistroAsistencia.objects.filter(empresa=e,empleado=emp).order_by("-fecha")[:30],"disciplinas":emp.acciones_disciplinarias.order_by("-fecha"),"cursos":emp.capacitaciones.select_related("capacitacion"),"documentos":Documento.objects.filter(empresa=e,content_type=ct,object_id=emp.pk),"historial":emp.historial.order_by("-fecha"),"auditoria":EventoAuditoria.objects.filter(empresa=e,content_type=ct,object_id=emp.pk)[:50],"nominas":DetalleNominaEmpleado.objects.filter(empleado=emp).select_related("nomina")[:24],"salida":SalidaEmpleado.objects.filter(empleado=emp).first()})
+ return render(request,"rrhh/empleado_360.html",{"empleado":emp,"antiguedad_dias":(h-emp.fecha_ingreso).days,"saldo":saldo,"horas_extra":HoraExtra.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).aggregate(v=Sum("horas"))["v"] or 0,"ausencias":AusenciaEmpleado.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio).count(),"tardanzas":RegistroAsistencia.objects.filter(empresa=e,empleado=emp,fecha__gte=inicio,minutos_tardanza__gt=0).count(),"contratos":emp.contratos.order_by("-inicio"),"vacaciones":SolicitudVacacion.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"licencias":LicenciaEmpleado.objects.filter(empresa=e,empleado=emp).order_by("-desde"),"ponches":RegistroAsistencia.objects.filter(empresa=e,empleado=emp).order_by("-fecha")[:30],"extras":HoraExtra.objects.filter(empresa=e,empleado=emp).order_by("-fecha"),"disciplinas":emp.acciones_disciplinarias.order_by("-fecha"),"cursos":emp.capacitaciones.select_related("capacitacion"),"documentos":Documento.objects.filter(empresa=e,content_type=ct,object_id=emp.pk),"prestaciones":LiquidacionLaboral.objects.filter(empresa=e,empleado=emp),"tss":NovedadTSS.objects.filter(empresa=e,empleado=emp),"historial":emp.historial.order_by("-fecha"),"auditoria":EventoAuditoria.objects.filter(empresa=e,content_type=ct,object_id=emp.pk)[:50],"nominas":DetalleNominaEmpleado.objects.filter(empleado=emp,nomina__empresa=e).select_related("nomina")[:24],"salida":SalidaEmpleado.objects.filter(empleado=emp).first()})
+
+@login_required
+@permission_required("rrhh.view_empleado",raise_exception=True)
+def reportes(request):return render(request,"rrhh/reportes.html")
 
 MAPPING={"contratos":(ContratoEmpleado,ContratoForm),"vacaciones":(SolicitudVacacion,VacacionForm),"licencias":(LicenciaEmpleado,LicenciaForm),"amonestaciones":(AccionDisciplinaria,DisciplinaForm),"cursos":(Capacitacion,CapacitacionForm),"salidas":(SalidaEmpleado,SalidaForm)}
 @login_required
