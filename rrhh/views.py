@@ -15,8 +15,8 @@ from documentos.forms import DocumentoForm
 from documentos.models import Documento
 from documentos.services import crear_documento_asociado
 from nomina.models import DetalleNominaEmpleado,LiquidacionLaboral,Nomina,PrestamoEmpleado
-from .forms import CapacitacionForm,ContratoForm,DescripcionPuestoForm,DisciplinaForm,EmpleadoForm,LicenciaForm,ParticipacionForm,SalidaForm,VacacionForm
-from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,ContratoEmpleado,DescripcionPuesto,Empleado,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudVacacion
+from .forms import CapacitacionForm,ContratoForm,DepartamentoForm,DescripcionPuestoForm,DisciplinaForm,EmpleadoForm,EntidadFinancieraForm,LicenciaForm,LugarTrabajoForm,ParticipacionForm,SalidaForm,SolicitudDocumentoForm,VacacionForm
+from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,DescripcionPuesto,Empleado,EntidadFinancieraRRHH,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudDocumentoRRHH,SolicitudVacacion
 
 def _empresa(r):return obtener_empresa_usuario(r)
 def _empleado(r,pk):return get_object_or_404(Empleado.objects.select_related("puesto","departamento","centro","supervisor"),pk=pk,empresa=_empresa(r))
@@ -76,10 +76,14 @@ def reportes(request):return render(request,"rrhh/reportes.html")
 @login_required
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def documentos_centro(request):
- empleados=Empleado.objects.filter(empresa=_empresa(request),estado="ACTIVO").select_related("puesto","departamento").order_by("apellidos","nombres")
- return render(request,"rrhh/documentos.html",{"empleados":empleados})
+ e=_empresa(request);form=SolicitudDocumentoForm(request.POST or None,empresa=e)
+ if request.method=="POST" and form.is_valid():
+  obj=form.save(commit=False);obj.empresa=e;obj.version=SolicitudDocumentoRRHH.objects.filter(empresa=e,empleado=obj.empleado,tipo=obj.tipo).count()+1;obj.numero=f"RRHH-{obj.tipo}-{obj.empleado.codigo}-V{obj.version:02d}";obj.snapshot={"empleado":str(obj.empleado),"puesto":obj.empleado.puesto.nombre,"departamento":obj.empleado.departamento.nombre,"lugar_trabajo":obj.empleado.centro.nombre,"entidad":obj.entidad_financiera.nombre if obj.entidad_financiera else "","destinatario":obj.destinatario,"pais":obj.pais_destino,"proposito":obj.proposito};obj.save();_audit(request,obj,EventoAuditoria.Accion.CREAR,"Solicitud documental RRHH creada.",nuevos=obj.snapshot);return redirect(f"{request.path}?solicitud={obj.pk}")
+ solicitud=None
+ if request.GET.get("solicitud"):solicitud=get_object_or_404(SolicitudDocumentoRRHH.objects.select_related("empleado","entidad_financiera"),pk=request.GET["solicitud"],empresa=e)
+ return render(request,"rrhh/documentos.html",{"form":form,"solicitud":solicitud,"recientes":SolicitudDocumentoRRHH.objects.filter(empresa=e).select_related("empleado").order_by("-pk")[:12]})
 
-MAPPING={"contratos":(ContratoEmpleado,ContratoForm),"funciones":(DescripcionPuesto,DescripcionPuestoForm),"vacaciones":(SolicitudVacacion,VacacionForm),"licencias":(LicenciaEmpleado,LicenciaForm),"amonestaciones":(AccionDisciplinaria,DisciplinaForm),"cursos":(Capacitacion,CapacitacionForm),"salidas":(SalidaEmpleado,SalidaForm)}
+MAPPING={"departamentos":(Departamento,DepartamentoForm),"lugares-trabajo":(CentroTrabajo,LugarTrabajoForm),"entidades-financieras":(EntidadFinancieraRRHH,EntidadFinancieraForm),"contratos":(ContratoEmpleado,ContratoForm),"funciones":(DescripcionPuesto,DescripcionPuestoForm),"vacaciones":(SolicitudVacacion,VacacionForm),"licencias":(LicenciaEmpleado,LicenciaForm),"amonestaciones":(AccionDisciplinaria,DisciplinaForm),"cursos":(Capacitacion,CapacitacionForm),"salidas":(SalidaEmpleado,SalidaForm)}
 @login_required
 def recurso_lista(request,recurso):
  if recurso not in MAPPING:return HttpResponse(status=404)

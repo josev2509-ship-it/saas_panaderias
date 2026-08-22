@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 from conduces.services import obtener_empresa_usuario
-from rrhh.models import Empleado, HistorialLaboral
+from rrhh.models import Empleado, HistorialLaboral, SolicitudDocumentoRRHH
 from documentos.models import TipoDocumento
 from documentos.services import crear_documento_asociado
 
@@ -307,16 +307,22 @@ def prestamo_pdf(request, pk):
 @permission_required("nomina.view_plantilladocumentorrhh", raise_exception=True)
 def documento_empleado(request, empleado_id, tipo):
     kind = tipo.upper()
-    allowed = {"CONTRATO", "LABORAL", "CONSULAR", "BANCARIA", "ANEXO"}
+    allowed = {"CONTRATO", "TEMPORAL", "LABORAL", "CONSULAR", "BANCARIA", "ANEXO", "EXPEDIENTE"}
     if kind not in allowed:
         return HttpResponse("Tipo documental no permitido.", status=404)
-    employee = get_object_or_404(Empleado.objects.select_related("empresa", "puesto", "departamento"), empresa=_e(request), pk=empleado_id)
-    content = employee_document_pdf(employee, kind)
+    employee = get_object_or_404(Empleado.objects.select_related("empresa", "puesto", "departamento", "centro", "supervisor"), empresa=_e(request), pk=empleado_id)
+    document_request = None
+    if request.GET.get("solicitud"):
+        document_request = get_object_or_404(SolicitudDocumentoRRHH.objects.select_related("entidad_financiera"), empresa=_e(request), empleado=employee, pk=request.GET["solicitud"], tipo=kind)
+    content = employee_document_pdf(employee, kind, document_request=document_request)
     if request.method == "POST":
         doc_type, _ = TipoDocumento.objects.get_or_create(empresa=_e(request), codigo=f"RRHH-{kind}", defaults={"nombre": f"Documento laboral {kind.title()}"})
         document = crear_documento_asociado(empresa=_e(request), objeto=employee, usuario=request.user, request=request,
             archivo=ContentFile(content, name=f"{kind.lower()}-{employee.codigo}.pdf"), titulo=f"{kind.title()} · {employee.nombres} {employee.apellidos}", tipo_documento=doc_type)
         _audit(request, employee, f"Documento laboral {kind} generado y archivado.", after={"documento_id": document.pk})
+        if document_request:
+            document_request.estado = "GENERADO"
+            document_request.save(update_fields=["estado"])
         messages.success(request, "Documento generado y vinculado al expediente digital.")
         return redirect("documentos:detalle", document.pk)
     return _download(content, "application/pdf", f"{kind.lower()}-{employee.codigo}.pdf", inline=True)

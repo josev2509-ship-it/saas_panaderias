@@ -4,18 +4,29 @@ from django.db import models, transaction
 class Base(models.Model):
  empresa=models.ForeignKey("conduces.Empresa",on_delete=models.CASCADE);creado_en=models.DateTimeField(auto_now_add=True)
  class Meta:abstract=True
-class Departamento(Base):codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);activo=models.BooleanField(default=True)
-class Puesto(Base):codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);descripcion=models.TextField(blank=True)
+class Departamento(Base):
+ codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);descripcion=models.TextField(blank=True);activo=models.BooleanField(default=True)
+ def __str__(self):return f"{self.codigo} · {self.nombre}"
+class Puesto(Base):
+ codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);descripcion=models.TextField(blank=True)
+ def __str__(self):return f"{self.codigo} · {self.nombre}"
 class SecuenciaEmpleado(models.Model):
  empresa=models.OneToOneField("conduces.Empresa",on_delete=models.CASCADE,related_name="secuencia_empleados");ultimo_numero=models.PositiveBigIntegerField(default=0);actualizado_en=models.DateTimeField(auto_now=True)
 
 class DescripcionPuesto(Base):
  puesto=models.ForeignKey(Puesto,on_delete=models.PROTECT,related_name="descripciones_funciones");objetivo=models.TextField();funciones=models.TextField();responsabilidades=models.TextField(blank=True);procedimientos=models.TextField(blank=True);herramientas=models.TextField(blank=True);controles=models.TextField(blank=True);documentos_relacionados=models.TextField(blank=True);version=models.PositiveIntegerField(default=1);vigente_desde=models.DateField();activa=models.BooleanField(default=True)
  class Meta:constraints=[models.UniqueConstraint(fields=["puesto","version"],name="rrhh_desc_puesto_version_uniq")]
-class CentroTrabajo(Base):codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);direccion=models.TextField(blank=True)
+class CentroTrabajo(Base):
+ """Canonical workplace catalog. The legacy class name is retained for DB compatibility."""
+ codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);direccion=models.TextField(blank=True);descripcion=models.TextField(blank=True);activo=models.BooleanField(default=True)
+ def __str__(self):return f"{self.codigo} · {self.nombre}"
+ class Meta:verbose_name="Lugar de trabajo";verbose_name_plural="Lugares de trabajo"
+class EntidadFinancieraRRHH(Base):
+ codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=150);direccion=models.TextField(blank=True);activo=models.BooleanField(default=True)
+ def __str__(self):return self.nombre
 class Empleado(Base):
  codigo=models.CharField(max_length=20);nombres=models.CharField(max_length=100);apellidos=models.CharField(max_length=100);identificacion=models.CharField(max_length=30);correo=models.EmailField(blank=True);telefono=models.CharField(max_length=30,blank=True);contacto_emergencia=models.CharField(max_length=150,blank=True);puesto=models.ForeignKey(Puesto,on_delete=models.PROTECT);departamento=models.ForeignKey(Departamento,on_delete=models.PROTECT);supervisor=models.ForeignKey("self",on_delete=models.PROTECT,null=True,blank=True);centro=models.ForeignKey(CentroTrabajo,on_delete=models.PROTECT);fecha_ingreso=models.DateField();salario=models.DecimalField(max_digits=18,decimal_places=2);forma_pago=models.CharField(max_length=20,default="TRANSFERENCIA");cuenta_bancaria_cifrada=models.TextField(blank=True);estado=models.CharField(max_length=15,default="ACTIVO");foto=models.ImageField(upload_to="rrhh/empleados/",blank=True)
- sexo=models.CharField(max_length=20,blank=True);fecha_nacimiento=models.DateField(null=True,blank=True);estado_civil=models.CharField(max_length=30,blank=True);nacionalidad=models.CharField(max_length=60,blank=True);direccion=models.TextField(blank=True);tipo_contrato=models.CharField(max_length=30,blank=True);frecuencia_pago=models.CharField(max_length=20,default="MENSUAL");banco=models.CharField(max_length=100,blank=True);tipo_cuenta_bancaria=models.CharField(max_length=30,blank=True);licencia_conducir=models.CharField(max_length=40,blank=True);categoria_licencia=models.CharField(max_length=20,blank=True);vence_licencia=models.DateField(null=True,blank=True);observaciones=models.TextField(blank=True)
+ sexo=models.CharField(max_length=20,blank=True);fecha_nacimiento=models.DateField(null=True,blank=True);estado_civil=models.CharField(max_length=30,blank=True);nacionalidad=models.CharField(max_length=60,blank=True);direccion=models.TextField(blank=True);tipo_contrato=models.CharField(max_length=30,blank=True);frecuencia_pago=models.CharField(max_length=20,default="MENSUAL");banco=models.CharField(max_length=100,blank=True);tipo_cuenta_bancaria=models.CharField(max_length=30,blank=True);licencia_conducir=models.CharField(max_length=40,blank=True);categoria_licencia=models.CharField(max_length=20,blank=True);vence_licencia=models.DateField(null=True,blank=True);observaciones=models.TextField(blank=True);es_supervisor=models.BooleanField(default=False)
  class Meta:constraints=[models.UniqueConstraint(fields=["empresa","codigo"],name="rrhh_emp_codigo_uniq"),models.UniqueConstraint(fields=["empresa","identificacion"],name="rrhh_emp_ident_uniq")]
  @classmethod
  def siguiente_codigo(cls,empresa):
@@ -23,9 +34,19 @@ class Empleado(Base):
    secuencia,_=SecuenciaEmpleado.objects.select_for_update().get_or_create(empresa=empresa)
    secuencia.ultimo_numero+=1;secuencia.save(update_fields=["ultimo_numero","actualizado_en"])
    return f"EMP-{secuencia.ultimo_numero:06d}"
+ def __str__(self):return f"{self.codigo} · {self.nombres} {self.apellidos}"
 class Organigrama(Base):empleado=models.OneToOneField(Empleado,on_delete=models.CASCADE);padre=models.ForeignKey("self",on_delete=models.PROTECT,null=True,blank=True)
 class ContratoEmpleado(Base):
- empleado=models.ForeignKey(Empleado,on_delete=models.PROTECT,related_name="contratos");tipo=models.CharField(max_length=30);inicio=models.DateField();fin=models.DateField(null=True,blank=True);salario=models.DecimalField(max_digits=18,decimal_places=2);estado=models.CharField(max_length=15,default="BORRADOR");puesto=models.ForeignKey(Puesto,on_delete=models.PROTECT,null=True,blank=True);jornada=models.CharField(max_length=80,blank=True);renovacion_de=models.ForeignKey("self",on_delete=models.PROTECT,null=True,blank=True,related_name="renovaciones");observaciones=models.TextField(blank=True)
+ empleado=models.ForeignKey(Empleado,on_delete=models.PROTECT,related_name="contratos");numero=models.CharField(max_length=40,blank=True);version=models.PositiveIntegerField(default=1);tipo=models.CharField(max_length=30);inicio=models.DateField();fin=models.DateField(null=True,blank=True);salario=models.DecimalField(max_digits=18,decimal_places=2);estado=models.CharField(max_length=15,default="BORRADOR");puesto=models.ForeignKey(Puesto,on_delete=models.PROTECT,null=True,blank=True);jornada=models.CharField(max_length=80,blank=True);renovacion_de=models.ForeignKey("self",on_delete=models.PROTECT,null=True,blank=True,related_name="renovaciones");objeto=models.TextField(blank=True);lugar_prestacion=models.TextField(blank=True);motivo_temporal=models.TextField(blank=True);anexos=models.TextField(blank=True);observaciones=models.TextField(blank=True)
+ def __str__(self):return f"{self.numero or 'Contrato'} v{self.version} · {self.empleado}"
+ def save(self,*args,**kwargs):
+  if not self.numero and self.empleado_id:self.numero=f"CTR-{self.empleado.codigo}-{self.version:02d}"
+  super().save(*args,**kwargs)
+
+class SolicitudDocumentoRRHH(Base):
+ TIPOS=(("LABORAL","Certificación laboral"),("BANCARIA","Carta bancaria"),("CONSULAR","Carta consular"),("CONTRATO","Contrato"),("TEMPORAL","Contrato temporal"),("ANEXO","Anexo de funciones"),("EXPEDIENTE","Expediente del empleado"))
+ empleado=models.ForeignKey(Empleado,on_delete=models.PROTECT,related_name="solicitudes_documentos");tipo=models.CharField(max_length=20,choices=TIPOS);entidad_financiera=models.ForeignKey(EntidadFinancieraRRHH,on_delete=models.PROTECT,null=True,blank=True);destinatario=models.CharField(max_length=180,blank=True);pais_destino=models.CharField(max_length=100,blank=True);proposito=models.CharField(max_length=180,blank=True);numero=models.CharField(max_length=50,blank=True);version=models.PositiveIntegerField(default=1);snapshot=models.JSONField(default=dict);estado=models.CharField(max_length=20,default="BORRADOR")
+ def __str__(self):return f"{self.get_tipo_display()} · {self.empleado}"
 class DependienteEmpleado(models.Model):empleado=models.ForeignKey(Empleado,on_delete=models.CASCADE,related_name="dependientes");nombre=models.CharField(max_length=150);parentesco=models.CharField(max_length=30);fecha_nacimiento=models.DateField(null=True)
 class HistorialLaboral(models.Model):empleado=models.ForeignKey(Empleado,on_delete=models.CASCADE,related_name="historial");accion=models.CharField(max_length=40);snapshot=models.JSONField(default=dict);fecha=models.DateTimeField(auto_now_add=True)
 class BeneficioEmpleado(Base):empleado=models.ForeignKey(Empleado,on_delete=models.CASCADE,related_name="beneficios");nombre=models.CharField(max_length=100);monto=models.DecimalField(max_digits=18,decimal_places=2,default=0)

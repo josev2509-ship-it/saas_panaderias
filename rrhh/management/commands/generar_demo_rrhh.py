@@ -10,7 +10,7 @@ from nomina.payroll_engine import ensure_legal_parameters
 from nomina.services import procesar_nomina
 from documentos.models import Documento,TipoDocumento
 from documentos.services import crear_documento_asociado
-from rrhh.models import (AccionDisciplinaria,Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,Empleado,HoraExtra,
+from rrhh.models import (AccionDisciplinaria,Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,Empleado,EntidadFinancieraRRHH,HoraExtra,
  IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,Puesto,RegistroAsistencia,ReingresoEmpleado,SaldoVacacion,SalidaEmpleado,SolicitudVacacion)
 
 class Command(BaseCommand):
@@ -19,8 +19,8 @@ class Command(BaseCommand):
  def handle(self,*args,**o):
   try:e=Empresa.objects.get(usuario__username=o["usuario"])
   except Empresa.DoesNotExist:raise CommandError("Empresa no encontrada para ese usuario.")
-  hoy=timezone.localdate();d,_=Departamento.objects.get_or_create(empresa=e,codigo="DEMO-RRHH",defaults={"nombre":"Operaciones Demo"});p,_=Puesto.objects.get_or_create(empresa=e,codigo="DEMO-ANA",defaults={"nombre":"Analista Demo"});c,_=CentroTrabajo.objects.get_or_create(empresa=e,codigo="DEMO-SDQ",defaults={"nombre":"Centro Demo"})
-  emp,_=Empleado.objects.update_or_create(empresa=e,codigo="DEMO-RRHH-001",defaults={"nombres":"Persona","apellidos":"Demostración","identificacion":"DEMO-RRHH-001","puesto":p,"departamento":d,"centro":c,"fecha_ingreso":hoy-timedelta(days=400),"salario":Decimal("45000"),"estado":"ACTIVO"})
+  hoy=timezone.localdate();d,_=Departamento.objects.get_or_create(empresa=e,codigo="DEMO-RRHH",defaults={"nombre":"Operaciones Demo"});p,_=Puesto.objects.get_or_create(empresa=e,codigo="DEMO-ANA",defaults={"nombre":"Analista Demo"});c,_=CentroTrabajo.objects.update_or_create(empresa=e,codigo="DEMO-SDQ",defaults={"nombre":"Sede Principal Demo","direccion":"Santo Domingo","activo":True});EntidadFinancieraRRHH.objects.get_or_create(empresa=e,codigo="DEMO-BANCO",defaults={"nombre":"Banco Demostración","direccion":"Santo Domingo"})
+  emp,_=Empleado.objects.update_or_create(empresa=e,codigo="DEMO-RRHH-001",defaults={"nombres":"Persona","apellidos":"Demostración","identificacion":"DEMO-RRHH-001","puesto":p,"departamento":d,"centro":c,"fecha_ingreso":hoy-timedelta(days=400),"salario":Decimal("45000"),"estado":"ACTIVO","es_supervisor":True})
   emp_b,_=Empleado.objects.update_or_create(empresa=e,codigo="DEMO-RRHH-003",defaults={"nombres":"Persona","apellidos":"Incentivo Demo","identificacion":"DEMO-RRHH-003","puesto":p,"departamento":d,"centro":c,"fecha_ingreso":hoy-timedelta(days=500),"salario":Decimal("52000"),"estado":"ACTIVO"})
   emp_c,_=Empleado.objects.update_or_create(empresa=e,codigo="DEMO-RRHH-004",defaults={"nombres":"Persona","apellidos":"Préstamo Demo","identificacion":"DEMO-RRHH-004","puesto":p,"departamento":d,"centro":c,"fecha_ingreso":hoy-timedelta(days=700),"salario":Decimal("60000"),"estado":"ACTIVO"})
   inactivo,_=Empleado.objects.update_or_create(empresa=e,codigo="DEMO-RRHH-002",defaults={"nombres":"Persona","apellidos":"Inactiva Demo","identificacion":"DEMO-RRHH-002","puesto":p,"departamento":d,"centro":c,"fecha_ingreso":hoy-timedelta(days=800),"salario":Decimal("38000"),"estado":"INACTIVO"})

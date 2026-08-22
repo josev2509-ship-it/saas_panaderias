@@ -157,15 +157,37 @@ def loan_statement_pdf(loan):
     return _build_pdf("Estado de préstamo", loan.empresa, story)
 
 
-def employee_document_pdf(employee, kind):
+def employee_document_pdf(employee, kind, *, document_request=None):
     styles = getSampleStyleSheet()
     template = _template(employee.empresa, kind)
-    labels = {"CONTRATO": "Contrato de trabajo", "LABORAL": "Carta laboral", "CONSULAR": "Carta para fines consulares", "BANCARIA": "Carta para apertura de cuenta bancaria", "ANEXO": "Descripción de funciones"}
-    values = {"empresa": employee.empresa.nombre, "rnc": employee.empresa.rnc or "—", "direccion_empresa": employee.empresa.direccion or "—", "empleado": f"{employee.nombres} {employee.apellidos}", "identificacion": employee.identificacion, "codigo_empleado": employee.codigo, "puesto": employee.puesto.nombre, "departamento": employee.departamento.nombre, "salario": _money(employee.salario), "fecha_ingreso": str(employee.fecha_ingreso), "tipo_contrato": employee.tipo_contrato or "No especificado"}
+    labels = {"CONTRATO": "Contrato individual de trabajo", "TEMPORAL": "Contrato individual de trabajo por tiempo determinado", "LABORAL": "Certificación laboral", "CONSULAR": "Carta para fines consulares", "BANCARIA": "Carta dirigida a entidad financiera", "ANEXO": "Anexo de funciones", "EXPEDIENTE": "Expediente ejecutivo del empleado"}
+    metadata = document_request.snapshot if document_request else {}
+    values = {"empresa": employee.empresa.nombre, "rnc": employee.empresa.rnc or "—", "direccion_empresa": employee.empresa.direccion or "—", "empleado": f"{employee.nombres} {employee.apellidos}", "identificacion": employee.identificacion, "codigo_empleado": employee.codigo, "puesto": employee.puesto.nombre, "departamento": employee.departamento.nombre, "lugar_trabajo": employee.centro.nombre, "salario": _money(employee.salario), "fecha_ingreso": str(employee.fecha_ingreso), "tipo_contrato": employee.tipo_contrato or "No especificado", "entidad_financiera": metadata.get("entidad", ""), "destinatario": metadata.get("destinatario", ""), "proposito": metadata.get("proposito", "")}
     body = (template.cuerpo if template and template.cuerpo else "Documento emitido a solicitud de la parte interesada con base en la información laboral registrada.")
     for key, value in values.items():
         body = body.replace("{{" + key + "}}", str(value))
-    story = [Paragraph(f"Fecha: {timezone.localdate()}", styles["Normal"]), Spacer(1, 5*mm), Paragraph(body.replace("\n", "<br/>"), styles["BodyText"])]
+    recipient = metadata.get("entidad") or metadata.get("destinatario") or "A quien pueda interesar"
+    story = [Paragraph(f"Santo Domingo, República Dominicana · {timezone.localdate()}", styles["Normal"]), Spacer(1, 5*mm), Paragraph(f"<b>Señores:</b><br/>{recipient}<br/><b>Asunto:</b> {labels.get(kind, 'Documento laboral')}", styles["BodyText"]), Spacer(1, 5*mm), Paragraph(body.replace("\n", "<br/>"), styles["BodyText"])]
+    if kind in {"CONTRATO", "TEMPORAL"}:
+        contract = employee.contratos.filter(empresa=employee.empresa).order_by("-version", "-inicio").first()
+        end = contract.fin if contract else None
+        reason = contract.motivo_temporal if contract else ""
+        clauses = [
+            ("PRIMERA. IDENTIFICACIÓN Y CAPACIDAD", f"Comparecen {employee.empresa.nombre}, RNC {employee.empresa.rnc or '—'}, y {values['empleado']}, titular de la identificación {employee.identificacion}, quienes declaran capacidad para obligarse."),
+            ("SEGUNDA. OBJETO", (contract.objeto if contract and contract.objeto else f"La persona trabajadora prestará servicios como {employee.puesto.nombre}, conforme a la descripción y anexos vigentes del puesto.")),
+            ("TERCERA. LUGAR DE PRESTACIÓN", (contract.lugar_prestacion if contract and contract.lugar_prestacion else f"Los servicios se prestarán en {employee.centro.nombre}, {employee.centro.direccion or employee.empresa.direccion or 'dirección registrada por la empresa'}.")),
+            ("CUARTA. VIGENCIA", f"El contrato inicia el {contract.inicio if contract else employee.fecha_ingreso}." + (f" Finaliza el {end}. La causa temporal declarada es: {reason}." if kind == "TEMPORAL" and end else " Su vigencia es por tiempo indefinido salvo terminación conforme al marco laboral aplicable.")),
+            ("QUINTA. JORNADA", (contract.jornada if contract and contract.jornada else "La jornada, descansos y horario serán los registrados en el expediente laboral y comunicados por Gestión Humana.")),
+            ("SEXTA. REMUNERACIÓN", f"La remuneración mensual registrada es {_money(contract.salario if contract else employee.salario)}, pagadera con la frecuencia y medio informados en el expediente."),
+            ("SÉPTIMA. OBLIGACIONES", "La persona trabajadora se compromete a ejecutar sus funciones con diligencia, confidencialidad, seguridad y observancia de las políticas legítimamente comunicadas."),
+            ("OCTAVA. SEGURIDAD SOCIAL Y RETENCIONES", "La empresa realizará los registros, aportes y retenciones que correspondan conforme a los parámetros legales vigentes y a la información certificada del período."),
+            ("NOVENA. DOCUMENTOS Y ANEXOS", (contract.anexos if contract and contract.anexos else "Forman parte del contrato la descripción de puesto, políticas entregadas, adendas y constancias firmadas, cada una identificada por su versión.")),
+            ("DÉCIMA. VERSIONES Y ACEPTACIÓN", f"Este documento corresponde a la versión {contract.version if contract else 1}. Toda modificación deberá constar por escrito. Las partes firman dos ejemplares de igual contenido y valor."),
+        ]
+        story = [Paragraph(f"Referencia: {(contract.numero if contract else '') or employee.codigo}", styles["Normal"])] + [Paragraph(f"<b>{title}</b><br/>{text}", styles["BodyText"]) for title, text in clauses]
+    elif kind == "EXPEDIENTE":
+        rows = [["Campo", "Información"],["Código",employee.codigo],["Nombre",values["empleado"]],["Identificación",employee.identificacion],["Puesto",employee.puesto.nombre],["Departamento",employee.departamento.nombre],["Lugar de trabajo",employee.centro.nombre],["Supervisor",str(employee.supervisor or "—")],["Ingreso",str(employee.fecha_ingreso)],["Estado",employee.estado],["Correo",employee.correo or "—"],["Teléfono",employee.telefono or "—"]]
+        story = [_styled_table(rows,[48*mm,120*mm]),Spacer(1,5*mm),Paragraph("Este expediente resume la información vigente registrada. Los soportes documentales y el historial auditado permanecen en el repositorio de Gestión Humana.",styles["BodyText"])]
     if kind == "ANEXO":
         description = employee.puesto.descripciones_funciones.filter(empresa=employee.empresa, activa=True).order_by("-version").first()
         if description:

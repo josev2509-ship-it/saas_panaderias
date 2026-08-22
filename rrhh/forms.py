@@ -1,6 +1,6 @@
 from django import forms
 from django.conf import settings
-from .models import AccionDisciplinaria, Capacitacion, ContratoEmpleado, DescripcionPuesto, Empleado, LicenciaEmpleado, ParticipacionCapacitacion, SalidaEmpleado, SolicitudVacacion
+from .models import AccionDisciplinaria, Capacitacion, CentroTrabajo, ContratoEmpleado, Departamento, DescripcionPuesto, Empleado, EntidadFinancieraRRHH, LicenciaEmpleado, ParticipacionCapacitacion, SalidaEmpleado, SolicitudDocumentoRRHH, SolicitudVacacion
 
 class TenantForm(forms.ModelForm):
     def __init__(self,*args,empresa=None,**kwargs):
@@ -13,6 +13,8 @@ class TenantForm(forms.ModelForm):
 class EmpleadoForm(TenantForm):
     eliminar_foto=forms.BooleanField(required=False,label="Eliminar fotografía actual")
     class Meta:model=Empleado;exclude=("empresa","creado_en","codigo");widgets={"fecha_ingreso":forms.DateInput(attrs={"type":"date"}),"fecha_nacimiento":forms.DateInput(attrs={"type":"date"}),"vence_licencia":forms.DateInput(attrs={"type":"date"}),"direccion":forms.Textarea(attrs={"rows":2}),"observaciones":forms.Textarea(attrs={"rows":2}),"foto":forms.FileInput(attrs={"accept":"image/jpeg,image/png,image/webp"})}
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs);self.fields["centro"].label="Lugar de trabajo";self.fields["supervisor"].queryset=Empleado.objects.filter(empresa=self.empresa,estado="ACTIVO",es_supervisor=True).exclude(pk=self.instance.pk)
     def clean_identificacion(self):
         value=self.cleaned_data["identificacion"].strip()
         qs=Empleado.objects.filter(empresa=self.empresa,identificacion=value)
@@ -25,7 +27,26 @@ class EmpleadoForm(TenantForm):
         if photo and getattr(photo,"content_type","") not in {"image/jpeg","image/png","image/webp"}:raise forms.ValidationError("Use una fotografía JPG, PNG o WEBP.")
         return photo
 class ContratoForm(TenantForm):
-    class Meta:model=ContratoEmpleado;exclude=("empresa","creado_en");widgets={"inicio":forms.DateInput(attrs={"type":"date"}),"fin":forms.DateInput(attrs={"type":"date"})}
+    class Meta:model=ContratoEmpleado;exclude=("empresa","creado_en","numero");widgets={"inicio":forms.DateInput(attrs={"type":"date"}),"fin":forms.DateInput(attrs={"type":"date"}),"objeto":forms.Textarea(attrs={"rows":3}),"motivo_temporal":forms.Textarea(attrs={"rows":3}),"anexos":forms.Textarea(attrs={"rows":3})}
+    def clean(self):
+        data=super().clean();tipo=(data.get("tipo") or "").upper()
+        if "TEMPOR" in tipo and (not data.get("fin") or not data.get("motivo_temporal")):raise forms.ValidationError("El contrato temporal requiere fecha de finalización y causa temporal documentada.")
+        return data
+
+class DepartamentoForm(TenantForm):
+    class Meta:model=Departamento;exclude=("empresa","creado_en")
+class LugarTrabajoForm(TenantForm):
+    class Meta:model=CentroTrabajo;exclude=("empresa","creado_en");labels={"nombre":"Lugar de trabajo"}
+class EntidadFinancieraForm(TenantForm):
+    class Meta:model=EntidadFinancieraRRHH;exclude=("empresa","creado_en")
+class SolicitudDocumentoForm(TenantForm):
+    class Meta:model=SolicitudDocumentoRRHH;fields=("tipo","empleado","entidad_financiera","destinatario","pais_destino","proposito")
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs);self.fields["entidad_financiera"].queryset=EntidadFinancieraRRHH.objects.filter(empresa=self.empresa,activo=True);self.fields["entidad_financiera"].required=False
+    def clean(self):
+        data=super().clean()
+        if data.get("tipo")=="BANCARIA" and not data.get("entidad_financiera"):self.add_error("entidad_financiera","Seleccione la entidad financiera destinataria.")
+        return data
 class VacacionForm(TenantForm):
     class Meta:model=SolicitudVacacion;exclude=("empresa","creado_en");widgets={"desde":forms.DateInput(attrs={"type":"date"}),"hasta":forms.DateInput(attrs={"type":"date"})}
 class LicenciaForm(TenantForm):

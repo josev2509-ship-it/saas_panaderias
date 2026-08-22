@@ -6,7 +6,7 @@ from django.urls import reverse
 from auditoria.models import EventoAuditoria
 from conduces.models import Empresa
 from documentos.models import Documento,TipoDocumento
-from .models import Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,Empleado,HistorialLaboral,ParticipacionCapacitacion,Puesto,SalidaEmpleado,SolicitudVacacion
+from .models import Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,Empleado,EntidadFinancieraRRHH,HistorialLaboral,ParticipacionCapacitacion,Puesto,SalidaEmpleado,SolicitudDocumentoRRHH,SolicitudVacacion
 from .forms import EmpleadoForm
 
 class RRHHCoreTests(TestCase):
@@ -25,7 +25,7 @@ class RRHHCoreTests(TestCase):
   response=self.client.get(reverse("rrhh:empleados"));self.assertContains(response,"Ana Pérez");self.assertNotContains(response,"Otro Tenant")
  def test_v5_navigation_dashboard_and_document_center(self):
   dashboard=self.client.get(reverse("rrhh:dashboard"));self.assertContains(dashboard,"Gestión Humana");self.assertContains(dashboard,"Acciones rápidas");self.assertContains(dashboard,"Préstamos activos");self.assertContains(dashboard,"Documentos y cartas")
-  employees=self.client.get(reverse("rrhh:empleados"));self.assertContains(employees,"Identificación");self.assertContains(employees,"Ver expediente");self.assertContains(employees,"RD$ 50")
+  employees=self.client.get(reverse("rrhh:empleados"));self.assertContains(employees,"Identificación");self.assertContains(employees,"Ver expediente");self.assertContains(employees,"Lugar de trabajo")
   documents=self.client.get(reverse("rrhh:documentos_centro"));self.assertEqual(documents.status_code,200);self.assertContains(documents,"Certificación laboral");self.assertContains(documents,"Carta bancaria");self.assertNotContains(documents,"Otro Tenant")
   wizard=self.client.get(reverse("rrhh:empleado_crear"));self.assertContains(wizard,"Nómina y seguridad social");self.assertContains(wizard,"Guardar y continuar")
  def test_employee_creation_is_tenant_safe_and_audited(self):
@@ -65,3 +65,15 @@ class RRHHCoreTests(TestCase):
  def test_duplicate_identification_is_a_form_error(self):
   form=EmpleadoForm({"nombres":"Duplicado","apellidos":"Seguro","identificacion":"001","puesto":self.pos.pk,"departamento":self.dep.pk,"centro":self.centro.pk,"fecha_ingreso":date.today(),"salario":"1000","forma_pago":"TRANSFERENCIA","frecuencia_pago":"MENSUAL","estado":"ACTIVO"},empresa=self.empresa)
   self.assertFalse(form.is_valid());self.assertIn("identificacion",form.errors)
+ def test_v6_catalogs_have_human_labels_and_tenant_scope(self):
+  self.assertEqual(str(self.dep),"ADM · Administración");self.assertEqual(str(self.centro),"SDQ · Principal");self.assertNotIn("object",str(self.emp))
+  for resource in ("departamentos","lugares-trabajo","entidades-financieras"):
+   response=self.client.get(reverse("rrhh:recurso_lista",args=[resource]));self.assertEqual(response.status_code,200)
+ def test_v6_document_workflow_requires_bank_and_preserves_snapshot(self):
+  bank=EntidadFinancieraRRHH.objects.create(empresa=self.empresa,codigo="BANCO",nombre="Banco de Prueba")
+  response=self.client.post(reverse("rrhh:documentos_centro"),{"tipo":"BANCARIA","empleado":self.emp.pk,"entidad_financiera":bank.pk,"proposito":"Apertura de cuenta"})
+  self.assertEqual(response.status_code,302);obj=SolicitudDocumentoRRHH.objects.get();self.assertEqual(obj.snapshot["lugar_trabajo"],"Principal");self.assertIn("solicitud=",response.url)
+ def test_v6_expeditious_pdf_and_temporary_contract_validation(self):
+  response=self.client.get(reverse("nomina:documento_empleado",args=[self.emp.pk,"EXPEDIENTE"]));self.assertEqual(response.status_code,200);self.assertEqual(response["Content-Type"],"application/pdf");self.assertTrue(response.content.startswith(b"%PDF"))
+  from .forms import ContratoForm
+  form=ContratoForm({"empleado":self.emp.pk,"version":1,"tipo":"TEMPORAL","inicio":date.today(),"salario":"50000","estado":"BORRADOR","puesto":self.pos.pk,"jornada":"Diurna"},empresa=self.empresa);self.assertFalse(form.is_valid());self.assertIn("fecha de finalización",str(form.errors))
