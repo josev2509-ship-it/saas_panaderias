@@ -23,6 +23,11 @@ class RRHHCoreTests(TestCase):
   for name,args in (("rrhh:dashboard",()),("rrhh:empleados",()),("rrhh:empleado_360",(self.emp.pk,))):
    response=self.client.get(reverse(name,args=args));self.assertEqual(response.status_code,200);self.assertContains(response,"RRHH")
   response=self.client.get(reverse("rrhh:empleados"));self.assertContains(response,"Ana Pérez");self.assertNotContains(response,"Otro Tenant")
+ def test_v5_navigation_dashboard_and_document_center(self):
+  dashboard=self.client.get(reverse("rrhh:dashboard"));self.assertContains(dashboard,"Gestión Humana");self.assertContains(dashboard,"Acciones rápidas");self.assertContains(dashboard,"Préstamos activos");self.assertContains(dashboard,"Documentos y cartas")
+  employees=self.client.get(reverse("rrhh:empleados"));self.assertContains(employees,"Identificación");self.assertContains(employees,"Ver expediente");self.assertContains(employees,"RD$ 50")
+  documents=self.client.get(reverse("rrhh:documentos_centro"));self.assertEqual(documents.status_code,200);self.assertContains(documents,"Certificación laboral");self.assertContains(documents,"Carta bancaria");self.assertNotContains(documents,"Otro Tenant")
+  wizard=self.client.get(reverse("rrhh:empleado_crear"));self.assertContains(wizard,"Nómina y seguridad social");self.assertContains(wizard,"Guardar y continuar")
  def test_employee_creation_is_tenant_safe_and_audited(self):
   response=self.client.post(reverse("rrhh:empleado_crear"),{"codigo":"E-002","nombres":"Luis","apellidos":"Díaz","identificacion":"003","puesto":self.pos.pk,"departamento":self.dep.pk,"centro":self.centro.pk,"fecha_ingreso":date.today(),"salario":"45000","forma_pago":"TRANSFERENCIA","frecuencia_pago":"MENSUAL","estado":"ACTIVO"})
   self.assertEqual(response.status_code,302);nuevo=Empleado.objects.get(identificacion="003");self.assertEqual(nuevo.codigo,"EMP-000001");self.assertEqual(nuevo.empresa,self.empresa);self.assertTrue(HistorialLaboral.objects.filter(empleado=nuevo,accion="INGRESO").exists());self.assertTrue(EventoAuditoria.objects.filter(empresa=self.empresa,object_id=nuevo.pk,modulo="rrhh").exists())

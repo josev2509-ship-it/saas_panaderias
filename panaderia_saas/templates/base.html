@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#12213a">
 <title>{% block title %}{% if empresa %}{{ empresa.nombre }} · {% endif %}SASTRE ERP{% endblock %}</title>
 <link rel="stylesheet" href="{% static 'conduces/css/app.css' %}"><link rel="stylesheet" href="{% static 'conduces/css/style.css' %}">
-{% for sheet in 'tokens.css,base.css,layout.css,components.css,demo_ready.css,utilities.css,responsive.css'|split:',' %}<link rel="stylesheet" href="{% static 'design_system/css/'|add:sheet %}">{% endfor %}
+{% for sheet in 'tokens.css,base.css,layout.css,components.css,demo_ready.css,utilities.css,responsive.css'|split:',' %}<link rel="stylesheet" href="{% static 'design_system/css/'|add:sheet %}?v=rrhh-v5">{% endfor %}
 <link rel="stylesheet" href="{% static 'design_system/css/enterprise_list.css' %}?v=rc1">
 <link rel="stylesheet" href="{% static 'design_system/css/demo_unified.css' %}">
 <style>

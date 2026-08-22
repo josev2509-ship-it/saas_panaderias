@@ -14,7 +14,7 @@ from conduces.services import obtener_empresa_usuario
 from documentos.forms import DocumentoForm
 from documentos.models import Documento
 from documentos.services import crear_documento_asociado
-from nomina.models import DetalleNominaEmpleado,LiquidacionLaboral,Nomina
+from nomina.models import DetalleNominaEmpleado,LiquidacionLaboral,Nomina,PrestamoEmpleado
 from .forms import CapacitacionForm,ContratoForm,DescripcionPuestoForm,DisciplinaForm,EmpleadoForm,LicenciaForm,ParticipacionForm,SalidaForm,VacacionForm
 from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,ContratoEmpleado,DescripcionPuesto,Empleado,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudVacacion
 
@@ -26,7 +26,8 @@ def _audit(r,obj,accion,descripcion,antes=None,nuevos=None):return registrar_eve
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def dashboard(request):
  e=_empresa(request);h=timezone.localdate();lim=h+timedelta(days=45);empleados=Empleado.objects.filter(empresa=e)
- return render(request,"rrhh/dashboard.html",{"activos":empleados.filter(estado="ACTIVO").count(),"ingresos":empleados.filter(fecha_ingreso__year=h.year,fecha_ingreso__month=h.month).count(),"salidas":SalidaEmpleado.objects.filter(empresa=e,fecha_salida__year=h.year,fecha_salida__month=h.month).count(),"vacaciones":SolicitudVacacion.objects.filter(empresa=e,desde__range=(h,lim)).count(),"contratos":ContratoEmpleado.objects.filter(empresa=e,fin__range=(h,lim)).select_related("empleado"),"documentos":Documento.objects.filter(empresa=e,fecha_vencimiento__range=(h,lim),estado="ACTIVO"),"licencias":empleados.filter(vence_licencia__range=(h,lim)),"incidencias":AccionDisciplinaria.objects.filter(empresa=e,estado="ABIERTA").count(),"cursos":Capacitacion.objects.filter(empresa=e,inicio__range=(h,lim)).count()})
+ ultima_nomina=Nomina.objects.filter(empresa=e).order_by("-periodo__hasta").first()
+ return render(request,"rrhh/dashboard.html",{"activos":empleados.filter(estado="ACTIVO").count(),"nomina_actual":ultima_nomina,"ausencias_hoy":AusenciaEmpleado.objects.filter(empresa=e,fecha=h).count(),"prestamos_activos":PrestamoEmpleado.objects.filter(empresa=e,estado="ACTIVO",saldo__gt=0).count(),"ingresos":empleados.filter(fecha_ingreso__year=h.year,fecha_ingreso__month=h.month).count(),"salidas":SalidaEmpleado.objects.filter(empresa=e,fecha_salida__year=h.year,fecha_salida__month=h.month).count(),"vacaciones":SolicitudVacacion.objects.filter(empresa=e,desde__range=(h,lim)).count(),"contratos":ContratoEmpleado.objects.filter(empresa=e,fin__range=(h,lim)).select_related("empleado"),"documentos":Documento.objects.filter(empresa=e,fecha_vencimiento__range=(h,lim),estado="ACTIVO"),"licencias":empleados.filter(vence_licencia__range=(h,lim)),"incidencias":AccionDisciplinaria.objects.filter(empresa=e,estado="ABIERTA").count(),"cursos":Capacitacion.objects.filter(empresa=e,inicio__range=(h,lim)).count()})
 
 @login_required
 @permission_required("rrhh.view_empleado",raise_exception=True)
@@ -71,6 +72,12 @@ def empleado_360(request,pk):
 @login_required
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def reportes(request):return render(request,"rrhh/reportes.html")
+
+@login_required
+@permission_required("rrhh.view_empleado",raise_exception=True)
+def documentos_centro(request):
+ empleados=Empleado.objects.filter(empresa=_empresa(request),estado="ACTIVO").select_related("puesto","departamento").order_by("apellidos","nombres")
+ return render(request,"rrhh/documentos.html",{"empleados":empleados})
 
 MAPPING={"contratos":(ContratoEmpleado,ContratoForm),"funciones":(DescripcionPuesto,DescripcionPuestoForm),"vacaciones":(SolicitudVacacion,VacacionForm),"licencias":(LicenciaEmpleado,LicenciaForm),"amonestaciones":(AccionDisciplinaria,DisciplinaForm),"cursos":(Capacitacion,CapacitacionForm),"salidas":(SalidaEmpleado,SalidaForm)}
 @login_required

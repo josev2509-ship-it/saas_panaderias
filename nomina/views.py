@@ -37,7 +37,8 @@ def _audit(request, obj, description, before=None, after=None):
 def dashboard(request):
     periods = PeriodoNomina.objects.filter(empresa=_e(request)).select_related("tipo").order_by("-desde")
     payrolls = Nomina.objects.filter(empresa=_e(request)).select_related("periodo__tipo").order_by("-periodo__desde")
-    return render(request, "nomina/dashboard.html", {"periodos": periods, "nominas": payrolls})
+    current = payrolls.first()
+    return render(request, "nomina/dashboard.html", {"periodos": periods, "nominas": payrolls, "nomina_actual": current})
 
 
 @login_required
@@ -128,7 +129,8 @@ def concepto_crear(request):
 @login_required
 @permission_required("nomina.add_novedadnomina", raise_exception=True)
 def novedad_crear(request):
-    form = NovedadForm(request.POST or None, empresa=_e(request))
+    naturaleza = request.GET.get("tipo", "").upper()
+    form = NovedadForm(request.POST or None, empresa=_e(request), naturaleza=naturaleza)
     if request.method == "POST" and form.is_valid():
         obj = form.save(commit=False)
         obj.empresa, obj.estado = _e(request), "APROBADA"
@@ -136,7 +138,8 @@ def novedad_crear(request):
         _audit(request, obj, "Novedad de ingreso/descuento aprobada.")
         messages.success(request, "Novedad registrada. Recalcule la nómina abierta para aplicarla.")
         return redirect("nomina:dashboard")
-    return render(request, "rrhh/form.html", {"form": form, "titulo": "Registrar ingreso o descuento"})
+    titulo = "Registrar ingreso adicional" if naturaleza == "INGRESO" else "Registrar descuento" if naturaleza == "DESCUENTO" else "Registrar novedad de nómina"
+    return render(request, "rrhh/form.html", {"form": form, "titulo": titulo, "form_context": "nomina"})
 
 
 @login_required

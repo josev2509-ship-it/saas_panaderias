@@ -7,6 +7,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from django.utils import timezone
 
@@ -22,12 +23,36 @@ def _template(empresa, kind):
     return PlantillaDocumentoRRHH.objects.filter(empresa=empresa, tipo=kind, activo=True).first()
 
 
+class _NumberedCanvas(canvas.Canvas):
+    """Adds stable Page X of Y numbering after ReportLab knows the final count."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.setFont("Helvetica", 8)
+            self.setFillColor(colors.HexColor("#526079"))
+            self.drawRightString(self._pagesize[0] - 14 * mm, 7 * mm, f"Página {self._pageNumber} de {total}")
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+
 def _build_pdf(title, empresa, story, *, landscape_page=False):
     output = BytesIO()
     doc = SimpleDocTemplate(output, pagesize=landscape(A4) if landscape_page else A4, leftMargin=14 * mm, rightMargin=14 * mm, topMargin=12 * mm, bottomMargin=12 * mm, title=title)
     styles = getSampleStyleSheet()
-    header = [Paragraph(f"<b>{empresa.nombre}</b>", styles["Title"]), Paragraph(f"RNC: {empresa.rnc or '—'}", styles["Normal"]), Paragraph(title, styles["Heading2"]), Spacer(1, 5 * mm)]
-    doc.build(header + story)
+    company_line = f"RNC: {empresa.rnc or '—'}"
+    if getattr(empresa, "direccion", ""):
+        company_line += f" · {empresa.direccion}"
+    header = [Paragraph(f"<b>{empresa.nombre}</b>", styles["Title"]), Paragraph(company_line, styles["Normal"]), Paragraph(title, styles["Heading2"]), Spacer(1, 5 * mm)]
+    doc.build(header + story, canvasmaker=_NumberedCanvas)
     return output.getvalue()
 
 

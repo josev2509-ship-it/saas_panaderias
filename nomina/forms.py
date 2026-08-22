@@ -33,6 +33,12 @@ class NovedadForm(TenantForm):
         model = NovedadNomina
         exclude = ("empresa", "creado_en", "estado")
 
+    def __init__(self, *args, naturaleza=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        concept_type = {"INGRESO": "INGRESO", "DESCUENTO": "DEDUCCION"}.get(naturaleza)
+        if concept_type:
+            self.fields["concepto"].queryset = self.fields["concepto"].queryset.filter(tipo=concept_type)
+
     def clean_monto(self):
         amount = self.cleaned_data["monto"]
         if amount < 0:
