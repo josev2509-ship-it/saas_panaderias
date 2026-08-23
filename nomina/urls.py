@@ -11,6 +11,7 @@ urlpatterns = [
     path("<int:pk>/", views.detalle, name="detalle"),
     path("<int:pk>/estado/", views.estado, name="estado"),
     path("<int:pk>/empleados/<int:detalle_id>/", views.empleado_detalle, name="empleado_detalle"),
+    path("<int:pk>/<str:seccion>/", views.panel, name="panel"),
     path("<int:pk>/empleados/<int:detalle_id>/volante.pdf", views.volante_pdf, name="volante_pdf"),
     path("<int:pk>/volantes.zip", views.volantes_zip, name="volantes_zip"),
     path("<int:pk>/nomina.pdf", views.nomina_pdf, name="nomina_pdf"),

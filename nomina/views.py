@@ -7,6 +7,7 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from auditoria.models import EventoAuditoria
@@ -75,7 +76,7 @@ def calcular(request, periodo_id):
 @permission_required("nomina.view_nomina", raise_exception=True)
 def detalle(request, pk):
     payroll = get_object_or_404(Nomina.objects.select_related("periodo__tipo"), empresa=_e(request), pk=pk)
-    details = payroll.detalles.select_related("empleado__puesto").order_by("empleado__apellidos")
+    details = payroll.detalles.select_related("empleado__puesto", "empleado__departamento").order_by("empleado__apellidos")
     return render(request, "nomina/detalle.html", {"nomina": payroll, "detalles": details})
 
 
@@ -85,6 +86,22 @@ def empleado_detalle(request, pk, detalle_id):
     payroll = get_object_or_404(Nomina, empresa=_e(request), pk=pk)
     detail = get_object_or_404(DetalleNominaEmpleado.objects.select_related("empleado__puesto", "nomina__periodo"), nomina=payroll, pk=detalle_id)
     return render(request, "nomina/empleado_detalle.html", {"nomina": payroll, "detalle": detail, "lineas": detail.lineas.select_related("concepto")})
+
+
+@login_required
+@permission_required("nomina.view_nomina", raise_exception=True)
+def panel(request, pk, seccion):
+    allowed = {"ingresos", "descuentos", "prestamos", "aportes", "volantes", "documentos"}
+    if seccion not in allowed:
+        return HttpResponse(status=404)
+    payroll = get_object_or_404(Nomina.objects.select_related("periodo__tipo"), empresa=_e(request), pk=pk)
+    details = payroll.detalles.select_related("empleado__puesto", "empleado__departamento").order_by("empleado__apellidos")
+    lines = None
+    if seccion in {"ingresos", "descuentos"}:
+        line_type = "INGRESO" if seccion == "ingresos" else "DEDUCCION"
+        lines = NovedadNomina.objects.filter(empresa=_e(request), periodo=payroll.periodo, concepto__tipo=line_type).select_related("empleado", "concepto")
+    loans = PrestamoEmpleado.objects.filter(empresa=_e(request), cuotas_detalle__nomina=payroll).select_related("empleado").distinct() if seccion == "prestamos" else None
+    return render(request, "nomina/panel.html", {"nomina": payroll, "seccion": seccion, "detalles": details, "lineas": lines, "prestamos_periodo": loans})
 
 
 @login_required
@@ -130,16 +147,21 @@ def concepto_crear(request):
 @permission_required("nomina.add_novedadnomina", raise_exception=True)
 def novedad_crear(request):
     naturaleza = request.GET.get("tipo", "").upper()
-    form = NovedadForm(request.POST or None, empresa=_e(request), naturaleza=naturaleza)
+    payroll = None
+    if request.GET.get("nomina"):
+        payroll = get_object_or_404(Nomina.objects.select_related("periodo"), empresa=_e(request), pk=request.GET["nomina"])
+    form = NovedadForm(request.POST or None, empresa=_e(request), naturaleza=naturaleza, initial={"periodo": payroll.periodo if payroll else None})
+    if payroll:
+        form.fields["periodo"].disabled = True
     if request.method == "POST" and form.is_valid():
         obj = form.save(commit=False)
         obj.empresa, obj.estado = _e(request), "APROBADA"
         obj.save()
         _audit(request, obj, "Novedad de ingreso/descuento aprobada.")
         messages.success(request, "Novedad registrada. Recalcule la nómina abierta para aplicarla.")
-        return redirect("nomina:dashboard")
+        return redirect("nomina:panel", pk=payroll.pk, seccion="ingresos" if naturaleza == "INGRESO" else "descuentos") if payroll else redirect("nomina:dashboard")
     titulo = "Registrar ingreso adicional" if naturaleza == "INGRESO" else "Registrar descuento" if naturaleza == "DESCUENTO" else "Registrar novedad de nómina"
-    return render(request, "rrhh/form.html", {"form": form, "titulo": titulo, "form_context": "nomina"})
+    return render(request, "rrhh/form.html", {"form": form, "titulo": titulo, "form_context": "nomina", "volver_url": reverse("nomina:panel", kwargs={"pk": payroll.pk, "seccion": "ingresos" if naturaleza == "INGRESO" else "descuentos"}) if payroll else reverse("nomina:dashboard")})
 
 
 @login_required

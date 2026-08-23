@@ -64,8 +64,24 @@ def calculate_isr_annual(taxable_annual, brackets):
     return ZERO
 
 
+PERIODOS_POR_MES = {"MENSUAL": Decimal("1"), "QUINCENAL": Decimal("2"), "SEMANAL": Decimal("4")}
+
+
+def salario_ordinario_periodo(empleado, periodo):
+    """Convierte la base canónica sin saltarse el motor legal de TSS/ISR."""
+    origen = (empleado.frecuencia_salario or "MENSUAL").upper()
+    destino = periodo.tipo.periodicidad.upper()
+    if origen == "ESPECIAL" or destino == "ESPECIAL":
+        if origen != destino:
+            raise ValidationError(f"La frecuencia salarial especial de {empleado.codigo} requiere un valor explícito para este período.")
+        return money(empleado.salario)
+    if origen not in PERIODOS_POR_MES or destino not in PERIODOS_POR_MES:
+        raise ValidationError(f"Frecuencia salarial no soportada para {empleado.codigo}.")
+    return money(empleado.salario * PERIODOS_POR_MES[origen] / PERIODOS_POR_MES[destino])
+
+
 def _factor(periodo):
-    return {"QUINCENAL": Decimal("0.5"), "SEMANAL": Decimal("0.25")}.get(periodo.tipo.periodicidad.upper(), Decimal("1"))
+    return Decimal("1") / PERIODOS_POR_MES.get(periodo.tipo.periodicidad.upper(), Decimal("1"))
 
 
 def _concept(empresa, codigo, nombre, tipo, **flags):
@@ -103,7 +119,7 @@ def process_payroll(*, empresa, periodo, usuario=None):
     totals = {key: ZERO for key in ("gross", "deductions", "net", "afp", "sfs", "isr", "other_deductions", "employer")}
     employees = Empleado.objects.filter(empresa=empresa, estado="ACTIVO", fecha_ingreso__lte=periodo.hasta)
     for employee in employees.select_related("puesto", "departamento"):
-        salary_period = money(employee.salario * factor)
+        salary_period = salario_ordinario_periodo(employee, periodo)
         additions = list(NovedadNomina.objects.filter(empresa=empresa, empleado=employee, periodo=periodo, estado="APROBADA").select_related("concepto"))
         extras = HoraExtra.objects.filter(empresa=empresa, empleado=employee, fecha__range=(periodo.desde, periodo.hasta)).filter(Q(estado="APROBADA") | Q(estado="APLICADA", nomina_id=payroll.pk))
         overtime = money(extras.aggregate(value=Sum("monto"))["value"] or ZERO)

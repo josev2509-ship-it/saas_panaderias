@@ -27,7 +27,7 @@ class RRHHCoreTests(TestCase):
   dashboard=self.client.get(reverse("rrhh:dashboard"));self.assertContains(dashboard,"Gestión Humana");self.assertContains(dashboard,"Acciones rápidas");self.assertContains(dashboard,"Préstamos activos");self.assertContains(dashboard,"Documentos y cartas")
   employees=self.client.get(reverse("rrhh:empleados"));self.assertContains(employees,"Identificación");self.assertContains(employees,"Ver expediente");self.assertContains(employees,"Lugar de trabajo")
   documents=self.client.get(reverse("rrhh:documentos_centro"));self.assertEqual(documents.status_code,200);self.assertContains(documents,"Certificación laboral");self.assertContains(documents,"Carta bancaria");self.assertNotContains(documents,"Otro Tenant")
-  wizard=self.client.get(reverse("rrhh:empleado_crear"));self.assertContains(wizard,"Nómina y seguridad social");self.assertContains(wizard,"Guardar y continuar")
+  wizard=self.client.get(reverse("rrhh:empleado_crear"));self.assertContains(wizard,"Nómina y Seguridad Social");self.assertContains(wizard,"Guardar y continuar")
  def test_employee_creation_is_tenant_safe_and_audited(self):
   response=self.client.post(reverse("rrhh:empleado_crear"),{"codigo":"E-002","nombres":"Luis","apellidos":"Díaz","identificacion":"003","puesto":self.pos.pk,"departamento":self.dep.pk,"centro":self.centro.pk,"fecha_ingreso":date.today(),"salario":"45000","forma_pago":"TRANSFERENCIA","frecuencia_pago":"MENSUAL","estado":"ACTIVO"})
   self.assertEqual(response.status_code,302);nuevo=Empleado.objects.get(identificacion="003");self.assertEqual(nuevo.codigo,"EMP-000001");self.assertEqual(nuevo.empresa,self.empresa);self.assertTrue(HistorialLaboral.objects.filter(empleado=nuevo,accion="INGRESO").exists());self.assertTrue(EventoAuditoria.objects.filter(empresa=self.empresa,object_id=nuevo.pk,modulo="rrhh").exists())
@@ -69,6 +69,7 @@ class RRHHCoreTests(TestCase):
   self.assertEqual(str(self.dep),"ADM · Administración");self.assertEqual(str(self.centro),"SDQ · Principal");self.assertNotIn("object",str(self.emp))
   for resource in ("departamentos","lugares-trabajo","entidades-financieras"):
    response=self.client.get(reverse("rrhh:recurso_lista",args=[resource]));self.assertEqual(response.status_code,200)
+  response=self.client.get(reverse("rrhh:configuracion"));self.assertEqual(response.status_code,200);self.assertContains(response,"Lugares de trabajo");self.assertContains(response,"Plantillas documentales")
  def test_v6_document_workflow_requires_bank_and_preserves_snapshot(self):
   bank=EntidadFinancieraRRHH.objects.create(empresa=self.empresa,codigo="BANCO",nombre="Banco de Prueba")
   response=self.client.post(reverse("rrhh:documentos_centro"),{"tipo":"BANCARIA","empleado":self.emp.pk,"entidad_financiera":bank.pk,"proposito":"Apertura de cuenta"})
@@ -77,3 +78,8 @@ class RRHHCoreTests(TestCase):
   response=self.client.get(reverse("nomina:documento_empleado",args=[self.emp.pk,"EXPEDIENTE"]));self.assertEqual(response.status_code,200);self.assertEqual(response["Content-Type"],"application/pdf");self.assertTrue(response.content.startswith(b"%PDF"))
   from .forms import ContratoForm
   form=ContratoForm({"empleado":self.emp.pk,"version":1,"tipo":"TEMPORAL","inicio":date.today(),"salario":"50000","estado":"BORRADOR","puesto":self.pos.pk,"jornada":"Diurna"},empresa=self.empresa);self.assertFalse(form.is_valid());self.assertIn("fecha de finalización",str(form.errors))
+ def test_v7_signed_contract_is_immutable_and_pdf_is_multipage(self):
+  contract=ContratoEmpleado.objects.create(empresa=self.empresa,empleado=self.emp,tipo="INDEFINIDO",inicio=date.today(),salario=50000,puesto=self.pos,estado="ACTIVO",firmado=True,texto_firmado="Texto exacto")
+  contract.salario=51000
+  with self.assertRaises(ValueError):contract.save()
+  response=self.client.get(reverse("nomina:documento_empleado",args=[self.emp.pk,"CONTRATO"]));self.assertEqual(response.status_code,200);self.assertGreater(len(response.content),5000)

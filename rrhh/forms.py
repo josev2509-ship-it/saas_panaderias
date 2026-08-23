@@ -14,7 +14,8 @@ class EmpleadoForm(TenantForm):
     eliminar_foto=forms.BooleanField(required=False,label="Eliminar fotografía actual")
     class Meta:model=Empleado;exclude=("empresa","creado_en","codigo");widgets={"fecha_ingreso":forms.DateInput(attrs={"type":"date"}),"fecha_nacimiento":forms.DateInput(attrs={"type":"date"}),"vence_licencia":forms.DateInput(attrs={"type":"date"}),"direccion":forms.Textarea(attrs={"rows":2}),"observaciones":forms.Textarea(attrs={"rows":2}),"foto":forms.FileInput(attrs={"accept":"image/jpeg,image/png,image/webp"})}
     def __init__(self,*args,**kwargs):
-        super().__init__(*args,**kwargs);self.fields["centro"].label="Lugar de trabajo";self.fields["supervisor"].queryset=Empleado.objects.filter(empresa=self.empresa,estado="ACTIVO",es_supervisor=True).exclude(pk=self.instance.pk)
+        super().__init__(*args,**kwargs);self.fields["centro"].label="Lugar de trabajo";self.fields["supervisor"].queryset=Empleado.objects.filter(empresa=self.empresa,estado="ACTIVO",es_supervisor=True).exclude(pk=self.instance.pk);self.fields["frecuencia_salario"].required=False;self.fields["frecuencia_salario"].initial=self.instance.frecuencia_salario or "MENSUAL"
+    def clean_frecuencia_salario(self):return self.cleaned_data.get("frecuencia_salario") or "MENSUAL"
     def clean_identificacion(self):
         value=self.cleaned_data["identificacion"].strip()
         qs=Empleado.objects.filter(empresa=self.empresa,identificacion=value)
@@ -27,7 +28,7 @@ class EmpleadoForm(TenantForm):
         if photo and getattr(photo,"content_type","") not in {"image/jpeg","image/png","image/webp"}:raise forms.ValidationError("Use una fotografía JPG, PNG o WEBP.")
         return photo
 class ContratoForm(TenantForm):
-    class Meta:model=ContratoEmpleado;exclude=("empresa","creado_en","numero");widgets={"inicio":forms.DateInput(attrs={"type":"date"}),"fin":forms.DateInput(attrs={"type":"date"}),"objeto":forms.Textarea(attrs={"rows":3}),"motivo_temporal":forms.Textarea(attrs={"rows":3}),"anexos":forms.Textarea(attrs={"rows":3})}
+    class Meta:model=ContratoEmpleado;exclude=("empresa","creado_en","numero","firmado","firmado_en","firmado_por","texto_firmado");widgets={"inicio":forms.DateInput(attrs={"type":"date"}),"fin":forms.DateInput(attrs={"type":"date"}),"objeto":forms.Textarea(attrs={"rows":3}),"motivo_temporal":forms.Textarea(attrs={"rows":3}),"anexos":forms.Textarea(attrs={"rows":3})}
     def clean(self):
         data=super().clean();tipo=(data.get("tipo") or "").upper()
         if "TEMPOR" in tipo and (not data.get("fin") or not data.get("motivo_temporal")):raise forms.ValidationError("El contrato temporal requiere fecha de finalización y causa temporal documentada.")

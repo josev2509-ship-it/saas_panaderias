@@ -18,7 +18,7 @@ from .forms import PrestamoForm
 from .loan_services import finalize_payroll_loans, prepare_loan, reverse_payroll_loans
 from .labor_settlement import calculate_settlement
 from .models import ConceptoNomina, CuotaPrestamoEmpleado, LiquidacionLaboral, NovedadNomina, PeriodoNomina, PrestamoEmpleado, TipoNomina
-from .payroll_engine import calculate_isr_annual, ensure_legal_parameters, money, process_payroll
+from .payroll_engine import calculate_isr_annual, ensure_legal_parameters, money, process_payroll, salario_ordinario_periodo
 
 
 class PayrollRDEngineTests(TestCase):
@@ -98,6 +98,24 @@ class PayrollRDEngineTests(TestCase):
         self.assertEqual(biweekly_detail.afp_empleado, money(monthly_detail.afp_empleado / 2))
         self.assertEqual(biweekly_detail.sfs_empleado, money(monthly_detail.sfs_empleado / 2))
         self.assertEqual(biweekly_detail.isr, money(monthly_detail.isr / 2))
+
+    def test_salary_frequency_has_one_canonical_conversion_service(self):
+        employee = self.employee("BASE-FREQ", "50000")
+        biweekly = self.period("QUINCENAL", date(2026, 10, 1), date(2026, 10, 15))
+        self.assertEqual(salario_ordinario_periodo(employee, biweekly), Decimal("25000.00"))
+        employee.frecuencia_salario, employee.salario = "QUINCENAL", Decimal("25000")
+        employee.save(update_fields=["frecuencia_salario", "salario"])
+        self.assertEqual(salario_ordinario_periodo(employee, biweekly), Decimal("25000.00"))
+
+    def test_payroll_context_panels_keep_selected_payroll(self):
+        employee = self.employee("CTX", "50000")
+        payroll = process_payroll(empresa=self.company, periodo=self.period("QUINCENAL", date(2026, 11, 1), date(2026, 11, 15)))
+        for section in ("ingresos", "descuentos", "prestamos", "aportes", "volantes", "documentos"):
+            response = self.client.get(reverse("nomina:panel", args=[payroll.pk, section]))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, payroll.numero)
+        response = self.client.get(reverse("nomina:novedad_crear") + f"?tipo=DESCUENTO&nomina={payroll.pk}")
+        self.assertContains(response, "← Volver")
 
     def test_snapshot_is_historical_and_closed_payroll_cannot_recalculate(self):
         self.employee("SNAP", "45000")

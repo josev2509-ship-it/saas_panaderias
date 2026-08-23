@@ -58,7 +58,7 @@ def empleado_form(request,pk=None):
   if not obj.pk:obj.codigo=Empleado.siguiente_codigo(obj.empresa)
   if form.cleaned_data.get("eliminar_foto") and obj.foto:obj.foto.delete(save=False);obj.foto=""
   obj.save();nuevos={"codigo":obj.codigo,"puesto":obj.puesto_id,"departamento":obj.departamento_id,"salario":str(obj.salario),"estado":obj.estado};HistorialLaboral.objects.create(empleado=obj,accion="ACTUALIZACION" if antes else "INGRESO",snapshot={"antes":antes,"despues":nuevos});_audit(request,obj,EventoAuditoria.Accion.EDITAR if antes else EventoAuditoria.Accion.CREAR,"Empleado actualizado." if antes else "Empleado creado.",antes,nuevos);messages.success(request,"Empleado guardado correctamente.");return redirect("rrhh:empleado_360",obj.pk)
- groups=[("Datos personales",("foto","nombres","apellidos","identificacion","fecha_nacimiento","sexo","estado_civil","nacionalidad","eliminar_foto")),("Contacto",("telefono","correo","direccion","contacto_emergencia")),("Datos laborales",("fecha_ingreso","departamento","puesto","supervisor","centro","tipo_contrato","salario","frecuencia_pago","forma_pago","estado")),("Información bancaria",("banco","tipo_cuenta_bancaria","cuenta_bancaria_cifrada")),("Información adicional",("licencia_conducir","categoria_licencia","vence_licencia","observaciones"))]
+ groups=[("Datos personales",("foto","nombres","apellidos","identificacion","fecha_nacimiento","sexo","estado_civil","nacionalidad","eliminar_foto")),("Contacto",("telefono","correo","direccion","contacto_emergencia")),("Datos laborales",("fecha_ingreso","departamento","puesto","supervisor","centro","tipo_contrato","salario","frecuencia_salario","frecuencia_pago","forma_pago","estado")),("Información bancaria",("banco","tipo_cuenta_bancaria","cuenta_bancaria_cifrada")),("Información adicional",("licencia_conducir","categoria_licencia","vence_licencia","observaciones"))]
  sections=[(title,[form[name] for name in names if name in form.fields]) for title,names in groups]
  return render(request,"rrhh/form.html",{"form":form,"titulo":"Editar empleado" if obj else "Ingreso de empleado","objeto":obj,"form_sections":sections,"codigo_automatico":not obj})
 
@@ -72,6 +72,10 @@ def empleado_360(request,pk):
 @login_required
 @permission_required("rrhh.view_empleado",raise_exception=True)
 def reportes(request):return render(request,"rrhh/reportes.html")
+
+@login_required
+@permission_required("rrhh.view_departamento",raise_exception=True)
+def configuracion(request):return render(request,"rrhh/configuracion.html")
 
 @login_required
 @permission_required("rrhh.view_empleado",raise_exception=True)
