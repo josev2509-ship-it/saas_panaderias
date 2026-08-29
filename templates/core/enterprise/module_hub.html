@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}{{ title }} · SASTRE ERP{% endblock %}{% block content %}
+<nav class="ds-breadcrumb" aria-label="Breadcrumb"><a href="{% url 'inicio' %}">Inicio</a><span>/</span><span aria-current="page">{{ title }}</span></nav>
+<header class="ds-page-header"><div><span class="ds-eyebrow">Módulo principal</span><h1>{{ title }}</h1><p>{{ description }}</p></div><div class="ds-actions"><a class="ds-btn ds-btn--secondary" href="javascript:history.back()">← Volver</a><a class="ds-btn ds-btn--secondary" href="{% url 'inicio' %}">Inicio</a></div></header>
+<section class="ds-card-grid enterprise-module-grid">{% for label,detail,route in cards %}<a class="ds-card ds-module-card" href="{% url route %}"><span class="ds-card__icon"><svg><use href="#i-grid"/></svg></span><div><h2>{{ label }}</h2><p>{{ detail }}</p><strong>Gestionar →</strong></div></a>{% endfor %}</section>
+{% endblock %}

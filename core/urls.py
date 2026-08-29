@@ -2,10 +2,22 @@ from django.urls import path
 
 from . import views
 from . import experience_views
+from . import enterprise_views
 
 app_name = "core"
 
 urlpatterns = [
+    path("enterprise/<str:module>/", enterprise_views.module_hub, name="enterprise_module"),
+    path("enterprise/finanzas/dashboard/", enterprise_views.finance_dashboard, name="enterprise_finance"),
+    path("enterprise/finanzas/cuentas-por-pagar/", enterprise_views.cxp_list, name="enterprise_cxp"),
+    path("enterprise/finanzas/cuentas-por-pagar/exportar/<str:fmt>/", enterprise_views.cxp_export, name="enterprise_cxp_export"),
+    path("enterprise/finanzas/cuentas-por-pagar/<int:pk>/", enterprise_views.cxp_detail, name="enterprise_cxp_detail"),
+    path("enterprise/finanzas/cuentas-por-pagar/<int:pk>/pagar/", enterprise_views.payment_create, name="enterprise_payment_create"),
+    path("enterprise/finanzas/pagos/registrar/", enterprise_views.payment_create, name="enterprise_payment_create_general"),
+    path("enterprise/finanzas/pagos/multiple/", enterprise_views.payment_multiple, name="enterprise_payment_multiple"),
+    path("enterprise/finanzas/pagos/programar/", enterprise_views.payment_schedule, name="enterprise_payment_schedule"),
+    path("enterprise/finanzas/cuentas-por-cobrar/", enterprise_views.cxc_list, name="enterprise_cxc"),
+    path("enterprise/finanzas/tesoreria/", enterprise_views.treasury, name="enterprise_treasury"),
     path("workspace/", experience_views.workspace_home, name="workspace_home"),
     path("workspace/<str:dominio>/", experience_views.workspace, name="workspace"),
     path("buscar/", experience_views.busqueda_global, name="busqueda_global"),

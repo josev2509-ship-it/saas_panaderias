@@ -119,7 +119,7 @@ class FullProgramInteractionQATests(TestCase):
         )
         required = (
             'aria-label="Navegación principal"', 'class="app-sidebar"',
-            'class="ds-topbar', 'data-group="comercial"',
+            'class="ds-topbar', 'data-group="ventas"',
             'data-group="inventario"', 'data-group="finanzas"',
         )
         expected_groups = None

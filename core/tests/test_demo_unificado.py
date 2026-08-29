@@ -37,8 +37,8 @@ class DemoUnificadoContractTests(SimpleTestCase):
     def test_navigation_keeps_recommended_domain_order(self):
         source = (ROOT / "panaderia_saas/templates/base.html").read_text(encoding="utf-8")
         positions = [source.index(f'data-group="{name}"') for name in (
-            "inicio", "comercial", "operaciones", "compras", "inventario",
-            "produccion", "finanzas", "reportes", "administracion",
+            "ventas", "inabie", "inventario", "compras", "rrhh",
+            "finanzas", "contabilidad", "administracion",
         )]
         self.assertEqual(positions, sorted(positions))
 

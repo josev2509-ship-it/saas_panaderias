@@ -322,10 +322,11 @@ def inicio(request):
         return redirect("login_usuario")
 
     from comercial.models_o2c4 import CuentaPorCobrar, FacturaVenta
-    from compras.p2p_models import RecepcionCompra
+    from compras.p2p_models import OrdenCompraEnterprise, RecepcionCompra
     from contabilidad.models import CuentaPorPagarEnterprise
     from core.models import NavegacionReciente
     from inventario.models import ProductoInventario
+    from rrhh.models import Empleado
 
     hoy = timezone.localdate()
     inicio_mes = hoy.replace(day=1)
@@ -344,6 +345,7 @@ def inicio(request):
 
     ventas = FacturaVenta.objects.filter(empresa=empresa).aggregate(
         mes=Sum("total", filter=Q(fecha__range=(inicio_mes, hoy))),
+        dia=Sum("total", filter=Q(fecha=hoy)),
     )
     cobros = {"mes": 0}
     compras = {"mes": 0, "aprobar": 0}
@@ -370,6 +372,8 @@ def inicio(request):
     recepciones_pendientes = RecepcionCompra.objects.filter(
         empresa=empresa, estado__in=["BORRADOR", "EN_PROCESO", "PARCIAL", "CON_DIFERENCIAS"]
     ).count()
+    ordenes_compra_pendientes = OrdenCompraEnterprise.objects.filter(empresa=empresa).exclude(estado__in=["CERRADA", "CANCELADA", "FACTURADA"]).count()
+    empleados_activos = Empleado.objects.filter(empresa=empresa, estado="ACTIVO").count()
 
     zero = Decimal("0")
     money = lambda value: value or zero
@@ -444,6 +448,7 @@ def inicio(request):
         "centros_sin_menu": 0 if menu_manana else total_centros,
         "recepciones_pendientes": recepciones_pendientes,
         "financial": {"estimated": Decimal(total_raciones) * Decimal("10.18"), "billed": money(ventas["mes"]), "cxc": money(cxc["saldo_total"]), "cxp": money(cxp["saldo_total"]), "overdue_cxc": cxc["vencidas"], "overdue_cxp": cxp["por_vencer"]},
+        "executive": {"sales_today": money(ventas["dia"]), "pending_purchase_orders": ordenes_compra_pendientes, "low_stock": inventario["criticos"], "active_employees": empleados_activos, "accounts_receivable": money(cxc["saldo_total"])},
     })
 
 

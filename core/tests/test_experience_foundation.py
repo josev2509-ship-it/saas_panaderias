@@ -25,7 +25,7 @@ class EnterpriseExperienceFoundationTests(SimpleTestCase):
 
     def test_shell_has_accessible_regions_and_breadcrumb_support(self):
         for marker in ('aria-label="Navegación principal"', 'id="contenido-principal"',
-                       'class="ds-topbar"', 'class="ds-footer"', 'v2-topbar'):
+                       'class="ds-topbar"', 'class="ds-footer"', 'enterprise-welcome'):
             self.assertIn(marker, self.base + self.dashboard)
 
     def test_menu_respects_existing_permission_guards(self):
@@ -43,11 +43,11 @@ class EnterpriseExperienceFoundationTests(SimpleTestCase):
         self.assertIn("translateX", self.responsive)
 
     def test_dashboard_has_drilldowns_and_honest_empty_states(self):
-        for route in ("comercial:dashboard", "comercial:o2c_full_dashboard",
-                      "inventario:produccion_dashboard", "inventario:dashboard"):
+        for route in ("core:enterprise_module", "compras:p2p_dashboard",
+                      "rrhh:dashboard", "core:enterprise_finance"):
             self.assertIn(route, self.dashboard)
-        self.assertIn('class="v2-empty"', self.dashboard)
-        self.assertIn("Sin resumen disponible", self.dashboard)
+        self.assertIn('class="ds-empty"', self.dashboard)
+        self.assertIn("Sin actividad reciente", self.dashboard)
         self.assertNotIn("action-icon", self.dashboard)
 
     def test_enterprise_tables_and_forms_are_reusable(self):

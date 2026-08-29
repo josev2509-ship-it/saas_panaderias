@@ -27,13 +27,11 @@ class DemoReadyContractTests(SimpleTestCase):
 
     def test_dashboard_contains_executive_demo_sections(self):
         for marker in (
-            "v2-topbar",
-            "v2-kpis",
-            "Producción diaria del mes",
-            "Requiere tu atención",
-            "Resumen financiero",
+            "enterprise-welcome",
+            "executive-kpis",
+            "Módulos principales",
             "Actividad reciente",
-            "Acciones rápidas",
+            "Alertas importantes",
         ):
             self.assertIn(marker, self.template)
 
@@ -68,10 +66,10 @@ class DemoReadyContractTests(SimpleTestCase):
 
     def test_responsive_demo_contract(self):
         for marker in (
-            "v2-kpis",
-            "v2-primary-grid",
-            "v2-secondary-grid",
-            "v2-actions__grid",
+            "executive-mobile-menu",
+            "executive-kpis",
+            "executive-modules",
+            "executive-bottom",
         ):
             self.assertIn(marker, self.template + self.responsive)
 
@@ -104,7 +102,7 @@ class DemoReadyDashboardTests(TestCase):
         response = self.client.get(reverse("inicio"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Empresa Demo")
-        self.assertContains(response, "Resumen ejecutivo")
+        self.assertContains(response, "Resumen general de tu empresa")
 
     def test_demo_command_dry_run_is_non_mutating(self):
         call_command("generar_demo_ready", empresa=self.empresa.pk, dry_run=True)
@@ -128,25 +126,26 @@ class PremiumExecutiveDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Empresa Premium")
         self.assertNotContains(response, "Empresa Ajena")
-        for marker in ("Requiere tu atención", "Producción diaria del mes", "Actividad reciente", "Resumen financiero"):
+        for marker in ("Ventas del día", "Módulos principales", "Actividad reciente", "Alertas importantes"):
             self.assertContains(response, marker)
 
     def test_kpis_links_and_empty_states_are_honest(self):
         response = self.client.get(reverse("inicio"))
-        self.assertContains(response, 'class="v2-kpi ', count=4)
-        self.assertContains(response, "Sin resumen disponible")
-        for route in ("comercial:dashboard", "comercial:o2c_full_dashboard", "inventario:produccion_dashboard", "inventario:dashboard"):
+        self.assertContains(response, 'class="executive-kpi ', count=5)
+        self.assertContains(response, "Sin actividad reciente")
+        for route in ("core:enterprise_module", "compras:dashboard", "rrhh:dashboard", "core:enterprise_finance"):
+            if route == "core:enterprise_module":
+                self.assertContains(response, reverse(route, args=["ventas"]))
+                continue
             self.assertContains(response, reverse(route))
 
     def test_actions_follow_role_permissions(self):
         response = self.client.get(reverse("inicio"))
-        self.assertContains(response, "Generar conduce")
-        self.assertContains(response, "Facturación")
-        self.empresa.modulo_conduces = False
-        self.empresa.modulo_facturacion = False
-        self.empresa.save(update_fields=["modulo_conduces", "modulo_facturacion"])
-        self.assertNotContains(self.client.get(reverse("inicio")), "Generar conduce")
-        self.assertNotContains(self.client.get(reverse("inicio")), ">Facturación</a>")
+        self.assertContains(response, "Venta General")
+        self.assertContains(response, "Compras")
+        self.assertNotContains(response, 'data-group="rrhh"')
+        self.assertNotContains(response, 'data-group="administracion"')
+        self.assertContains(response, "Módulos principales")
 
     def test_dashboard_stays_within_query_budget(self):
         with CaptureQueriesContext(connection) as queries:
@@ -165,12 +164,12 @@ class PremiumDashboardContractTests(SimpleTestCase):
         cls.javascript = (root / "conduces/static/design_system/js/dashboard_premium.js").read_text(encoding="utf-8")
 
     def test_reference_layout_and_responsive_contract(self):
-        self.assertIn("grid-template-columns:minmax(0,6fr) minmax(270px,3fr) minmax(260px,3fr)", self.css)
-        for marker in (".v2-kpis{grid-template-columns:repeat(2", ".v2-primary-grid,.v2-secondary-grid{grid-template-columns:1fr", ".v2-actions__grid{grid-template-columns:repeat(2"):
+        self.assertIn(".executive-kpis{display:grid;grid-template-columns:repeat(5", self.css)
+        for marker in (".executive-kpis{grid-template-columns:repeat(2", ".executive-bottom{grid-template-columns:1fr", ".executive-mobile-menu{display:inline-grid"):
             self.assertIn(marker, self.css)
 
     def test_approved_composition_replaces_legacy_blocks(self):
-        for marker in ("v2-topbar", "v2-kpis", "v2-primary-grid", "v2-secondary-grid", "v2-finance"):
+        for marker in ("enterprise-welcome", "executive-kpis", "executive-modules", "executive-bottom", "executive-mobile-menu"):
             self.assertIn(marker, self.template)
         self.assertNotIn("premium-hero", self.template)
         self.assertNotIn("premium-chart-tabs", self.template)

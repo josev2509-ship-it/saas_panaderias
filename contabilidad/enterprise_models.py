@@ -71,6 +71,7 @@ class AplicacionAnticipoProveedor(models.Model):
     class Meta:constraints=[models.UniqueConstraint(fields=["anticipo","clave_idempotencia"],name="fin_aplic_ant_idem_uniq")]
 class SolicitudPago(EmpresaBase):
     cuenta=models.ForeignKey(CuentaPorPagarEnterprise,on_delete=models.PROTECT);monto=models.DecimalField(max_digits=18,decimal_places=2);estado=models.CharField(max_length=15,default="BORRADOR")
+    fecha_prevista=models.DateField(null=True,blank=True);prioridad=models.CharField(max_length=10,choices=[("BAJA","Baja"),("MEDIA","Media"),("ALTA","Alta"),("URGENTE","Urgente")],default="MEDIA");cuenta_prevista=models.ForeignKey("tesoreria.CuentaBancariaEmpresa",on_delete=models.PROTECT,null=True,blank=True,related_name="pagos_programados");observacion=models.TextField(blank=True)
 class OrdenPago(EmpresaBase):
     METODOS=[(x,x.title()) for x in ("TRANSFERENCIA","CHEQUE","DEPOSITO","COMPENSACION")];numero=models.CharField(max_length=30);solicitud=models.OneToOneField(SolicitudPago,on_delete=models.PROTECT);estado=models.CharField(max_length=15,default="BORRADOR");metodo=models.CharField(max_length=20,choices=METODOS,default="TRANSFERENCIA");referencia=models.CharField(max_length=100,blank=True);retencion=models.DecimalField(max_digits=18,decimal_places=2,default=0);movimiento_tesoreria_id=models.PositiveBigIntegerField(null=True,blank=True)
 class AplicacionPago(models.Model):
