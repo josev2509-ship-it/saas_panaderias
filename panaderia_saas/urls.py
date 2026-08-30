@@ -3,6 +3,7 @@ from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from django.conf import settings
 from django.conf.urls.static import static
+from .media_views import protected_media
 
 urlpatterns = [
     path("_sedl/catalog/", include("design_system.urls")),
@@ -61,3 +62,7 @@ if settings.DEBUG:
         settings.MEDIA_URL,
         document_root=settings.MEDIA_ROOT
     )
+else:
+    urlpatterns += [
+        path("media/<path:media_path>", protected_media, name="protected_media"),
+    ]
