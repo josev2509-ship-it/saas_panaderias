@@ -594,6 +594,34 @@ class DiaCalendarioEscolar(models.Model):
             raise ValidationError({"fecha": "La fecha queda fuera de la vigencia del calendario."})
 
 
+class FechaOficialCalendario(models.Model):
+    """Catalogo configurable de excepciones publicadas para un ano escolar."""
+    anio_inicio = models.PositiveSmallIntegerField()
+    anio_fin = models.PositiveSmallIntegerField()
+    fecha = models.DateField()
+    clasificacion = models.CharField(max_length=25, choices=DiaCalendarioEscolar.Clasificacion.choices)
+    motivo = models.CharField(max_length=255)
+    fuente = models.CharField(max_length=255, blank=True)
+    activa = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("anio_inicio", "fecha")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("anio_inicio", "anio_fin", "fecha"),
+                name="fecha_oficial_calendario_uniq",
+            )
+        ]
+
+    def clean(self):
+        if self.anio_fin != self.anio_inicio + 1:
+            raise ValidationError({"anio_fin": "Los anos escolares deben ser consecutivos."})
+
+    def __str__(self):
+        return f"{self.fecha}: {self.motivo}"
+
+
 class ProgramaMenu(models.Model):
     class Modalidad(models.TextChoices):
         REGULAR = "REGULAR", "Regular"

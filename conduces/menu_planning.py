@@ -49,7 +49,8 @@ def activar_calendario(calendario, *, usuario, request=None, forzar=False, justi
     esperados = calendario.dias_docencia_oficiales
     if detectados != esperados and not (forzar and justificacion.strip()):
         raise ValidationError(
-            f"El calendario detecta {detectados} dias regulares de {esperados}; revise las fechas antes de activar."
+            f"Dias oficiales: {esperados}. Dias calculados: {detectados}. "
+            f"Diferencia: {detectados - esperados}. Revise las fechas antes de activar."
         )
     if calendario.dias.filter(clasificacion=DiaCalendarioEscolar.Clasificacion.REQUIERE_REVISION).exists():
         raise ValidationError("Existen fechas que requieren revision.")

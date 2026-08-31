@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from .utils import suscripcion_requerida 
 from django.http import HttpResponse, FileResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.db import transaction
 from django.db.models import Q, Sum, Count, F
 from django.db.models.functions import TruncMonth
@@ -46,6 +47,7 @@ import urllib.error
 from django.contrib.auth.hashers import make_password
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
 from auditoria.services import registrar_evento
 from core.transactional_email import (
@@ -76,6 +78,7 @@ from .models import (
     DiaNoDocencia,
     CalendarioEscolar,
     DiaCalendarioEscolar,
+    FechaOficialCalendario,
     ProgramaMenu,
     VersionProgramaMenu,
     ItemCicloMenu,
@@ -3383,6 +3386,29 @@ def planificacion_menu_escolar(request):
     programaciones = ProgramacionMenuEscolar.objects.filter(empresa=empresa).select_related(
         "centro", "programa", "version"
     )[:100]
+    calendario_id = request.GET.get("calendario")
+    calendario_revision = calendarios.filter(pk=calendario_id).first() if calendario_id else calendarios.first()
+    dias_revision = DiaCalendarioEscolar.objects.none()
+    resumen_calendario = None
+    pagina_dias = None
+    filtro_fecha = request.GET.get("fecha", "").strip()
+    filtro_clasificacion = request.GET.get("clasificacion", "").strip()
+    if calendario_revision:
+        dias_revision = calendario_revision.dias.all()
+        if filtro_fecha:
+            fecha_buscada = convertir_fecha(filtro_fecha)
+            dias_revision = dias_revision.filter(fecha=fecha_buscada) if fecha_buscada else dias_revision.none()
+        if filtro_clasificacion:
+            dias_revision = dias_revision.filter(clasificacion=filtro_clasificacion)
+        resumen_calendario = {
+            "oficiales": calendario_revision.dias_docencia_oficiales,
+            "calculados": contar_docencia_regular(calendario_revision),
+            "docencia": calendario_revision.dias.filter(clasificacion=DiaCalendarioEscolar.Clasificacion.DOCENCIA).count(),
+            "no_lectivos": calendario_revision.dias.exclude(clasificacion=DiaCalendarioEscolar.Clasificacion.DOCENCIA).count(),
+            "excepciones": calendario_revision.dias.exclude(origen="PREVISUALIZACION").count(),
+        }
+        resumen_calendario["diferencia"] = resumen_calendario["calculados"] - resumen_calendario["oficiales"]
+        pagina_dias = Paginator(dias_revision, 31).get_page(request.GET.get("pagina"))
     return render(request, "planificacion_menu_escolar.html", {
         "empresa": empresa,
         "calendarios": calendarios,
@@ -3393,6 +3419,11 @@ def planificacion_menu_escolar(request):
         "puede_gestionar": puede_gestionar_planificacion(request.user),
         "modalidades": ProgramaMenu.Modalidad.choices,
         "clasificaciones": DiaCalendarioEscolar.Clasificacion.choices,
+        "calendario_revision": calendario_revision,
+        "resumen_calendario": resumen_calendario,
+        "pagina_dias": pagina_dias,
+        "filtro_fecha": filtro_fecha,
+        "filtro_clasificacion": filtro_clasificacion,
     })
 
 
@@ -3423,19 +3454,37 @@ def crear_calendario_escolar_planificacion(request):
             )
             calendario.full_clean()
             calendario.save()
+            fechas_oficiales = {
+                regla.fecha: regla
+                for regla in FechaOficialCalendario.objects.filter(
+                    anio_inicio=calendario.anio_inicio,
+                    anio_fin=calendario.anio_fin,
+                    activa=True,
+                    fecha__range=(inicio, fin),
+                )
+            }
             fecha = inicio
             dias = []
             while fecha <= fin:
-                clasificacion = (
-                    DiaCalendarioEscolar.Clasificacion.DOCENCIA
-                    if fecha.weekday() < 5
-                    else DiaCalendarioEscolar.Clasificacion.NO_LECTIVO
-                )
+                regla = fechas_oficiales.get(fecha)
+                if regla:
+                    clasificacion = regla.clasificacion
+                    motivo = regla.motivo
+                    origen = "CATALOGO_OFICIAL"
+                else:
+                    clasificacion = (
+                        DiaCalendarioEscolar.Clasificacion.DOCENCIA
+                        if fecha.weekday() < 5
+                        else DiaCalendarioEscolar.Clasificacion.NO_LECTIVO
+                    )
+                    motivo = ""
+                    origen = "PREVISUALIZACION"
                 dias.append(DiaCalendarioEscolar(
                     calendario=calendario,
                     fecha=fecha,
                     clasificacion=clasificacion,
-                    origen="PREVISUALIZACION",
+                    motivo=motivo,
+                    origen=origen,
                 ))
                 fecha += timedelta(days=1)
             DiaCalendarioEscolar.objects.bulk_create(dias)
@@ -3443,6 +3492,73 @@ def crear_calendario_escolar_planificacion(request):
     except (ValidationError, ValueError, TypeError) as error:
         messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
     return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+def descargar_plantilla_calendario_oficial(request):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Fechas oficiales"
+    ws.append(["fecha", "clasificacion", "motivo"])
+    ws.append(["2027-04-13", "NO_LECTIVO", "Dia de la ADP"])
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = 'attachment; filename="plantilla_fechas_calendario.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def cargar_fechas_calendario_oficial(request, calendario_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    calendario = get_object_or_404(CalendarioEscolar, pk=calendario_id, empresa=empresa)
+    if calendario.estado in (CalendarioEscolar.Estado.ACTIVO, CalendarioEscolar.Estado.CERRADO):
+        messages.error(request, "No puede cargar excepciones sobre un calendario activo o cerrado.")
+        return redirect(f"{reverse('planificacion_menu_escolar')}?calendario={calendario.pk}")
+    archivo = request.FILES.get("archivo")
+    if not archivo:
+        messages.error(request, "Seleccione el Excel de fechas oficiales.")
+        return redirect(f"{reverse('planificacion_menu_escolar')}?calendario={calendario.pk}")
+    clasificaciones_validas = {valor for valor, _ in DiaCalendarioEscolar.Clasificacion.choices}
+    errores = []
+    ajustes = []
+    wb = load_workbook(archivo, data_only=True)
+    for numero_fila, valores in enumerate(wb.active.iter_rows(min_row=2, values_only=True), start=2):
+        fecha = convertir_fecha_excel(valores[0] if len(valores) > 0 else None)
+        clasificacion = str(valores[1] or "").strip().upper() if len(valores) > 1 else ""
+        motivo = str(valores[2] or "").strip() if len(valores) > 2 else ""
+        if not fecha or clasificacion not in clasificaciones_validas or not motivo:
+            errores.append(f"Fila {numero_fila}: fecha, clasificacion o motivo invalido.")
+            continue
+        if not calendario.inicio_docencia <= fecha <= calendario.fin_docencia:
+            errores.append(f"Fila {numero_fila}: fecha fuera de la vigencia.")
+            continue
+        ajustes.append((fecha, clasificacion, motivo))
+    if errores:
+        messages.error(request, "No se aplicaron cambios. " + " ".join(errores[:5]))
+        return redirect(f"{reverse('planificacion_menu_escolar')}?calendario={calendario.pk}")
+    with transaction.atomic():
+        for fecha, clasificacion, motivo in ajustes:
+            dia = calendario.dias.select_for_update().get(fecha=fecha)
+            anterior = {"clasificacion": dia.clasificacion, "motivo": dia.motivo}
+            dia.clasificacion = clasificacion
+            dia.motivo = motivo
+            dia.origen = "CARGA_OFICIAL_EXCEL"
+            dia.ajustado_por = request.user
+            dia.save(update_fields=("clasificacion", "motivo", "origen", "ajustado_por", "ajustado_en"))
+            registrar_evento(
+                empresa=empresa, accion="EDITAR", modulo="planificacion_menu",
+                descripcion=f"Fecha oficial {fecha} aplicada desde Excel: {motivo}.",
+                usuario=request.user, objeto=dia, request=request,
+                datos_anteriores=anterior,
+                datos_nuevos={"clasificacion": clasificacion, "motivo": motivo, "origen": "CARGA_OFICIAL_EXCEL"},
+            )
+    messages.success(request, f"Se aplicaron {len(ajustes)} fechas oficiales a la previsualizacion.")
+    return redirect(f"{reverse('planificacion_menu_escolar')}?calendario={calendario.pk}")
 
 
 @login_required(login_url="login_usuario")
@@ -3457,8 +3573,13 @@ def clasificar_dia_calendario(request, dia_id):
         messages.error(request, "No puede editar normalmente un calendario activo o cerrado.")
         return redirect("planificacion_menu_escolar")
     anterior = dia.clasificacion
-    dia.clasificacion = request.POST.get("clasificacion", DiaCalendarioEscolar.Clasificacion.REQUIERE_REVISION)
-    dia.motivo = request.POST.get("motivo", "").strip()
+    nueva_clasificacion = request.POST.get("clasificacion", DiaCalendarioEscolar.Clasificacion.REQUIERE_REVISION)
+    motivo = request.POST.get("motivo", "").strip()
+    if nueva_clasificacion != DiaCalendarioEscolar.Clasificacion.DOCENCIA and not motivo:
+        messages.error(request, "Debe registrar el motivo de una fecha no lectiva o excepcional.")
+        return redirect(f"{reverse('planificacion_menu_escolar')}?calendario={dia.calendario_id}&fecha={dia.fecha}")
+    dia.clasificacion = nueva_clasificacion
+    dia.motivo = motivo
     dia.origen = "AJUSTE_MANUAL"
     dia.ajustado_por = request.user
     dia.full_clean()

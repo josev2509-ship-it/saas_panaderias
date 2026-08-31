@@ -13,6 +13,7 @@ from .models import (
     DetalleFactura,
     CalendarioEscolar,
     DiaCalendarioEscolar,
+    FechaOficialCalendario,
     ProgramaMenu,
     VersionProgramaMenu,
     ItemCicloMenu,
@@ -69,6 +70,13 @@ class CalendarioEscolarAdmin(admin.ModelAdmin):
 class DiaCalendarioEscolarAdmin(admin.ModelAdmin):
     list_display = ("fecha", "calendario", "clasificacion", "origen")
     list_filter = ("clasificacion", "calendario")
+
+
+@admin.register(FechaOficialCalendario)
+class FechaOficialCalendarioAdmin(admin.ModelAdmin):
+    list_display = ("fecha", "anio_inicio", "anio_fin", "clasificacion", "motivo", "activa")
+    list_filter = ("anio_inicio", "clasificacion", "activa")
+    search_fields = ("motivo", "fuente")
 
 
 admin.site.register(ProgramaMenu)

@@ -4,6 +4,7 @@ from io import BytesIO
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from openpyxl import load_workbook
@@ -100,8 +101,76 @@ class MenuPlanningTests(TestCase):
         self.calendario.estado = CalendarioEscolar.Estado.EN_REVISION
         self.calendario.dias_docencia_oficiales = 190
         self.calendario.save()
-        with self.assertRaises(ValidationError):
+        with self.assertRaisesMessage(ValidationError, "Dias oficiales: 190"):
             activar_calendario(self.calendario, usuario=self.user)
+
+    def test_previsualizacion_2026_2027_aplica_dia_oficial_adp(self):
+        self.calendario.delete()
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("crear_calendario_escolar_planificacion"), {
+            "nombre": "Oficial 2026-2027",
+            "anio_inicio": 2026,
+            "anio_fin": 2027,
+            "inicio_docencia": "2026-08-24",
+            "fin_docencia": "2027-06-18",
+            "dias_docencia_oficiales": 190,
+        })
+        self.assertRedirects(response, reverse("planificacion_menu_escolar"))
+        calendario = CalendarioEscolar.objects.get(nombre="Oficial 2026-2027")
+        adp = calendario.dias.get(fecha=date(2027, 4, 13))
+        self.assertEqual(adp.clasificacion, DiaCalendarioEscolar.Clasificacion.NO_LECTIVO)
+        self.assertEqual(adp.motivo, "Día de la ADP")
+        self.assertEqual(adp.origen, "CATALOGO_OFICIAL")
+
+    def test_carga_excel_oficial_aplica_excepciones_con_trazabilidad(self):
+        self.calendario.estado = CalendarioEscolar.Estado.EN_REVISION
+        self.calendario.save()
+        wb = __import__("openpyxl").Workbook()
+        ws = wb.active
+        ws.append(["fecha", "clasificacion", "motivo"])
+        ws.append(["2026-08-25", "FERIADO", "Feriado oficial"])
+        contenido = BytesIO(); wb.save(contenido)
+        archivo = SimpleUploadedFile(
+            "fechas.xlsx", contenido.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("cargar_fechas_calendario_oficial", args=[self.calendario.pk]),
+            {"archivo": archivo},
+        )
+        self.assertEqual(response.status_code, 302)
+        dia = self.calendario.dias.get(fecha=date(2026, 8, 25))
+        self.assertEqual(dia.clasificacion, DiaCalendarioEscolar.Clasificacion.FERIADO)
+        self.assertEqual(dia.motivo, "Feriado oficial")
+        self.assertEqual(dia.origen, "CARGA_OFICIAL_EXCEL")
+        self.assertEqual(dia.ajustado_por, self.user)
+
+    def test_revision_muestra_resumen_busqueda_filtro_y_diferencia(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("planificacion_menu_escolar"), {
+            "calendario": self.calendario.pk,
+            "fecha": "2026-08-24",
+            "clasificacion": "DOCENCIA",
+        })
+        self.assertContains(response, "Días oficiales")
+        self.assertContains(response, "Días calculados")
+        self.assertContains(response, "Diferencia")
+        self.assertContains(response, "24/08/2026")
+        self.assertNotContains(response, "25/08/2026")
+
+    def test_ajuste_manual_excepcional_exige_motivo(self):
+        self.calendario.estado = CalendarioEscolar.Estado.EN_REVISION
+        self.calendario.save()
+        dia = self.calendario.dias.get(fecha=date(2026, 8, 24))
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("clasificar_dia_calendario", args=[dia.pk]), {
+            "clasificacion": "NO_LECTIVO",
+            "motivo": "",
+        })
+        self.assertEqual(response.status_code, 302)
+        dia.refresh_from_db()
+        self.assertEqual(dia.clasificacion, DiaCalendarioEscolar.Clasificacion.DOCENCIA)
 
     def test_feriado_no_desplaza_producto_del_miercoles(self):
         martes = self.calendario.dias.get(fecha=date(2026, 8, 25))
