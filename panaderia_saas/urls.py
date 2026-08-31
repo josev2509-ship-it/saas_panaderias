@@ -4,6 +4,7 @@ from django.contrib.auth import views as auth_views
 from django.conf import settings
 from django.conf.urls.static import static
 from .media_views import protected_media
+from conduces.auth_views import SastrePasswordResetView
 
 urlpatterns = [
     path("_sedl/catalog/", include("design_system.urls")),
@@ -33,7 +34,7 @@ urlpatterns = [
     # 🔐 RESET DE CONTRASEÑA
     path(
         "password-reset/",
-        auth_views.PasswordResetView.as_view(),
+        SastrePasswordResetView.as_view(),
         name="password_reset"
     ),
 

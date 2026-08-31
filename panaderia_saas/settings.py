@@ -217,13 +217,17 @@ LOGOUT_REDIRECT_URL = "/login/"
 
 
 # =========================================================
-# Email SMTP Gmail Workspace / Railway
+# Transactional email (Resend HTTPS API) with legacy SMTP compatibility
 # =========================================================
 
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
-    "django.core.mail.backends.smtp.EmailBackend"
+    "core.transactional_email.ResendEmailBackend"
 )
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_API_URL = os.environ.get("RESEND_API_URL", "https://api.resend.com/emails")
+RESEND_API_TIMEOUT = int(os.environ.get("RESEND_API_TIMEOUT", 15))
 
 EMAIL_HOST = os.environ.get(
     "EMAIL_HOST",
@@ -251,7 +255,7 @@ EMAIL_HOST_PASSWORD = os.environ.get(
 
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
-    "SaaS Panaderías <admin@saaspanaderias.com>"
+    "SASTRE ERP <no-reply@notificaciones.saaspanaderias.com>"
 )
 
 EMAIL_TIMEOUT = 20
@@ -280,6 +284,16 @@ LOGGING = {
         "django": {
             "handlers": ["console"],
             "level": "INFO",
+        },
+        "conduces.verificacion_email": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "conduces.recuperacion_password": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
         },
     },
 }

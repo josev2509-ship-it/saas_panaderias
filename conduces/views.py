@@ -34,12 +34,18 @@ from django.contrib.auth import login, authenticate, logout
 
 import os
 import json
+import logging
+import secrets
 import urllib.request
 import urllib.error
 
 from django.contrib.auth.hashers import make_password
-from django.core.mail import send_mail
 from django.conf import settings
+from django.views.decorators.http import require_POST
+from core.transactional_email import (
+    safe_delivery_error,
+    send_transactional_email,
+)
 
 try:
     import qrcode
@@ -75,6 +81,8 @@ from .utils import (
 # =====================================================
 # FUNCIONES AUXILIARES
 # =====================================================
+
+logger_verificacion_email = logging.getLogger("conduces.verificacion_email")
 
 def convertir_fecha(fecha_str):
     if not fecha_str:
@@ -2583,11 +2591,70 @@ def eliminar_comprobante(request, comprobante_id):
 # =====================================================
 # AUTENTICACIÓN / REGISTRO / VALIDACIÓN
 # =====================================================
-from django.core.mail import send_mail
-from django.conf import settings
+
+REENVIO_CODIGO_COOLDOWN_SEGUNDOS = 60
+MAX_INTENTOS_CODIGO = 5
 
 
-def enviar_codigo_correo(user, tipo="correo"):
+class ReenvioCodigoEnCooldown(Exception):
+    def __init__(self, segundos_restantes):
+        self.segundos_restantes = segundos_restantes
+        super().__init__("reenviar_codigo_en_cooldown")
+
+
+def _causa_email_segura(error):
+    """Return diagnostic metadata without SMTP payloads, addresses or secrets."""
+    causa = type(error).__name__
+    errno = getattr(error, "errno", None)
+    if errno is not None:
+        causa = f"{causa}:errno={errno}"
+    return causa
+
+
+def _registrar_fallo_email(evento, user_id, error):
+    details = safe_delivery_error(error)
+    logger_verificacion_email.error(
+        "%s_FALLIDO user_id=%s causa=%s status=%s request_id=%s",
+        evento,
+        user_id,
+        details["category"],
+        details["status"] or "n/a",
+        details["request_id"] or "n/a",
+    )
+
+
+@transaction.atomic
+def enviar_codigo_correo(user, tipo="correo", flujo="ENVIO_INICIAL"):
+    evento = f"VERIFICACION_EMAIL_{flujo}"
+    logger_verificacion_email.info(
+        "%s_INICIADO user_id=%s tipo=%s",
+        evento,
+        user.pk,
+        tipo,
+    )
+
+    if not user.email:
+        error = ValueError("usuario_sin_email")
+        _registrar_fallo_email(evento, user.pk, error)
+        raise error
+
+    if flujo == "REENVIO":
+        ultimo = (
+            CodigoValidacion.objects.filter(user=user, tipo=tipo, usado=False)
+            .order_by("-creado_en")
+            .first()
+        )
+        if ultimo and ultimo.esta_vigente():
+            transcurridos = int((timezone.now() - ultimo.creado_en).total_seconds())
+            if transcurridos < REENVIO_CODIGO_COOLDOWN_SEGUNDOS:
+                restantes = REENVIO_CODIGO_COOLDOWN_SEGUNDOS - transcurridos
+                logger_verificacion_email.warning(
+                    "%s_FALLIDO user_id=%s causa=cooldown segundos_restantes=%s",
+                    evento,
+                    user.pk,
+                    restantes,
+                )
+                raise ReenvioCodigoEnCooldown(restantes)
 
     CodigoValidacion.objects.filter(
         user=user,
@@ -2600,7 +2667,7 @@ def enviar_codigo_correo(user, tipo="correo"):
         tipo=tipo
     )
 
-    asunto = "Código de validación - SaaS Panaderías"
+    asunto = "Código de verificación - SASTRE ERP"
 
     mensaje = f"""
 Hola {user.username},
@@ -2611,18 +2678,29 @@ Tu código de validación es:
 
 Este código vence en 15 minutos.
 
-SaaS Panaderías
+SASTRE ERP
 """
 
-    send_mail(
-        asunto,
-        mensaje,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=False,
-    )
+    try:
+        result = send_transactional_email(
+            subject=asunto,
+            text=mensaje,
+            recipients=[user.email],
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            idempotency_key=f"verificacion/{flujo.lower()}/{codigo.pk}",
+        )
+    except Exception as error:
+        _registrar_fallo_email(evento, user.pk, error)
+        raise
 
-    print("EMAIL ENVIADO CORRECTAMENTE:", user.email)
+    logger_verificacion_email.info(
+        "%s_ENVIADO user_id=%s tipo=%s provider=%s message_id=%s",
+        evento,
+        user.pk,
+        tipo,
+        result.provider,
+        result.message_id,
+    )
 
     return codigo
 
@@ -2666,14 +2744,25 @@ def registro(request):
                 request.session["usuario_pendiente_id"] = usuario_existente.id
 
                 try:
-                    enviar_codigo_correo(usuario_existente, tipo="correo")
+                    enviar_codigo_correo(
+                        usuario_existente,
+                        tipo="correo",
+                        flujo="REENVIO",
+                    )
                     messages.warning(
                         request,
                         "Este correo ya inició registro. Te reenviamos el código de validación."
                     )
-                except Exception as e:
-                    print("ERROR REENVIO CODIGO:", str(e))
-                    messages.error(request, "No fue posible reenviar el código.")
+                except ReenvioCodigoEnCooldown as error:
+                    messages.info(
+                        request,
+                        f"Espera {error.segundos_restantes} segundos antes de solicitar otro código.",
+                    )
+                except Exception:
+                    messages.error(
+                        request,
+                        "El servicio de correo no está disponible temporalmente. Intenta más tarde.",
+                    )
 
                 return redirect("verificar_correo")
 
@@ -2746,11 +2835,14 @@ def registro(request):
 
         except Exception as e:
             transaction.set_rollback(True)
-            print("ERROR REGISTRO:", str(e))
+            logger_verificacion_email.error(
+                "VERIFICACION_EMAIL_REGISTRO_FALLIDO causa=%s",
+                _causa_email_segura(e),
+            )
 
             messages.error(
                 request,
-                "No fue posible completar el registro. Intente nuevamente."
+                "No pudimos entregar el correo de verificación. El alta no fue completada; intenta más tarde."
             )
 
             return redirect("registro")
@@ -2770,19 +2862,40 @@ def verificar_correo(request):
     if request.method == "POST":
         codigo_ingresado = request.POST.get("codigo", "").strip()
 
-        codigo = CodigoValidacion.objects.filter(
-            user=user,
-            tipo="correo",
-            codigo=codigo_ingresado,
-            usado=False
-        ).order_by("-creado_en").first()
+        with transaction.atomic():
+            codigo = (
+                CodigoValidacion.objects.select_for_update()
+                .filter(user=user, tipo="correo", usado=False)
+                .order_by("-creado_en")
+                .first()
+            )
 
-        if not codigo or not codigo.esta_vigente():
-            messages.error(request, "Código inválido o vencido.")
-            return redirect("verificar_correo")
+            if not codigo:
+                messages.error(request, "No hay un código activo. Solicita uno nuevo.")
+                return redirect("verificar_correo")
 
-        codigo.usado = True
-        codigo.save()
+            if not codigo.esta_vigente():
+                codigo.usado = True
+                codigo.save(update_fields=["usado"])
+                messages.error(request, "El código expiró. Solicita uno nuevo.")
+                return redirect("verificar_correo")
+
+            if not secrets.compare_digest(codigo.codigo, codigo_ingresado):
+                codigo.intentos_fallidos += 1
+                if codigo.intentos_fallidos >= MAX_INTENTOS_CODIGO:
+                    codigo.usado = True
+                    codigo.save(update_fields=["intentos_fallidos", "usado"])
+                    messages.error(
+                        request,
+                        "Superaste el máximo de intentos. Solicita un código nuevo.",
+                    )
+                else:
+                    codigo.save(update_fields=["intentos_fallidos"])
+                    messages.error(request, "Código incorrecto.")
+                return redirect("verificar_correo")
+
+            codigo.usado = True
+            codigo.save(update_fields=["usado"])
 
         user.is_active = True
         user.save()
@@ -2803,21 +2916,35 @@ def verificar_correo(request):
     return render(request, "verificar_correo.html", {"correo": user.email})
 
 
+@require_POST
 def reenviar_codigo_correo(request):
     user_id = request.session.get("usuario_pendiente_id")
 
     if not user_id:
+        logger_verificacion_email.info(
+            "VERIFICACION_EMAIL_REENVIO_INICIADO user_id=ausente tipo=correo"
+        )
+        logger_verificacion_email.warning(
+            "VERIFICACION_EMAIL_REENVIO_FALLIDO user_id=ausente causa=sesion_sin_usuario_pendiente"
+        )
         messages.error(request, "No hay usuario pendiente de validación.")
         return redirect("login_usuario")
 
     user = get_object_or_404(User, id=user_id)
 
     try:
-        enviar_codigo_correo(user, tipo="correo")
+        enviar_codigo_correo(user, tipo="correo", flujo="REENVIO")
         messages.success(request, "Te enviamos un nuevo código de validación.")
-    except Exception as e:
-        print("ERROR REENVIO CODIGO:", str(e))
-        messages.error(request, "No fue posible reenviar el código.")
+    except ReenvioCodigoEnCooldown as error:
+        messages.info(
+            request,
+            f"Espera {error.segundos_restantes} segundos antes de solicitar otro código.",
+        )
+    except Exception:
+        messages.error(
+            request,
+            "El servicio de correo no está disponible temporalmente. Intenta más tarde.",
+        )
 
     return redirect("verificar_correo")
 
@@ -2843,16 +2970,20 @@ def login_usuario(request):
             request.session["usuario_pendiente_id"] = user.id
 
             try:
-                enviar_codigo_correo(user, tipo="correo")
+                enviar_codigo_correo(user, tipo="correo", flujo="REENVIO")
                 messages.warning(
                     request,
                     "Debes validar tu correo. Te enviamos un nuevo código."
                 )
-            except Exception as e:
-                print("ERROR LOGIN ENVIO CODIGO:", str(e))
+            except ReenvioCodigoEnCooldown as error:
+                messages.info(
+                    request,
+                    f"Debes validar tu correo. Espera {error.segundos_restantes} segundos para solicitar otro código.",
+                )
+            except Exception:
                 messages.warning(
                     request,
-                    "Tu cuenta está pendiente de validación, pero no fue posible reenviar el código."
+                    "Tu cuenta está pendiente de validación y el servicio de correo no está disponible temporalmente."
                 )
 
             return redirect("verificar_correo")

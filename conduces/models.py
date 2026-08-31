@@ -2,7 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 from datetime import timedelta
-import random
+import secrets
 
 # ==========================
 # EMPRESA
@@ -449,12 +449,13 @@ class CodigoValidacion(models.Model):
     tipo = models.CharField(max_length=20, choices=TIPOS)
     codigo = models.CharField(max_length=6)
     usado = models.BooleanField(default=False)
+    intentos_fallidos = models.PositiveSmallIntegerField(default=0)
     creado_en = models.DateTimeField(auto_now_add=True)
     expira_en = models.DateTimeField()
 
     def save(self, *args, **kwargs):
         if not self.codigo:
-            self.codigo = str(random.randint(100000, 999999))
+            self.codigo = f"{secrets.randbelow(900000) + 100000:06d}"
 
         if not self.expira_en:
             self.expira_en = timezone.now() + timedelta(minutes=15)
@@ -465,7 +466,7 @@ class CodigoValidacion(models.Model):
         return not self.usado and timezone.now() <= self.expira_en
 
     def __str__(self):
-        return f"{self.user.email} - {self.tipo} - {self.codigo}"
+        return f"Validación {self.tipo} · usuario {self.user_id}"
     # ==========================
 # CALENDARIO ESCOLAR / DÍAS NO LABORABLES
 # ==========================

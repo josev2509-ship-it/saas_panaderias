@@ -27,14 +27,14 @@
                         </p>
 
                         <div class="fw-semibold text-dark mt-2">
-                            {{ email }}
+                            {{ correo }}
                         </div>
 
                     </div>
 
                     {% if messages %}
                         {% for message in messages %}
-                            <div class="alert alert-success rounded-3">
+                            <div class="alert alert-{{ message.tags|default:'info' }} rounded-3">
                                 {{ message }}
                             </div>
                         {% endfor %}
@@ -79,12 +79,15 @@
 
                         <br>
 
-                        <a href=""
-                           class="fw-semibold text-decoration-none">
-
-                            Reenviar código
-
-                        </a>
+                        <form method="post"
+                              action="{% url 'reenviar_codigo_correo' %}"
+                              class="mt-2">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="btn btn-link fw-semibold text-decoration-none p-0">
+                                Reenviar código
+                            </button>
+                        </form>
 
                     </div>
 
