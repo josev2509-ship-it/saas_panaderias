@@ -181,7 +181,7 @@
                                     <a href="{% url 'editar_conduce' conduce.id %}" class="btn btn-secondary btn-small">Editar</a>
                                     <a href="{% url 'visualizar_pdf_conduce' conduce.id %}" class="btn btn-light btn-small">PDF</a>
 
-                                    {% if perms.conduces.delete_conduce %}
+                                    {% if puede_eliminar_conduce %}
                                     <button
                                         type="submit"
                                         form="eliminar-conduce-{{ conduce.id }}"
@@ -203,7 +203,7 @@
                 </table>
             </div>
         </form>
-        {% if perms.conduces.delete_conduce %}
+        {% if puede_eliminar_conduce %}
             {% for conduce in conduces %}
                 <form
                     id="eliminar-conduce-{{ conduce.id }}"

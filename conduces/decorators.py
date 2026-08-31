@@ -5,7 +5,30 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404
 
 from .services import obtener_empresa_usuario
-from .models import Empresa
+from .models import Empresa, PerfilUsuario
+
+
+def puede_eliminar_conduce(user):
+    """Politica unificada para la baja logica de conduces."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.has_perm("conduces.delete_conduce"):
+        return True
+    return PerfilUsuario.objects.filter(
+        user=user,
+        rol="admin_empresa",
+        activo=True,
+    ).exists()
+
+
+def permiso_eliminar_conduce_requerido(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not puede_eliminar_conduce(request.user):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 
 def modulo_requerido(nombre_modulo, permiso=None):

@@ -8,7 +8,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from auditoria.models import EventoAuditoria
-from conduces.models import CentroEducativo, Conduce, Empresa
+from conduces.models import CentroEducativo, Conduce, Empresa, EmpresaSaaS, PerfilUsuario
 from conduces.utils import dibujar_conduce
 
 
@@ -52,6 +52,44 @@ class ConduceEliminacionTests(TestCase):
     def grant_delete(self, user=None):
         (user or self.user).user_permissions.add(self.delete_permission)
 
+    def make_company_admin(self, user=None):
+        user = user or self.user
+        empresa_saas = EmpresaSaaS.objects.create(
+            nombre=f"Cuenta SaaS {user.username}",
+            rnc=f"RNC-{user.pk}",
+            correo=f"{user.username}@example.com",
+        )
+        return PerfilUsuario.objects.create(
+            user=user,
+            empresa=empresa_saas,
+            rol="admin_empresa",
+            correo_validado=True,
+            activo=True,
+        )
+
+    def test_administrador_empresa_ve_eliminar_sin_permiso_django_manual(self):
+        self.make_company_admin()
+
+        response = self.client.get(reverse("buscar_conduces"))
+
+        self.assertFalse(self.user.has_perm("conduces.delete_conduce"))
+        self.assertContains(response, "Eliminar")
+        self.assertContains(response, f'eliminar-conduce-{self.conduce.pk}')
+
+    def test_administrador_empresa_puede_realizar_baja_logica(self):
+        self.make_company_admin()
+
+        response = self.client.post(reverse("eliminar_conduce", args=[self.conduce.pk]))
+
+        self.assertRedirects(response, reverse("buscar_conduces"))
+        self.assertFalse(Conduce.objects.filter(pk=self.conduce.pk).exists())
+        self.assertEqual(Conduce.all_objects.get(pk=self.conduce.pk).eliminado_por, self.user)
+
+    def test_usuario_sin_permiso_no_ve_eliminar(self):
+        response = self.client.get(reverse("buscar_conduces"))
+
+        self.assertNotContains(response, f'eliminar-conduce-{self.conduce.pk}')
+
     def test_eliminacion_exitosa_es_logica_y_auditada(self):
         self.grant_delete()
 
@@ -92,14 +130,14 @@ class ConduceEliminacionTests(TestCase):
         self.assertTrue(Conduce.objects.filter(pk=self.conduce.pk).exists())
 
     def test_aislamiento_por_empresa(self):
-        self.grant_delete()
+        self.make_company_admin()
         otro_usuario = get_user_model().objects.create_user(username="otro-operador")
         otra_empresa = Empresa.objects.create(
             usuario=otro_usuario,
             nombre="Empresa Ajena",
             modulo_conduces=True,
         )
-        otro_usuario.user_permissions.add(self.delete_permission)
+        self.make_company_admin(otro_usuario)
         self.client.force_login(otro_usuario)
 
         response = self.client.post(reverse("eliminar_conduce", args=[self.conduce.pk]))
@@ -107,6 +145,16 @@ class ConduceEliminacionTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertTrue(Conduce.objects.filter(pk=self.conduce.pk).exists())
         self.assertNotEqual(otra_empresa.pk, self.empresa.pk)
+
+    def test_administrador_existente_resuelve_permiso_por_rol_sin_sincronizacion(self):
+        perfil = self.make_company_admin()
+
+        self.assertFalse(self.user.has_perm("conduces.delete_conduce"))
+        response = self.client.post(reverse("eliminar_conduce", args=[self.conduce.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(perfil.activo)
+        self.assertFalse(Conduce.objects.filter(pk=self.conduce.pk).exists())
 
     def test_usuario_sin_permiso_no_elimina(self):
         response = self.client.post(reverse("eliminar_conduce", args=[self.conduce.pk]))

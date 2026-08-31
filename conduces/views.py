@@ -13,7 +13,11 @@ from django.db.models.functions import TruncMonth
 from django.contrib import messages
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
-from .decorators import modulo_requerido
+from .decorators import (
+    modulo_requerido,
+    permiso_eliminar_conduce_requerido,
+    puede_eliminar_conduce,
+)
 
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
@@ -991,6 +995,7 @@ def buscar_conduces(request):
         "fecha_desde": fecha_desde,
         "fecha_hasta": fecha_hasta,
         "estado": estado,
+        "puede_eliminar_conduce": puede_eliminar_conduce(request.user),
     })
 
 
@@ -1016,7 +1021,8 @@ def editar_conduce(request, conduce_id):
 
 
 @login_required(login_url="login_usuario")
-@modulo_requerido("modulo_conduces", permiso="conduces.delete_conduce")
+@modulo_requerido("modulo_conduces")
+@permiso_eliminar_conduce_requerido
 @require_POST
 def eliminar_conduce(request, conduce_id):
     empresa = obtener_empresa(request)
