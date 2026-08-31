@@ -181,13 +181,16 @@
                                     <a href="{% url 'editar_conduce' conduce.id %}" class="btn btn-secondary btn-small">Editar</a>
                                     <a href="{% url 'visualizar_pdf_conduce' conduce.id %}" class="btn btn-light btn-small">PDF</a>
 
-                                    <a 
-                                        href="{% url 'eliminar_conduce' conduce.id %}" 
+                                    {% if perms.conduces.delete_conduce %}
+                                    <button
+                                        type="submit"
+                                        form="eliminar-conduce-{{ conduce.id }}"
                                         class="btn btn-danger btn-small"
                                         onclick="return confirm('¿Seguro que deseas eliminar este conduce?');"
                                     >
                                         Eliminar
-                                    </a>
+                                    </button>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -200,6 +203,18 @@
                 </table>
             </div>
         </form>
+        {% if perms.conduces.delete_conduce %}
+            {% for conduce in conduces %}
+                <form
+                    id="eliminar-conduce-{{ conduce.id }}"
+                    method="post"
+                    action="{% url 'eliminar_conduce' conduce.id %}"
+                    hidden
+                >
+                    {% csrf_token %}
+                </form>
+            {% endfor %}
+        {% endif %}
     </section>
 
 </div>

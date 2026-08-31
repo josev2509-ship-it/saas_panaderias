@@ -11,7 +11,7 @@
     <div><label for="id_producto">Producto</label><input id="id_producto" type="text" name="producto" value="{{ conduce.producto }}" required></div>
     <div><label for="id_cantidad">Cantidad</label><input id="id_cantidad" type="number" name="cantidad" value="{{ conduce.cantidad }}" required></div>
     <div><label for="id_estado">Estado</label><select id="id_estado" name="estado"><option value="borrador" {% if conduce.estado == "borrador" %}selected{% endif %}>Borrador</option><option value="entregado" {% if conduce.estado == "entregado" %}selected{% endif %}>Entregado</option><option value="anulado" {% if conduce.estado == "anulado" %}selected{% endif %}>Anulado</option></select></div>
-    <div><label for="id_observaciones">Observaciones</label><textarea id="id_observaciones" name="observaciones">{{ conduce.observaciones }}</textarea></div>
+    <div><label for="id_observaciones">Observaciones</label><textarea id="id_observaciones" name="observaciones">{{ conduce.observaciones|default_if_none:"" }}</textarea></div>
   </div>
   <div class="ds-demo-form-actions"><a href="{% url 'buscar_conduces' %}" class="btn btn-secondary">Cancelar</a><button type="submit" class="btn btn-primary">Guardar cambios</button></div>
 </form></div></section>

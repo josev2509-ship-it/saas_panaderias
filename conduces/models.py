@@ -106,6 +106,16 @@ class MenuDiario(models.Model):
 # ==========================
 # CONDUCE
 # ==========================
+class ConduceQuerySet(models.QuerySet):
+    def activos(self):
+        return self.filter(eliminado_en__isnull=True)
+
+
+class ConduceManager(models.Manager.from_queryset(ConduceQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().activos()
+
+
 class Conduce(models.Model):
     ESTADOS = (
         ("borrador", "Borrador"),
@@ -121,6 +131,14 @@ class Conduce(models.Model):
     producto = models.CharField(max_length=255)
     cantidad = models.IntegerField(default=0)
     observaciones = models.TextField(blank=True, null=True)
+    eliminado_en = models.DateTimeField(null=True, blank=True, db_index=True)
+    eliminado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conduces_eliminados",
+    )
 
     estado = models.CharField(
         max_length=20,
@@ -128,13 +146,18 @@ class Conduce(models.Model):
         default="borrador"
     )
 
+    objects = ConduceManager()
+    all_objects = models.Manager()
+
     class Meta:
         ordering = ["-fecha", "-id"]
 
     def save(self, *args, **kwargs):
         if not self.numero:
             formato_base = str(self.empresa.numero_inicial_conduce or "0001")
-            conduces_empresa = Conduce.objects.filter(empresa=self.empresa)
+            # La numeracion considera tambien bajas logicas para no reutilizar
+            # identificadores documentales previamente emitidos.
+            conduces_empresa = Conduce.all_objects.filter(empresa=self.empresa)
 
             numeros_validos = []
             largo_formato = len(formato_base)
@@ -151,6 +174,15 @@ class Conduce(models.Model):
             self.cantidad = self.centro.matricula
 
         super().save(*args, **kwargs)
+
+    def eliminar_logicamente(self, usuario=None):
+        if self.eliminado_en is not None:
+            return False
+
+        self.eliminado_en = timezone.now()
+        self.eliminado_por = usuario if getattr(usuario, "is_authenticated", False) else None
+        self.save(update_fields=("eliminado_en", "eliminado_por"))
+        return True
 
     def __str__(self):
         return f"Conduce {self.numero} - {self.centro.nombre}"

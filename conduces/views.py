@@ -42,6 +42,7 @@ import urllib.error
 from django.contrib.auth.hashers import make_password
 from django.conf import settings
 from django.views.decorators.http import require_POST
+from auditoria.services import registrar_evento
 from core.transactional_email import (
     safe_delivery_error,
     send_transactional_email,
@@ -1015,14 +1016,36 @@ def editar_conduce(request, conduce_id):
 
 
 @login_required(login_url="login_usuario")
-@modulo_requerido("modulo_conduces")
+@modulo_requerido("modulo_conduces", permiso="conduces.delete_conduce")
+@require_POST
 def eliminar_conduce(request, conduce_id):
     empresa = obtener_empresa(request)
-    conduce = get_object_or_404(Conduce, id=conduce_id, empresa=empresa)
+    conduce = get_object_or_404(
+        Conduce.all_objects,
+        id=conduce_id,
+        empresa=empresa,
+    )
 
-    if request.method == "POST":
-        conduce.delete()
-        messages.success(request, "Conduce eliminado correctamente.")
+    numero = conduce.numero
+    with transaction.atomic():
+        eliminado = conduce.eliminar_logicamente(request.user)
+        if eliminado:
+            registrar_evento(
+                empresa=empresa,
+                accion="CAMBIAR_ESTADO",
+                modulo="conduces",
+                descripcion=f"Conduce {numero} eliminado logicamente.",
+                usuario=request.user,
+                objeto=conduce,
+                request=request,
+                datos_anteriores={"eliminado": False},
+                datos_nuevos={"eliminado": True},
+            )
+
+    if eliminado:
+        messages.success(request, f"Conduce {numero} eliminado correctamente.")
+    else:
+        messages.info(request, f"El conduce {numero} ya se encontraba eliminado.")
 
     return redirect("buscar_conduces")
 

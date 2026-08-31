@@ -117,9 +117,10 @@ def dibujar_conduce(c, conduce):
     c.line(140, obs_y - 3, 575, obs_y - 3)
     c.line(35, obs_y - 25, 575, obs_y - 25)
 
-    if conduce.observaciones:
+    observaciones = conduce.observaciones or ""
+    if observaciones:
         c.setFont("Helvetica", 8)
-        c.drawString(145, obs_y - 15, conduce.observaciones[:90])
+        c.drawString(145, obs_y - 15, observaciones[:90])
 
     recibido_y = obs_y - 70
 
