@@ -46,6 +46,18 @@ urlpatterns = [
     path('menu/crear/', obtener_vista('crear_menu_diario'), name='crear_menu_diario'),
     path('menu/editar/<int:menu_id>/', obtener_vista('editar_menu_diario'), name='editar_menu_diario'),
     path('menu/eliminar/<int:menu_id>/', obtener_vista('eliminar_menu_diario'), name='eliminar_menu_diario'),
+    path('menu/planificacion/', obtener_vista('planificacion_menu_escolar'), name='planificacion_menu_escolar'),
+    path('menu/planificacion/calendarios/crear/', obtener_vista('crear_calendario_escolar_planificacion'), name='crear_calendario_escolar_planificacion'),
+    path('menu/planificacion/calendarios/<int:calendario_id>/activar/', obtener_vista('activar_calendario_escolar_planificacion'), name='activar_calendario_escolar_planificacion'),
+    path('menu/planificacion/dias/<int:dia_id>/clasificar/', obtener_vista('clasificar_dia_calendario'), name='clasificar_dia_calendario'),
+    path('menu/planificacion/programas/crear/', obtener_vista('crear_programa_menu'), name='crear_programa_menu'),
+    path('menu/planificacion/programas/<int:programa_id>/versiones/crear/', obtener_vista('crear_version_programa_menu'), name='crear_version_programa_menu'),
+    path('menu/planificacion/versiones/<int:version_id>/items/', obtener_vista('guardar_item_ciclo_menu'), name='guardar_item_ciclo_menu'),
+    path('menu/planificacion/versiones/<int:version_id>/activar/', obtener_vista('activar_version_programa_menu'), name='activar_version_programa_menu'),
+    path('menu/planificacion/asignaciones/crear/', obtener_vista('asignar_programa_centro'), name='asignar_programa_centro'),
+    path('menu/planificacion/asignaciones/<int:asignacion_id>/calendarios/<int:calendario_id>/generar/', obtener_vista('generar_programacion_menu'), name='generar_programacion_menu'),
+    path('menu/planificacion/exportar.xlsx', obtener_vista('exportar_programacion_excel'), name='exportar_programacion_excel'),
+    path('menu/planificacion/exportar.pdf', obtener_vista('exportar_programacion_pdf'), name='exportar_programacion_pdf'),
 
     # ================= CONDUCES =================
     path('generar-conduces/', obtener_vista('generar_conduces_automaticos'), name='generar_conduces'),

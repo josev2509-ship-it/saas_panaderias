@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.contrib.auth.models import User
 from datetime import timedelta
@@ -528,3 +529,220 @@ class DiaNoDocencia(models.Model):
 
     def __str__(self):
         return f"{self.fecha} - {self.motivo}"
+
+
+class CalendarioEscolar(models.Model):
+    class Estado(models.TextChoices):
+        BORRADOR = "BORRADOR", "Borrador"
+        EN_REVISION = "EN_REVISION", "En revision"
+        ACTIVO = "ACTIVO", "Activo"
+        CERRADO = "CERRADO", "Cerrado"
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="calendarios_escolares")
+    nombre = models.CharField(max_length=120)
+    anio_inicio = models.PositiveSmallIntegerField()
+    anio_fin = models.PositiveSmallIntegerField()
+    inicio_docencia = models.DateField()
+    fin_docencia = models.DateField()
+    dias_docencia_oficiales = models.PositiveSmallIntegerField(default=190)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.BORRADOR)
+    documento_fuente = models.FileField(upload_to="calendarios_escolares/", blank=True, null=True)
+    diferencia_justificada = models.TextField(blank=True)
+    activado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="calendarios_activados")
+    activado_en = models.DateTimeField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-anio_inicio", "empresa_id")
+        constraints = [models.UniqueConstraint(fields=("empresa", "anio_inicio", "anio_fin"), name="cal_escolar_empresa_anio_uniq")]
+        permissions = [("activar_calendario_escolar", "Puede activar calendario escolar")]
+
+    def clean(self):
+        if self.anio_fin != self.anio_inicio + 1:
+            raise ValidationError({"anio_fin": "El ano escolar debe abarcar anos consecutivos."})
+        if self.inicio_docencia > self.fin_docencia:
+            raise ValidationError({"fin_docencia": "La fecha final debe ser posterior al inicio."})
+
+    def __str__(self):
+        return f"{self.nombre} ({self.anio_inicio}-{self.anio_fin})"
+
+
+class DiaCalendarioEscolar(models.Model):
+    class Clasificacion(models.TextChoices):
+        DOCENCIA = "DOCENCIA", "Docencia"
+        FERIADO = "FERIADO", "Feriado"
+        VACACIONES = "VACACIONES", "Vacaciones"
+        NO_LECTIVO = "NO_LECTIVO", "No lectivo"
+        SUSPENSION = "SUSPENSION", "Suspension"
+        REQUIERE_REVISION = "REQUIERE_REVISION", "Requiere revision"
+
+    calendario = models.ForeignKey(CalendarioEscolar, on_delete=models.CASCADE, related_name="dias")
+    fecha = models.DateField()
+    clasificacion = models.CharField(max_length=25, choices=Clasificacion.choices, default=Clasificacion.REQUIERE_REVISION)
+    motivo = models.CharField(max_length=255, blank=True)
+    origen = models.CharField(max_length=30, default="MANUAL")
+    ajustado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="dias_calendario_ajustados")
+    ajustado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("fecha",)
+        constraints = [models.UniqueConstraint(fields=("calendario", "fecha"), name="dia_calendario_fecha_uniq")]
+
+    def clean(self):
+        if self.calendario_id and not (self.calendario.inicio_docencia <= self.fecha <= self.calendario.fin_docencia):
+            raise ValidationError({"fecha": "La fecha queda fuera de la vigencia del calendario."})
+
+
+class ProgramaMenu(models.Model):
+    class Modalidad(models.TextChoices):
+        REGULAR = "REGULAR", "Regular"
+        PREPARA = "PREPARA", "PREPARA"
+        OTRA = "OTRA", "Otra"
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="programas_menu")
+    codigo = models.CharField(max_length=40)
+    nombre = models.CharField(max_length=160)
+    modalidad = models.CharField(max_length=20, choices=Modalidad.choices)
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("modalidad", "nombre")
+        constraints = [models.UniqueConstraint(fields=("empresa", "codigo"), name="programa_menu_empresa_codigo_uniq")]
+
+    def __str__(self):
+        return f"{self.nombre} - {self.get_modalidad_display()}"
+
+
+class VersionProgramaMenu(models.Model):
+    class Estado(models.TextChoices):
+        BORRADOR = "BORRADOR", "Borrador"
+        ACTIVA = "ACTIVA", "Activa"
+        CERRADA = "CERRADA", "Cerrada"
+
+    class InicioCiclo(models.TextChoices):
+        CONTINUAR = "CONTINUAR", "Continuar ciclo existente"
+        REINICIAR = "REINICIAR", "Reiniciar en semana 1"
+        ESPECIFICA = "ESPECIFICA", "Iniciar en semana especifica"
+
+    programa = models.ForeignKey(ProgramaMenu, on_delete=models.PROTECT, related_name="versiones")
+    nombre = models.CharField(max_length=80)
+    vigente_desde = models.DateField()
+    vigente_hasta = models.DateField(null=True, blank=True)
+    semanas_ciclo = models.PositiveSmallIntegerField(default=5)
+    fecha_ancla_ciclo = models.DateField()
+    modo_inicio_ciclo = models.CharField(max_length=15, choices=InicioCiclo.choices, default=InicioCiclo.REINICIAR)
+    semana_inicial = models.PositiveSmallIntegerField(default=1)
+    estado = models.CharField(max_length=15, choices=Estado.choices, default=Estado.BORRADOR)
+    documento_fuente = models.FileField(upload_to="programas_menu/", blank=True, null=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="versiones_menu_creadas")
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("programa_id", "-vigente_desde")
+        constraints = [models.UniqueConstraint(fields=("programa", "nombre"), name="version_programa_nombre_uniq")]
+
+    def clean(self):
+        if self.vigente_hasta and self.vigente_hasta < self.vigente_desde:
+            raise ValidationError({"vigente_hasta": "La vigencia final no puede preceder a la inicial."})
+        if not 1 <= self.semana_inicial <= self.semanas_ciclo:
+            raise ValidationError({"semana_inicial": "La semana inicial debe pertenecer al ciclo."})
+
+    def __str__(self):
+        return f"{self.programa.nombre} / {self.nombre}"
+
+
+class ItemCicloMenu(models.Model):
+    version = models.ForeignKey(VersionProgramaMenu, on_delete=models.PROTECT, related_name="items")
+    semana = models.PositiveSmallIntegerField()
+    dia_semana = models.PositiveSmallIntegerField(help_text="0=Lunes, 6=Domingo")
+    producto = models.CharField(max_length=180, blank=True)
+    es_suministrado = models.BooleanField(default=True, help_text="Desmarcar para bebidas u otros componentes no suministrados.")
+    observacion = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ("semana", "dia_semana")
+        constraints = [models.UniqueConstraint(fields=("version", "semana", "dia_semana"), name="item_ciclo_semana_dia_uniq")]
+
+    def clean(self):
+        if self.version_id and not 1 <= self.semana <= self.version.semanas_ciclo:
+            raise ValidationError({"semana": "La semana no pertenece al ciclo configurado."})
+        if not 0 <= self.dia_semana <= 6:
+            raise ValidationError({"dia_semana": "El dia debe estar entre lunes (0) y domingo (6)."})
+        if self.es_suministrado and not self.producto.strip():
+            raise ValidationError({"producto": "Indique el producto suministrado."})
+
+
+class AsignacionProgramaCentro(models.Model):
+    centro = models.ForeignKey(CentroEducativo, on_delete=models.PROTECT, related_name="asignaciones_menu")
+    programa = models.ForeignKey(ProgramaMenu, on_delete=models.PROTECT, related_name="asignaciones_centros")
+    modalidad = models.CharField(max_length=20, choices=ProgramaMenu.Modalidad.choices)
+    dias_entrega = models.JSONField(default=list, help_text="Dias Python: lunes=0, domingo=6")
+    vigente_desde = models.DateField()
+    vigente_hasta = models.DateField(null=True, blank=True)
+    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("centro_id", "-vigente_desde")
+
+    def clean(self):
+        if self.centro_id and self.programa_id and self.centro.empresa_id != self.programa.empresa_id:
+            raise ValidationError("El centro y el programa deben pertenecer a la misma empresa.")
+        if self.modalidad != self.programa.modalidad:
+            raise ValidationError({"modalidad": "La modalidad debe coincidir con el programa."})
+        if any(not isinstance(dia, int) or dia < 0 or dia > 6 for dia in self.dias_entrega):
+            raise ValidationError({"dias_entrega": "Los dias configurados no son validos."})
+        if self.vigente_hasta and self.vigente_hasta < self.vigente_desde:
+            raise ValidationError({"vigente_hasta": "La vigencia final no puede preceder a la inicial."})
+
+
+class ProgramacionMenuEscolar(models.Model):
+    class Estado(models.TextChoices):
+        PROGRAMADO = "PROGRAMADO", "Programado"
+        SIN_DOCENCIA = "SIN_DOCENCIA", "Sin docencia"
+        NO_PROGRAMADO = "NO_PROGRAMADO", "No programado"
+        NO_SUMINISTRADO = "NO_SUMINISTRADO", "Componente no suministrado"
+        OMITIDO = "OMITIDO", "Omitido por excepcion"
+        EXTRAORDINARIO = "EXTRAORDINARIO", "Entrega extraordinaria"
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="programaciones_menu")
+    calendario = models.ForeignKey(CalendarioEscolar, on_delete=models.PROTECT, related_name="programaciones")
+    asignacion = models.ForeignKey(AsignacionProgramaCentro, on_delete=models.PROTECT, related_name="programaciones")
+    centro = models.ForeignKey(CentroEducativo, on_delete=models.PROTECT, related_name="programaciones_menu")
+    fecha = models.DateField()
+    dia_semana = models.PositiveSmallIntegerField()
+    semana_ciclo = models.PositiveSmallIntegerField(null=True, blank=True)
+    programa = models.ForeignKey(ProgramaMenu, on_delete=models.PROTECT)
+    version = models.ForeignKey(VersionProgramaMenu, on_delete=models.PROTECT)
+    item_ciclo = models.ForeignKey(ItemCicloMenu, on_delete=models.PROTECT, null=True, blank=True)
+    producto = models.CharField(max_length=180, blank=True)
+    programa_snapshot = models.CharField(max_length=160)
+    version_snapshot = models.CharField(max_length=80)
+    modalidad_snapshot = models.CharField(max_length=20)
+    estado = models.CharField(max_length=20, choices=Estado.choices)
+    confirmada = models.BooleanField(default=False)
+    bloqueada = models.BooleanField(default=False)
+    creada_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="programaciones_menu_creadas")
+    creada_en = models.DateTimeField(auto_now_add=True)
+    actualizada_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("fecha", "centro_id")
+        constraints = [models.UniqueConstraint(fields=("asignacion", "fecha"), name="programacion_asignacion_fecha_uniq")]
+        permissions = [("confirmar_programacion_menu", "Puede confirmar programacion de menu")]
+
+
+class ExcepcionProgramacionMenu(models.Model):
+    programacion = models.ForeignKey(ProgramacionMenuEscolar, on_delete=models.PROTECT, related_name="excepciones")
+    estado_anterior = models.CharField(max_length=20)
+    estado_nuevo = models.CharField(max_length=20, choices=ProgramacionMenuEscolar.Estado.choices)
+    producto_anterior = models.CharField(max_length=180, blank=True)
+    producto_nuevo = models.CharField(max_length=180, blank=True)
+    motivo = models.TextField()
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-creado_en",)

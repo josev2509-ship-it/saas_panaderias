@@ -45,6 +45,7 @@ import urllib.error
 
 from django.contrib.auth.hashers import make_password
 from django.conf import settings
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.views.decorators.http import require_POST
 from auditoria.services import registrar_evento
 from core.transactional_email import (
@@ -73,6 +74,20 @@ from .models import (
     PerfilUsuario,
     CodigoValidacion,
     DiaNoDocencia,
+    CalendarioEscolar,
+    DiaCalendarioEscolar,
+    ProgramaMenu,
+    VersionProgramaMenu,
+    ItemCicloMenu,
+    AsignacionProgramaCentro,
+    ProgramacionMenuEscolar,
+)
+from .menu_planning import (
+    activar_calendario,
+    contar_docencia_regular,
+    materializar_programacion,
+    puede_gestionar_planificacion,
+    previsualizar_asignacion,
 )
 
 from .utils import (
@@ -3349,3 +3364,335 @@ def editar_dia_no_docencia(request, dia_id):
     return render(request, "editar_dia_no_docencia.html", {
         "dia": dia,
     })
+
+
+# =====================================================
+# PLANIFICACION DE MENU ESCOLAR (VERSIONADA)
+# =====================================================
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+def planificacion_menu_escolar(request):
+    empresa = obtener_empresa(request)
+    calendarios = CalendarioEscolar.objects.filter(empresa=empresa).prefetch_related("dias")
+    programas = ProgramaMenu.objects.filter(empresa=empresa).prefetch_related("versiones")
+    asignaciones = AsignacionProgramaCentro.objects.filter(
+        centro__empresa=empresa,
+        programa__empresa=empresa,
+    ).select_related("centro", "programa")
+    programaciones = ProgramacionMenuEscolar.objects.filter(empresa=empresa).select_related(
+        "centro", "programa", "version"
+    )[:100]
+    return render(request, "planificacion_menu_escolar.html", {
+        "empresa": empresa,
+        "calendarios": calendarios,
+        "programas": programas,
+        "asignaciones": asignaciones,
+        "programaciones": programaciones,
+        "centros": CentroEducativo.objects.filter(empresa=empresa).order_by("nombre"),
+        "puede_gestionar": puede_gestionar_planificacion(request.user),
+        "modalidades": ProgramaMenu.Modalidad.choices,
+        "clasificaciones": DiaCalendarioEscolar.Clasificacion.choices,
+    })
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def crear_calendario_escolar_planificacion(request):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    inicio = convertir_fecha(request.POST.get("inicio_docencia"))
+    fin = convertir_fecha(request.POST.get("fin_docencia"))
+    if not inicio or not fin or inicio > fin:
+        messages.error(request, "Indique una vigencia valida para el calendario.")
+        return redirect("planificacion_menu_escolar")
+    try:
+        with transaction.atomic():
+            calendario = CalendarioEscolar(
+                empresa=empresa,
+                nombre=request.POST.get("nombre", "").strip(),
+                anio_inicio=int(request.POST.get("anio_inicio")),
+                anio_fin=int(request.POST.get("anio_fin")),
+                inicio_docencia=inicio,
+                fin_docencia=fin,
+                dias_docencia_oficiales=int(request.POST.get("dias_docencia_oficiales") or 190),
+                estado=CalendarioEscolar.Estado.EN_REVISION,
+                documento_fuente=request.FILES.get("documento_fuente"),
+            )
+            calendario.full_clean()
+            calendario.save()
+            fecha = inicio
+            dias = []
+            while fecha <= fin:
+                clasificacion = (
+                    DiaCalendarioEscolar.Clasificacion.DOCENCIA
+                    if fecha.weekday() < 5
+                    else DiaCalendarioEscolar.Clasificacion.NO_LECTIVO
+                )
+                dias.append(DiaCalendarioEscolar(
+                    calendario=calendario,
+                    fecha=fecha,
+                    clasificacion=clasificacion,
+                    origen="PREVISUALIZACION",
+                ))
+                fecha += timedelta(days=1)
+            DiaCalendarioEscolar.objects.bulk_create(dias)
+        messages.success(request, "Calendario cargado como previsualizacion; revise las fechas antes de activarlo.")
+    except (ValidationError, ValueError, TypeError) as error:
+        messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def clasificar_dia_calendario(request, dia_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    dia = get_object_or_404(DiaCalendarioEscolar, pk=dia_id, calendario__empresa=empresa)
+    if dia.calendario.estado in (CalendarioEscolar.Estado.ACTIVO, CalendarioEscolar.Estado.CERRADO):
+        messages.error(request, "No puede editar normalmente un calendario activo o cerrado.")
+        return redirect("planificacion_menu_escolar")
+    anterior = dia.clasificacion
+    dia.clasificacion = request.POST.get("clasificacion", DiaCalendarioEscolar.Clasificacion.REQUIERE_REVISION)
+    dia.motivo = request.POST.get("motivo", "").strip()
+    dia.origen = "AJUSTE_MANUAL"
+    dia.ajustado_por = request.user
+    dia.full_clean()
+    dia.save()
+    registrar_evento(
+        empresa=empresa, accion="EDITAR", modulo="planificacion_menu",
+        descripcion=f"Fecha {dia.fecha} reclasificada de {anterior} a {dia.clasificacion}.",
+        usuario=request.user, objeto=dia, request=request,
+        datos_anteriores={"clasificacion": anterior}, datos_nuevos={"clasificacion": dia.clasificacion},
+    )
+    messages.success(request, "Fecha actualizada en la previsualizacion.")
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def activar_calendario_escolar_planificacion(request, calendario_id):
+    empresa = obtener_empresa(request)
+    calendario = get_object_or_404(CalendarioEscolar, pk=calendario_id, empresa=empresa)
+    try:
+        activar_calendario(
+            calendario,
+            usuario=request.user,
+            request=request,
+            forzar=request.POST.get("forzar") == "on",
+            justificacion=request.POST.get("justificacion", ""),
+        )
+        messages.success(request, f"Calendario activado: {contar_docencia_regular(calendario)} dias regulares.")
+    except (ValidationError, PermissionDenied) as error:
+        if isinstance(error, PermissionDenied):
+            raise
+        messages.error(request, "; ".join(error.messages))
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def crear_programa_menu(request):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    programa = ProgramaMenu(
+        empresa=empresa,
+        codigo=request.POST.get("codigo", "").strip(),
+        nombre=request.POST.get("nombre", "").strip(),
+        modalidad=request.POST.get("modalidad", ProgramaMenu.Modalidad.REGULAR),
+    )
+    try:
+        programa.full_clean()
+        programa.save()
+        messages.success(request, "Programa de menu creado.")
+    except ValidationError as error:
+        messages.error(request, "; ".join(error.messages))
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def crear_version_programa_menu(request, programa_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    programa = get_object_or_404(ProgramaMenu, pk=programa_id, empresa=empresa)
+    try:
+        version = VersionProgramaMenu(
+            programa=programa,
+            nombre=request.POST.get("nombre", "").strip(),
+            vigente_desde=convertir_fecha(request.POST.get("vigente_desde")),
+            vigente_hasta=convertir_fecha(request.POST.get("vigente_hasta")),
+            semanas_ciclo=int(request.POST.get("semanas_ciclo") or 5),
+            fecha_ancla_ciclo=convertir_fecha(request.POST.get("fecha_ancla_ciclo")),
+            modo_inicio_ciclo=request.POST.get("modo_inicio_ciclo", VersionProgramaMenu.InicioCiclo.REINICIAR),
+            semana_inicial=int(request.POST.get("semana_inicial") or 1),
+            estado=VersionProgramaMenu.Estado.BORRADOR,
+            documento_fuente=request.FILES.get("documento_fuente"),
+            creado_por=request.user,
+        )
+        version.full_clean()
+        version.save()
+        messages.success(request, "Version creada en borrador.")
+    except (ValidationError, ValueError, TypeError) as error:
+        messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def guardar_item_ciclo_menu(request, version_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    version = get_object_or_404(VersionProgramaMenu, pk=version_id, programa__empresa=empresa)
+    if version.estado != VersionProgramaMenu.Estado.BORRADOR:
+        messages.error(request, "Solo puede editar items de una version en borrador.")
+        return redirect("planificacion_menu_escolar")
+    try:
+        item = ItemCicloMenu(
+            version=version,
+            semana=int(request.POST.get("semana")),
+            dia_semana=int(request.POST.get("dia_semana")),
+            producto=request.POST.get("producto", "").strip(),
+            es_suministrado=request.POST.get("es_suministrado") == "on",
+            observacion=request.POST.get("observacion", "").strip(),
+        )
+        item.full_clean()
+        ItemCicloMenu.objects.update_or_create(
+            version=version, semana=item.semana, dia_semana=item.dia_semana,
+            defaults={"producto": item.producto, "es_suministrado": item.es_suministrado, "observacion": item.observacion},
+        )
+        messages.success(request, "Item del ciclo guardado.")
+    except (ValidationError, ValueError, TypeError) as error:
+        messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def activar_version_programa_menu(request, version_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    version = get_object_or_404(VersionProgramaMenu, pk=version_id, programa__empresa=empresa)
+    if not version.items.exists():
+        messages.error(request, "La version no contiene items de ciclo.")
+    else:
+        version.estado = VersionProgramaMenu.Estado.ACTIVA
+        version.save(update_fields=("estado",))
+        messages.success(request, "Version de menu activada.")
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def asignar_programa_centro(request):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    centro = get_object_or_404(CentroEducativo, pk=request.POST.get("centro_id"), empresa=empresa)
+    programa = get_object_or_404(ProgramaMenu, pk=request.POST.get("programa_id"), empresa=empresa)
+    try:
+        dias = sorted({int(valor) for valor in request.POST.getlist("dias_entrega")})
+        asignacion = AsignacionProgramaCentro(
+            centro=centro, programa=programa, modalidad=programa.modalidad,
+            dias_entrega=dias,
+            vigente_desde=convertir_fecha(request.POST.get("vigente_desde")),
+            vigente_hasta=convertir_fecha(request.POST.get("vigente_hasta")),
+            creado_por=request.user,
+        )
+        asignacion.full_clean()
+        asignacion.save()
+        messages.success(request, "Programacion de entregas asignada al centro.")
+    except (ValidationError, ValueError, TypeError) as error:
+        messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def generar_programacion_menu(request, asignacion_id, calendario_id):
+    empresa = obtener_empresa(request)
+    asignacion = get_object_or_404(AsignacionProgramaCentro, pk=asignacion_id, centro__empresa=empresa, programa__empresa=empresa)
+    calendario = get_object_or_404(CalendarioEscolar, pk=calendario_id, empresa=empresa)
+    try:
+        resultados = materializar_programacion(
+            asignacion, calendario, usuario=request.user, request=request,
+            fecha_inicio=convertir_fecha(request.POST.get("fecha_inicio")),
+            fecha_fin=convertir_fecha(request.POST.get("fecha_fin")),
+        )
+        messages.success(request, f"Programacion generada: {len(resultados)} fechas.")
+    except ValidationError as error:
+        messages.error(request, "; ".join(error.messages))
+    return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+def exportar_programacion_excel(request):
+    empresa = obtener_empresa(request)
+    filas = ProgramacionMenuEscolar.objects.filter(empresa=empresa).select_related("centro", "programa", "version")
+    fecha_inicio = convertir_fecha(request.GET.get("fecha_inicio"))
+    fecha_fin = convertir_fecha(request.GET.get("fecha_fin"))
+    modalidad = request.GET.get("modalidad", "")
+    if fecha_inicio:
+        filas = filas.filter(fecha__gte=fecha_inicio)
+    if fecha_fin:
+        filas = filas.filter(fecha__lte=fecha_fin)
+    if modalidad:
+        filas = filas.filter(modalidad_snapshot=modalidad)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Programacion escolar"
+    ws.append(["Fecha", "Dia", "Centro", "Semana menu", "Producto", "Programa", "Version", "Modalidad", "Estado"])
+    dias = ("Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo")
+    for fila in filas:
+        ws.append([fila.fecha, dias[fila.dia_semana], fila.centro.nombre, fila.semana_ciclo, fila.producto,
+                   fila.programa_snapshot, fila.version_snapshot, fila.modalidad_snapshot, fila.get_estado_display()])
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = 'attachment; filename="programacion_menu_escolar.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+def exportar_programacion_pdf(request):
+    empresa = obtener_empresa(request)
+    filas = ProgramacionMenuEscolar.objects.filter(empresa=empresa).select_related("centro")
+    fecha_inicio = convertir_fecha(request.GET.get("fecha_inicio"))
+    fecha_fin = convertir_fecha(request.GET.get("fecha_fin"))
+    if fecha_inicio:
+        filas = filas.filter(fecha__gte=fecha_inicio)
+    if fecha_fin:
+        filas = filas.filter(fecha__lte=fecha_fin)
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    y = 750
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(45, y, "SASTRE ERP - Programacion de menu escolar")
+    y -= 18
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(45, y, empresa.nombre)
+    y -= 24
+    for fila in filas:
+        if y < 55:
+            pdf.showPage(); y = 750; pdf.setFont("Helvetica", 8)
+        texto = f"{fila.fecha:%d/%m/%Y} | {fila.centro.nombre[:22]} | S{fila.semana_ciclo or '-'} | {fila.producto or '-'} | {fila.version_snapshot} | {fila.estado}"
+        pdf.drawString(45, y, texto[:105])
+        y -= 12
+    pdf.save(); buffer.seek(0)
+    return FileResponse(buffer, content_type="application/pdf", filename="programacion_menu_escolar.pdf")

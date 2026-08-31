@@ -11,6 +11,14 @@ from .models import (
     RangoComprobanteGubernamental,
     Factura,
     DetalleFactura,
+    CalendarioEscolar,
+    DiaCalendarioEscolar,
+    ProgramaMenu,
+    VersionProgramaMenu,
+    ItemCicloMenu,
+    AsignacionProgramaCentro,
+    ProgramacionMenuEscolar,
+    ExcepcionProgramacionMenu,
 )
 
 
@@ -49,6 +57,26 @@ class ConduceAdmin(admin.ModelAdmin):
     list_display = ("numero", "fecha", "empresa", "centro", "producto", "cantidad", "estado")
     search_fields = ("numero", "centro__nombre", "centro__codigo", "producto")
     list_filter = ("estado", "fecha", "producto")
+
+
+@admin.register(CalendarioEscolar)
+class CalendarioEscolarAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "empresa", "inicio_docencia", "fin_docencia", "dias_docencia_oficiales", "estado")
+    list_filter = ("estado", "empresa")
+
+
+@admin.register(DiaCalendarioEscolar)
+class DiaCalendarioEscolarAdmin(admin.ModelAdmin):
+    list_display = ("fecha", "calendario", "clasificacion", "origen")
+    list_filter = ("clasificacion", "calendario")
+
+
+admin.site.register(ProgramaMenu)
+admin.site.register(VersionProgramaMenu)
+admin.site.register(ItemCicloMenu)
+admin.site.register(AsignacionProgramaCentro)
+admin.site.register(ProgramacionMenuEscolar)
+admin.site.register(ExcepcionProgramacionMenu)
 
 
 @admin.register(ProductoFacturacion)
