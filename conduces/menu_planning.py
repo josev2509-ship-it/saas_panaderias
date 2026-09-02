@@ -47,6 +47,8 @@ def activar_calendario(calendario, *, usuario, request=None, forzar=False, justi
     calendario = CalendarioEscolar.objects.select_for_update().get(pk=calendario.pk, empresa=calendario.empresa)
     detectados = contar_docencia_regular(calendario)
     esperados = calendario.dias_docencia_oficiales
+    if esperados is None:
+        raise ValidationError("El calendario no tiene un total oficial declarado o confirmado.")
     if detectados != esperados and not (forzar and justificacion.strip()):
         raise ValidationError(
             f"Dias oficiales: {esperados}. Dias calculados: {detectados}. "

@@ -205,6 +205,7 @@ MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
 DOCUMENTOS_MAX_UPLOAD_SIZE = int(
     os.environ.get("DOCUMENTOS_MAX_UPLOAD_SIZE", 10 * 1024 * 1024)
 )
+CALENDAR_PDF_MAX_MB = int(os.environ.get("CALENDAR_PDF_MAX_MB", "30"))
 
 
 # =========================================================

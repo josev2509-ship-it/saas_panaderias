@@ -544,7 +544,7 @@ class CalendarioEscolar(models.Model):
     anio_fin = models.PositiveSmallIntegerField()
     inicio_docencia = models.DateField()
     fin_docencia = models.DateField()
-    dias_docencia_oficiales = models.PositiveSmallIntegerField(default=190)
+    dias_docencia_oficiales = models.PositiveSmallIntegerField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.BORRADOR)
     documento_fuente = models.FileField(upload_to="calendarios_escolares/", blank=True, null=True)
     diferencia_justificada = models.TextField(blank=True)
@@ -620,6 +620,77 @@ class FechaOficialCalendario(models.Model):
 
     def __str__(self):
         return f"{self.fecha}: {self.motivo}"
+
+
+class AnalisisDocumentoCalendario(models.Model):
+    class Estado(models.TextChoices):
+        PROCESANDO = "PROCESANDO", "Procesando"
+        DETECTADO = "DETECTADO", "Detectado"
+        REQUIERE_REVISION = "REQUIERE_REVISION", "Requiere revision"
+        CONFIRMADO = "CONFIRMADO", "Confirmado"
+        FALLIDO = "FALLIDO", "Fallido"
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="analisis_calendario")
+    calendario = models.ForeignKey(CalendarioEscolar, on_delete=models.PROTECT, null=True, blank=True, related_name="analisis_documentales")
+    archivo = models.FileField(upload_to="calendarios_escolares/analisis/")
+    nombre_original = models.CharField(max_length=255)
+    hash_sha256 = models.CharField(max_length=64, db_index=True)
+    proveedor = models.CharField(max_length=80)
+    version_proveedor = models.CharField(max_length=30, blank=True)
+    estado = models.CharField(max_length=25, choices=Estado.choices, default=Estado.PROCESANDO)
+    confianza = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    datos_detectados = models.JSONField(default=dict)
+    advertencias = models.JSONField(default=list)
+    texto_extraido = models.TextField(blank=True)
+    paginas = models.PositiveSmallIntegerField(default=0)
+    creado_por = models.ForeignKey(User, on_delete=models.PROTECT, related_name="analisis_calendario_creados")
+    confirmado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="analisis_calendario_confirmados")
+    confirmado_en = models.DateTimeField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-creado_en",)
+
+
+class TotalMensualCalendario(models.Model):
+    analisis = models.ForeignKey(AnalisisDocumentoCalendario, on_delete=models.CASCADE, related_name="totales_mensuales")
+    anio = models.PositiveSmallIntegerField()
+    mes = models.PositiveSmallIntegerField()
+    dias_declarados = models.PositiveSmallIntegerField(null=True, blank=True)
+    dias_calculados = models.PositiveSmallIntegerField(default=0)
+    diferencia = models.SmallIntegerField(default=0)
+    estado = models.CharField(max_length=25, default="REQUIERE_REVISION")
+    evidencia = models.TextField(blank=True)
+    pagina = models.PositiveSmallIntegerField(null=True, blank=True)
+    explicacion = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("anio", "mes")
+        constraints = [models.UniqueConstraint(fields=("analisis", "anio", "mes"), name="total_mensual_analisis_uniq")]
+
+
+class EventoDocumentoCalendario(models.Model):
+    class Estado(models.TextChoices):
+        DETECTADO = "DETECTADO", "Detectado"
+        CONFIRMADO = "CONFIRMADO", "Confirmado"
+        REQUIERE_REVISION = "REQUIERE_REVISION", "Requiere revision"
+        CORREGIDO = "CORREGIDO", "Corregido"
+
+    analisis = models.ForeignKey(AnalisisDocumentoCalendario, on_delete=models.CASCADE, related_name="eventos")
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField(null=True, blank=True)
+    clasificacion = models.CharField(max_length=25, choices=DiaCalendarioEscolar.Clasificacion.choices)
+    tipo_contextual = models.CharField(max_length=30, default="OTRO")
+    descripcion = models.CharField(max_length=255)
+    evidencia = models.TextField(blank=True)
+    pagina = models.PositiveSmallIntegerField(null=True, blank=True)
+    confianza = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    estado = models.CharField(max_length=25, choices=Estado.choices, default=Estado.DETECTADO)
+    confirmado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    confirmado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("fecha_inicio", "id")
 
 
 class ProgramaMenu(models.Model):

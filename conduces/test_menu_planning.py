@@ -8,6 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from openpyxl import load_workbook
+from auditoria.models import EventoAuditoria
 
 from conduces.menu_planning import (
     activar_calendario,
@@ -171,6 +172,23 @@ class MenuPlanningTests(TestCase):
         self.assertEqual(response.status_code, 302)
         dia.refresh_from_db()
         self.assertEqual(dia.clasificacion, DiaCalendarioEscolar.Clasificacion.DOCENCIA)
+
+    def test_correccion_manual_con_motivo_es_auditable(self):
+        self.calendario.estado = CalendarioEscolar.Estado.EN_REVISION
+        self.calendario.save()
+        dia = self.calendario.dias.get(fecha=date(2026, 8, 24))
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("clasificar_dia_calendario", args=[dia.pk]), {
+            "clasificacion": "SUSPENSION",
+            "motivo": "Suspension oficial extraordinaria",
+        })
+        self.assertEqual(response.status_code, 302)
+        dia.refresh_from_db()
+        self.assertEqual(dia.clasificacion, "SUSPENSION")
+        self.assertEqual(dia.ajustado_por, self.user)
+        evento = EventoAuditoria.objects.get(object_id=dia.pk, modulo="planificacion_menu")
+        self.assertEqual(evento.usuario, self.user)
+        self.assertEqual(evento.datos_nuevos["clasificacion"], "SUSPENSION")
 
     def test_feriado_no_desplaza_producto_del_miercoles(self):
         martes = self.calendario.dias.get(fecha=date(2026, 8, 25))

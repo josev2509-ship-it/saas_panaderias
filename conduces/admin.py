@@ -14,6 +14,9 @@ from .models import (
     CalendarioEscolar,
     DiaCalendarioEscolar,
     FechaOficialCalendario,
+    AnalisisDocumentoCalendario,
+    TotalMensualCalendario,
+    EventoDocumentoCalendario,
     ProgramaMenu,
     VersionProgramaMenu,
     ItemCicloMenu,
@@ -77,6 +80,17 @@ class FechaOficialCalendarioAdmin(admin.ModelAdmin):
     list_display = ("fecha", "anio_inicio", "anio_fin", "clasificacion", "motivo", "activa")
     list_filter = ("anio_inicio", "clasificacion", "activa")
     search_fields = ("motivo", "fuente")
+
+
+@admin.register(AnalisisDocumentoCalendario)
+class AnalisisDocumentoCalendarioAdmin(admin.ModelAdmin):
+    list_display = ("nombre_original", "empresa", "proveedor", "estado", "confianza", "creado_en")
+    list_filter = ("estado", "proveedor", "empresa")
+    readonly_fields = ("hash_sha256", "texto_extraido", "datos_detectados", "advertencias")
+
+
+admin.site.register(TotalMensualCalendario)
+admin.site.register(EventoDocumentoCalendario)
 
 
 admin.site.register(ProgramaMenu)

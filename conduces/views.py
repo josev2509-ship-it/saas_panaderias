@@ -47,6 +47,7 @@ import urllib.error
 from django.contrib.auth.hashers import make_password
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.base import ContentFile
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
 from auditoria.services import registrar_evento
@@ -84,7 +85,10 @@ from .models import (
     ItemCicloMenu,
     AsignacionProgramaCentro,
     ProgramacionMenuEscolar,
+    AnalisisDocumentoCalendario,
+    TotalMensualCalendario,
 )
+from .calendar_document_service import analizar_documento_calendario
 from .menu_planning import (
     activar_calendario,
     contar_docencia_regular,
@@ -3407,8 +3411,17 @@ def planificacion_menu_escolar(request):
             "no_lectivos": calendario_revision.dias.exclude(clasificacion=DiaCalendarioEscolar.Clasificacion.DOCENCIA).count(),
             "excepciones": calendario_revision.dias.exclude(origen="PREVISUALIZACION").count(),
         }
-        resumen_calendario["diferencia"] = resumen_calendario["calculados"] - resumen_calendario["oficiales"]
+        resumen_calendario["diferencia"] = (
+            resumen_calendario["calculados"] - resumen_calendario["oficiales"]
+            if resumen_calendario["oficiales"] is not None else None
+        )
         pagina_dias = Paginator(dias_revision, 31).get_page(request.GET.get("pagina"))
+    analisis_actual = (
+        AnalisisDocumentoCalendario.objects.filter(empresa=empresa, calendario=calendario_revision)
+        .prefetch_related("totales_mensuales", "eventos")
+        .first()
+        if calendario_revision else None
+    )
     return render(request, "planificacion_menu_escolar.html", {
         "empresa": empresa,
         "calendarios": calendarios,
@@ -3424,6 +3437,7 @@ def planificacion_menu_escolar(request):
         "pagina_dias": pagina_dias,
         "filtro_fecha": filtro_fecha,
         "filtro_clasificacion": filtro_clasificacion,
+        "analisis_actual": analisis_actual,
     })
 
 
@@ -3448,7 +3462,10 @@ def crear_calendario_escolar_planificacion(request):
                 anio_fin=int(request.POST.get("anio_fin")),
                 inicio_docencia=inicio,
                 fin_docencia=fin,
-                dias_docencia_oficiales=int(request.POST.get("dias_docencia_oficiales") or 190),
+                dias_docencia_oficiales=(
+                    int(request.POST.get("dias_docencia_oficiales"))
+                    if request.POST.get("dias_docencia_oficiales") else None
+                ),
                 estado=CalendarioEscolar.Estado.EN_REVISION,
                 documento_fuente=request.FILES.get("documento_fuente"),
             )
@@ -3492,6 +3509,62 @@ def crear_calendario_escolar_planificacion(request):
     except (ValidationError, ValueError, TypeError) as error:
         messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
     return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def subir_analizar_calendario(request):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    archivo = request.FILES.get("documento_fuente")
+    if not archivo:
+        messages.error(request, "Seleccione el PDF oficial que desea analizar.")
+        return redirect("planificacion_menu_escolar")
+    try:
+        analisis = analizar_documento_calendario(
+            empresa=empresa, usuario=request.user, archivo=archivo, request=request
+        )
+        if analisis.calendario_id:
+            destino = f"{reverse('planificacion_menu_escolar')}?calendario={analisis.calendario_id}"
+        else:
+            destino = reverse("planificacion_menu_escolar")
+        if analisis.estado == AnalisisDocumentoCalendario.Estado.DETECTADO:
+            messages.success(request, "Documento analizado: calendario consistente y listo para confirmacion.")
+        else:
+            messages.warning(request, "Documento conservado y analizado parcialmente; revise advertencias y discrepancias.")
+        return redirect(destino)
+    except ValidationError as error:
+        messages.error(request, "; ".join(error.messages))
+        return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def reanalizar_calendario(request, calendario_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    calendario = get_object_or_404(CalendarioEscolar, pk=calendario_id, empresa=empresa)
+    if not calendario.documento_fuente:
+        messages.error(request, "El calendario no conserva un PDF fuente para reanalizar.")
+        return redirect(f"{reverse('planificacion_menu_escolar')}?calendario={calendario.pk}")
+    with calendario.documento_fuente.open("rb") as fuente:
+        copia = ContentFile(fuente.read(), name=os.path.basename(calendario.documento_fuente.name))
+    try:
+        analisis = analizar_documento_calendario(
+            empresa=empresa, usuario=request.user, archivo=copia,
+            calendario=calendario, request=request,
+        )
+        if analisis.estado == AnalisisDocumentoCalendario.Estado.REQUIERE_REVISION:
+            messages.warning(request, "Reanalisis completado con advertencias; no se sobrescribio informacion historica protegida.")
+        else:
+            messages.success(request, "Documento reanalizado y previsualizacion regenerada.")
+    except ValidationError as error:
+        messages.error(request, "; ".join(error.messages))
+    return redirect(f"{reverse('planificacion_menu_escolar')}?calendario={calendario.pk}")
 
 
 @login_required(login_url="login_usuario")
