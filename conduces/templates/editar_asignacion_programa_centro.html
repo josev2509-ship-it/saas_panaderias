@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="app-page">
+  <header class="topbar">
+    <div>
+      <h1>Editar asignación</h1>
+      <p>Actualiza la planificación futura sin reescribir programación histórica.</p>
+    </div>
+    <div class="form-actions">
+      <a class="btn btn-secondary" href="{% url 'planificacion_menu_escolar' %}">Volver a planificación</a>
+      <a class="btn btn-light" href="{% url 'inicio' %}">Inicio</a>
+    </div>
+  </header>
+
+  <section class="card">
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      <div>
+        <label for="centro_id">Centro educativo</label>
+        <select id="centro_id" name="centro_id" required>
+          {% for centro in centros %}
+            <option value="{{ centro.id }}"{% if centro.id == asignacion.centro_id %} selected{% endif %}>{{ centro }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="programa_id">Programa de menú</label>
+        <select id="programa_id" name="programa_id" required>
+          {% for programa in programas_asignables %}
+            <option value="{{ programa.id }}"{% if programa.id == asignacion.programa_id %} selected{% endif %}>{{ programa }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <fieldset>
+        <legend>Días de entrega</legend>
+        <div class="menu-delivery-days">
+          {% for numero, nombre in dias_semana %}
+            <label><input type="checkbox" name="dias_entrega" value="{{ numero }}"{% if numero in asignacion.dias_entrega %} checked{% endif %}> {{ nombre }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div>
+        <label for="vigente_desde">Inicio de vigencia</label>
+        <input id="vigente_desde" type="date" name="vigente_desde" value="{{ asignacion.vigente_desde|date:'Y-m-d' }}" required>
+      </div>
+      <div>
+        <label for="vigente_hasta">Fin de vigencia</label>
+        <input id="vigente_hasta" type="date" name="vigente_hasta"{% if asignacion.vigente_hasta %} value="{{ asignacion.vigente_hasta|date:'Y-m-d' }}"{% endif %}>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">Guardar cambios</button>
+        <a class="btn btn-secondary" href="{% url 'planificacion_menu_escolar' %}">Cancelar</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

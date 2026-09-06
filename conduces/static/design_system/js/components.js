@@ -48,6 +48,7 @@
   document.querySelectorAll("table").forEach((table, tableIndex) => {
     table.classList.add("ds-enterprise-table"); table.parentElement?.classList.add("ds-enterprise-table-wrap");
     table.querySelectorAll("th").forEach(th => { th.tabIndex = 0; th.setAttribute("scope", "col"); });
+    if (table.dataset.enterpriseControls === "off") return;
     if (!table.tHead || table.dataset.enterpriseReady) return; table.dataset.enterpriseReady = "true";
     const toolbar = document.createElement("div"); toolbar.className = "ds-table-toolbar"; toolbar.setAttribute("role", "toolbar");
     const search = document.createElement("input"); search.type = "search"; search.placeholder = "Buscar en la tabla"; search.setAttribute("aria-label", "Buscar en la tabla");

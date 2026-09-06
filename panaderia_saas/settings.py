@@ -181,18 +181,141 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": (
-            "django.contrib.staticfiles.storage.StaticFilesStorage"
-            if DEBUG
-            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
-        ),
-    },
-}
+# =========================================================
+# Storage
+#
+# Local:
+#   FileSystemStorage -> media/
+#
+# Produccion:
+#   Railway Storage Bucket compatible con S3.
+#
+# USE_S3_STORAGE debe habilitarse solamente en el entorno
+# de produccion. Las credenciales nunca se guardan en Git.
+# =========================================================
+
+USE_S3_STORAGE = env_bool(
+    "USE_S3_STORAGE",
+    False,
+)
+
+STATIC_STORAGE_BACKEND = (
+    "django.contrib.staticfiles.storage.StaticFilesStorage"
+    if DEBUG
+    else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+)
+
+
+if USE_S3_STORAGE:
+
+    # Railway puede inyectar las credenciales usando sus
+    # nombres nativos o nombres compatibles con AWS.
+    S3_BUCKET_NAME = (
+        os.environ.get("BUCKET")
+        or os.environ.get("AWS_S3_BUCKET_NAME")
+        or os.environ.get("AWS_STORAGE_BUCKET_NAME")
+    )
+
+    S3_ACCESS_KEY_ID = (
+        os.environ.get("ACCESS_KEY_ID")
+        or os.environ.get("AWS_ACCESS_KEY_ID")
+    )
+
+    S3_SECRET_ACCESS_KEY = (
+        os.environ.get("SECRET_ACCESS_KEY")
+        or os.environ.get("AWS_SECRET_ACCESS_KEY")
+    )
+
+    S3_REGION_NAME = (
+        os.environ.get("REGION")
+        or os.environ.get("AWS_DEFAULT_REGION")
+        or os.environ.get("AWS_S3_REGION_NAME")
+        or "auto"
+    )
+
+    S3_ENDPOINT_URL = (
+        os.environ.get("ENDPOINT")
+        or os.environ.get("AWS_ENDPOINT_URL")
+        or os.environ.get("AWS_S3_ENDPOINT_URL")
+    )
+
+    S3_ADDRESSING_STYLE = (
+        os.environ.get("AWS_S3_URL_STYLE")
+        or os.environ.get("AWS_S3_ADDRESSING_STYLE")
+        or "virtual"
+    ).strip().lower()
+
+    if S3_ADDRESSING_STYLE not in {
+        "virtual",
+        "path",
+    }:
+        S3_ADDRESSING_STYLE = "virtual"
+
+    faltantes_storage = []
+
+    if not S3_BUCKET_NAME:
+        faltantes_storage.append("BUCKET")
+
+    if not S3_ACCESS_KEY_ID:
+        faltantes_storage.append("ACCESS_KEY_ID")
+
+    if not S3_SECRET_ACCESS_KEY:
+        faltantes_storage.append("SECRET_ACCESS_KEY")
+
+    if not S3_ENDPOINT_URL:
+        faltantes_storage.append("ENDPOINT")
+
+    if faltantes_storage:
+        raise ImproperlyConfigured(
+            "USE_S3_STORAGE esta habilitado pero faltan "
+            "variables del almacenamiento: "
+            + ", ".join(faltantes_storage)
+        )
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "bucket_name": S3_BUCKET_NAME,
+                "access_key": S3_ACCESS_KEY_ID,
+                "secret_key": S3_SECRET_ACCESS_KEY,
+                "region_name": S3_REGION_NAME,
+                "endpoint_url": S3_ENDPOINT_URL,
+                "addressing_style": S3_ADDRESSING_STYLE,
+
+                # Railway Buckets son privados.
+                # Las URL generadas permanecen firmadas.
+                "querystring_auth": True,
+                "querystring_expire": 900,
+
+                "default_acl": None,
+
+                # Mantiene comportamiento similar a
+                # FileSystemStorage ante nombres repetidos.
+                "file_overwrite": False,
+
+                # Todo el contenido operativo vive bajo
+                # una raiz clara dentro del bucket.
+                "location": "media",
+            },
+        },
+        "staticfiles": {
+            "BACKEND": STATIC_STORAGE_BACKEND,
+        },
+    }
+
+else:
+
+    STORAGES = {
+        "default": {
+            "BACKEND": (
+                "django.core.files.storage.FileSystemStorage"
+            ),
+        },
+        "staticfiles": {
+            "BACKEND": STATIC_STORAGE_BACKEND,
+        },
+    }
 
 
 # =========================================================

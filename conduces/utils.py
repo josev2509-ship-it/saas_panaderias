@@ -472,6 +472,7 @@ def suscripcion_requerida(view_func):
             "relacion-diaria/pdf",
             "relacion-general/pdf",
             "nota-aclaratoria",
+            "documentos-institucionales",
             "facturacion/generar",
             "factura",
             "pdf",

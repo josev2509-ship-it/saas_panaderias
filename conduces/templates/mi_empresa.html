@@ -78,6 +78,225 @@
                 <div>
                     <label>Logo de la empresa</label>
                     <input type="file" name="logo" accept="image/*">
+
+                <div style="
+                    margin-top:24px;
+                    padding-top:22px;
+                    border-top:1px solid #e5e7eb;
+                ">
+                    <div style="margin-bottom:18px;">
+                        <h3 style="
+                            margin:0 0 5px 0;
+                            font-size:18px;
+                            font-weight:800;
+                            color:#0f172a;
+                        ">
+                            Recursos para documentos institucionales
+                        </h3>
+
+                        <p style="
+                            margin:0;
+                            color:#64748b;
+                            font-size:13px;
+                            line-height:1.5;
+                        ">
+                            Configure la firma autorizada y el sello de la empresa.
+                            Su incorporación en cada documento seguirá siendo opcional.
+                        </p>
+                    </div>
+
+                    <div style="
+                        display:grid;
+                        grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+                        gap:18px;
+                    ">
+
+                        <!-- FIRMA -->
+                        <div style="
+                            border:1px solid #dbe3ef;
+                            border-radius:12px;
+                            padding:18px;
+                            background:#fff;
+                        ">
+                            <div style="
+                                font-weight:800;
+                                color:#0f172a;
+                                margin-bottom:5px;
+                            ">
+                                Firma autorizada
+                            </div>
+
+                            <div style="
+                                font-size:12px;
+                                color:#64748b;
+                                margin-bottom:14px;
+                            ">
+                                Preferiblemente PNG con fondo transparente.
+                            </div>
+
+                            {% if empresa.firma_autorizada %}
+                                <div style="
+                                    min-height:100px;
+                                    display:flex;
+                                    align-items:center;
+                                    justify-content:center;
+                                    background:#f8fafc;
+                                    border:1px dashed #cbd5e1;
+                                    border-radius:9px;
+                                    padding:10px;
+                                    margin-bottom:12px;
+                                ">
+                                    <img
+                                        src="{{ empresa.firma_autorizada.url }}"
+                                        alt="Firma autorizada"
+                                        style="
+                                            display:block;
+                                            max-width:220px;
+                                            max-height:85px;
+                                            object-fit:contain;
+                                        "
+                                    >
+                                </div>
+
+                                <label style="
+                                    display:flex;
+                                    align-items:center;
+                                    gap:8px;
+                                    font-size:12px;
+                                    color:#b42318;
+                                    margin-bottom:12px;
+                                ">
+                                    <input
+                                        type="checkbox"
+                                        name="eliminar_firma_autorizada"
+                                        value="1"
+                                    >
+                                    Eliminar firma actual
+                                </label>
+                            {% endif %}
+
+                            <input
+                                type="file"
+                                name="firma_autorizada"
+                                accept="image/png,image/jpeg,image/webp"
+                            >
+
+                            <div style="
+                                margin-top:18px;
+                                display:grid;
+                                gap:14px;
+                            ">
+                                <div>
+                                    <label>
+                                        Nombre del firmante predeterminado
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="firmante_predeterminado"
+                                        value="{{ empresa.firmante_predeterminado|default:'' }}"
+                                        placeholder="Ej.: Andrés Rodríguez Castro"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label>
+                                        Cargo del firmante
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="cargo_firmante_predeterminado"
+                                        value="{{ empresa.cargo_firmante_predeterminado|default:'' }}"
+                                        placeholder="Ej.: Gerente"
+                                    >
+                                </div>
+
+                                <div style="
+                                    font-size:12px;
+                                    line-height:1.5;
+                                    color:#64748b;
+                                ">
+                                    Estos datos se utilizarán por defecto
+                                    en los documentos institucionales y
+                                    podrán modificarse en cada documento.
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- SELLO -->
+                        <div style="
+                            border:1px solid #dbe3ef;
+                            border-radius:12px;
+                            padding:18px;
+                            background:#fff;
+                        ">
+                            <div style="
+                                font-weight:800;
+                                color:#0f172a;
+                                margin-bottom:5px;
+                            ">
+                                Sello institucional
+                            </div>
+
+                            <div style="
+                                font-size:12px;
+                                color:#64748b;
+                                margin-bottom:14px;
+                            ">
+                                Utilice una imagen limpia del sello institucional.
+                            </div>
+
+                            {% if empresa.sello_institucional %}
+                                <div style="
+                                    min-height:100px;
+                                    display:flex;
+                                    align-items:center;
+                                    justify-content:center;
+                                    background:#f8fafc;
+                                    border:1px dashed #cbd5e1;
+                                    border-radius:9px;
+                                    padding:10px;
+                                    margin-bottom:12px;
+                                ">
+                                    <img
+                                        src="{{ empresa.sello_institucional.url }}"
+                                        alt="Sello institucional"
+                                        style="
+                                            display:block;
+                                            max-width:150px;
+                                            max-height:100px;
+                                            object-fit:contain;
+                                        "
+                                    >
+                                </div>
+
+                                <label style="
+                                    display:flex;
+                                    align-items:center;
+                                    gap:8px;
+                                    font-size:12px;
+                                    color:#b42318;
+                                    margin-bottom:12px;
+                                ">
+                                    <input
+                                        type="checkbox"
+                                        name="eliminar_sello_institucional"
+                                        value="1"
+                                    >
+                                    Eliminar sello actual
+                                </label>
+                            {% endif %}
+
+                            <input
+                                type="file"
+                                name="sello_institucional"
+                                accept="image/png,image/jpeg,image/webp"
+                            >
+                        </div>
+
+                    </div>
+                </div>
+
                 </div>
             </div>
 

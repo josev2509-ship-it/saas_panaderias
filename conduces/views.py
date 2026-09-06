@@ -25,8 +25,11 @@ from django.contrib.auth.hashers import make_password
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import from_excel
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.drawing.image import Image as XLImage
+from openpyxl.utils import get_column_letter
 
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Table, TableStyle, Paragraph
@@ -110,6 +113,7 @@ from .utils import (
 # =====================================================
 
 logger_verificacion_email = logging.getLogger("conduces.verificacion_email")
+logger_menu_documento = logging.getLogger("conduces.menu_documento")
 
 def convertir_fecha(fecha_str):
     if not fecha_str:
@@ -902,74 +906,169 @@ def generar_conduces_automaticos(request):
             messages.error(request, "Debe completar las fechas.")
             return redirect("generar_conduces")
 
-        fecha_desde = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
-        fecha_hasta = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+        try:
+            fecha_desde = datetime.strptime(
+                fecha_desde, "%Y-%m-%d"
+            ).date()
+            fecha_hasta = datetime.strptime(
+                fecha_hasta, "%Y-%m-%d"
+            ).date()
+        except ValueError:
+            messages.error(request, "El rango de fechas no es válido.")
+            return redirect("generar_conduces")
 
         if fecha_desde > fecha_hasta:
-            messages.error(request, "La fecha desde no puede ser mayor que la fecha hasta.")
+            messages.error(
+                request,
+                "La fecha desde no puede ser mayor que la fecha hasta."
+            )
             return redirect("generar_conduces")
 
-        centros = CentroEducativo.objects.filter(empresa=empresa).order_by("orden_carga", "id")
-        menus = MenuDiario.objects.filter(
-            empresa=empresa,
-            fecha__range=[fecha_desde, fecha_hasta]
-        ).order_by("fecha")
+        # -------------------------------------------------
+        # Fuente operativa:
+        # Programación de menú escolar materializada.
+        #
+        # Cada fila PROGRAMADO/EXTRAORDINARIO ya identifica:
+        # fecha + centro + producto.
+        # -------------------------------------------------
+        programaciones = (
+            ProgramacionMenuEscolar.objects
+            .filter(
+                empresa=empresa,
+                fecha__range=[fecha_desde, fecha_hasta],
+                estado__in=[
+                    ProgramacionMenuEscolar.Estado.PROGRAMADO,
+                    ProgramacionMenuEscolar.Estado.EXTRAORDINARIO,
+                ],
+            )
+            .exclude(producto="")
+            .select_related(
+                "centro",
+                "programa",
+                "version",
+                "asignacion",
+            )
+            .order_by(
+                "fecha",
+                "centro__orden_carga",
+                "centro_id",
+                "id",
+            )
+        )
 
-        if not centros.exists():
-            messages.error(request, "No hay centros cargados.")
-            return redirect("generar_conduces")
-
-        if not menus.exists():
-            messages.error(request, "No hay menú cargado para ese rango de fechas.")
+        if not programaciones.exists():
+            messages.error(
+                request,
+                "No hay programación de menú escolar disponible "
+                "para generar conduces en ese rango de fechas."
+            )
             return redirect("generar_conduces")
 
         def obtener_largo_formato(valor):
-            return len(str(valor)) if str(valor).startswith("0") else None
+            return (
+                len(str(valor))
+                if str(valor).startswith("0")
+                else None
+            )
 
-        ultimo = Conduce.objects.filter(empresa=empresa).order_by("-id").first()
+        # La numeración documental considera también conduces
+        # eliminados lógicamente para evitar reutilizar números.
+        ultimo = (
+            Conduce.all_objects
+            .filter(empresa=empresa)
+            .order_by("-id")
+            .first()
+        )
 
         if numero_inicial:
-            numero = int(numero_inicial)
+            try:
+                numero = int(numero_inicial)
+            except ValueError:
+                messages.error(
+                    request,
+                    "El número inicial de conduce debe ser numérico."
+                )
+                return redirect("generar_conduces")
+
             largo = obtener_largo_formato(numero_inicial)
             empresa.numero_inicial_conduce = numero_inicial
-            empresa.save()
-        elif ultimo:
+            empresa.save(update_fields=["numero_inicial_conduce"])
+
+        elif ultimo and ultimo.numero and str(ultimo.numero).isdigit():
             numero = int(ultimo.numero) + 1
             largo = obtener_largo_formato(ultimo.numero)
+
         else:
-            numero = int(empresa.numero_inicial_conduce or "1")
-            largo = obtener_largo_formato(empresa.numero_inicial_conduce or "1")
+            formato_base = str(
+                empresa.numero_inicial_conduce or "1"
+            )
+            numero = int(formato_base)
+            largo = obtener_largo_formato(formato_base)
 
         total_generados = 0
+        total_existentes = 0
 
-        for menu in menus:
-            for centro in centros:
-                existe = Conduce.objects.filter(
-                    empresa=empresa,
-                    fecha=menu.fecha,
-                    centro=centro,
-                ).exists()
+        for programacion in programaciones:
+            # Un centro debe tener como máximo un conduce operativo
+            # por fecha. También revisamos bajas lógicas para no
+            # recrear silenciosamente un documento eliminado.
+            existe = Conduce.all_objects.filter(
+                empresa=empresa,
+                fecha=programacion.fecha,
+                centro=programacion.centro,
+            ).exists()
 
-                if not existe:
-                    numero_final = str(numero).zfill(largo) if largo else str(numero)
+            if existe:
+                total_existentes += 1
+                continue
 
-                    Conduce.objects.create(
-                        empresa=empresa,
-                        numero=numero_final,
-                        fecha=menu.fecha,
-                        centro=centro,
-                        producto=menu.producto,
-                        cantidad=centro.matricula,
-                        estado="borrador",
-                    )
+            numero_final = (
+                str(numero).zfill(largo)
+                if largo
+                else str(numero)
+            )
 
-                    numero += 1
-                    total_generados += 1
+            Conduce.objects.create(
+                empresa=empresa,
+                numero=numero_final,
+                fecha=programacion.fecha,
+                centro=programacion.centro,
+                producto=programacion.producto,
+                cantidad=programacion.centro.matricula,
+                estado="borrador",
+            )
 
-        messages.success(request, f"Se generaron {total_generados} conduces.")
+            numero += 1
+            total_generados += 1
+
+        if total_generados:
+            mensaje = (
+                f"Se generaron {total_generados} conduces "
+                f"desde la programación de menú escolar."
+            )
+            if total_existentes:
+                mensaje += (
+                    f" {total_existentes} ya existían y no "
+                    f"se duplicaron."
+                )
+            messages.success(request, mensaje)
+        else:
+            messages.info(
+                request,
+                "No se generaron conduces nuevos. "
+                f"{total_existentes} conduces del rango ya existían."
+            )
+
         return redirect("generar_conduces")
 
-    return render(request, "generar_conduces.html", {"empresa": empresa, "empresas": empresas})
+    return render(
+        request,
+        "generar_conduces.html",
+        {
+            "empresa": empresa,
+            "empresas": empresas,
+        },
+    )
 
 
 # =====================================================
@@ -1082,12 +1181,48 @@ def eliminar_conduce(request, conduce_id):
 @modulo_requerido("modulo_conduces")
 def anular_conduce(request, conduce_id):
     empresa = obtener_empresa(request)
-    conduce = get_object_or_404(Conduce, id=conduce_id, empresa=empresa)
-    conduce.estado = "anulado"
-    conduce.save()
 
-    messages.success(request, "Conduce anulado correctamente.")
-    return redirect("buscar_conduces")
+    conduce = get_object_or_404(
+        Conduce,
+        id=conduce_id,
+        empresa=empresa,
+    )
+
+    if request.method != "POST":
+        messages.error(
+            request,
+            "La anulación del conduce debe confirmarse desde el formulario.",
+        )
+        return redirect("vista_conduce", conduce_id=conduce.id)
+
+    if conduce.estado == "anulado":
+        messages.info(
+            request,
+            f"El conduce {conduce.numero} ya se encuentra anulado.",
+        )
+        return redirect("vista_conduce", conduce_id=conduce.id)
+
+    motivo = request.POST.get("motivo_anulacion", "").strip()
+
+    if not motivo:
+        messages.error(
+            request,
+            "Debe indicar el motivo de anulación del conduce.",
+        )
+        return redirect("vista_conduce", conduce_id=conduce.id)
+
+    conduce.estado = "anulado"
+    conduce.observaciones = motivo
+    conduce.save(update_fields=("estado", "observaciones"))
+
+    messages.success(
+        request,
+        f"Conduce {conduce.numero} anulado correctamente. "
+        "El motivo quedó registrado para fines documentales.",
+    )
+
+    return redirect("vista_conduce", conduce_id=conduce.id)
+
 
 
 @login_required(login_url="login_usuario")
@@ -1146,8 +1281,32 @@ def acciones_conduces(request):
         )
 
         if accion == "anular":
-            conduces_qs.update(estado="anulado")
-            messages.success(request, "Conduces anulados correctamente.")
+            motivo_anulacion = request.POST.get(
+                "motivo_anulacion",
+                "",
+            ).strip()
+
+            if not motivo_anulacion:
+                messages.error(
+                    request,
+                    "Debe indicar el motivo de anulación de los conduces seleccionados.",
+                )
+                return redirect("buscar_conduces")
+
+            conduces_a_anular = conduces_qs.exclude(estado="anulado")
+
+            cantidad_anulados = conduces_a_anular.count()
+
+            conduces_a_anular.update(
+                estado="anulado",
+                observaciones=motivo_anulacion,
+            )
+
+            messages.success(
+                request,
+                f"{cantidad_anulados} conduce(s) anulado(s) correctamente. "
+                "El motivo quedó registrado para fines documentales.",
+            )
             return redirect("buscar_conduces")
 
         if accion == "entregado":
@@ -1265,19 +1424,33 @@ def generar_relacion_diaria_pdf(request):
 @modulo_requerido("modulo_reportes")
 @suscripcion_requerida
 def preparar_nota_aclaratoria(request):
-    empresa = obtener_empresa(request)
+    """
+    Compatibilidad con el flujo anterior.
 
-    fecha_inicio = request.GET.get("fecha_inicio", "")
-    fecha_fin = request.GET.get("fecha_fin", "")
+    Cualquier acceso antiguo a Preparar nota aclaratoria
+    es enviado al nuevo motor documental conservando el
+    rango de fechas seleccionado.
+    """
+    from urllib.parse import urlencode
+    from django.urls import reverse
 
-    return render(request, "preparar_nota_aclaratoria.html", {
-        "empresa": empresa,
-        "fecha_inicio": fecha_inicio,
-        "fecha_fin": fecha_fin,
-        "firmante": "",
-        "cargo": "",
-        "comentario": "",
-    })
+    fecha_inicio = request.GET.get("fecha_inicio", "").strip()
+    fecha_fin = request.GET.get("fecha_fin", "").strip()
+
+    parametros = {}
+
+    if fecha_inicio:
+        parametros["fecha_inicio"] = fecha_inicio
+
+    if fecha_fin:
+        parametros["fecha_fin"] = fecha_fin
+
+    url = reverse("nuevo_documento_institucional")
+
+    if parametros:
+        url += "?" + urlencode(parametros)
+
+    return redirect(url)
 
 # =====================================================
 # NOTA ACLARATORIA
@@ -1383,7 +1556,13 @@ def generar_nota_aclaratoria_pdf(request):
 
         if empresa.logo:
             try:
-                logo = ImageReader(empresa.logo.path)
+                with empresa.logo.storage.open(
+                    empresa.logo.name,
+                    "rb",
+                ) as archivo_logo:
+                    logo = ImageReader(
+                        BytesIO(archivo_logo.read())
+                    )
                 pdf.drawImage(
                     logo,
                     width / 2 - 45,
@@ -3078,10 +3257,36 @@ def mi_empresa(request):
         empresa.telefono = request.POST.get("telefono", "").strip()
         empresa.ciudad = request.POST.get("ciudad", "").strip()
         empresa.correo = request.POST.get("correo", "").strip()
+        empresa.firmante_predeterminado = request.POST.get(
+            "firmante_predeterminado",
+            "",
+        ).strip()
+
+        empresa.cargo_firmante_predeterminado = request.POST.get(
+            "cargo_firmante_predeterminado",
+            "",
+        ).strip()
         empresa.numero_inicial_conduce = request.POST.get("numero_inicial_conduce", "0001").strip()
 
         if request.FILES.get("logo"):
             empresa.logo = request.FILES.get("logo")
+
+        if request.FILES.get("firma_autorizada"):
+            empresa.firma_autorizada = request.FILES.get("firma_autorizada")
+
+        if request.FILES.get("sello_institucional"):
+            empresa.sello_institucional = request.FILES.get("sello_institucional")
+
+        # Permite retirar los recursos sin afectar el logo.
+        if request.POST.get("eliminar_firma_autorizada") == "1":
+            if empresa.firma_autorizada:
+                empresa.firma_autorizada.delete(save=False)
+            empresa.firma_autorizada = None
+
+        if request.POST.get("eliminar_sello_institucional") == "1":
+            if empresa.sello_institucional:
+                empresa.sello_institucional.delete(save=False)
+            empresa.sello_institucional = None
 
         empresa.modulo_conduces = request.POST.get("modulo_conduces") == "on"
         empresa.modulo_centros = request.POST.get("modulo_centros") == "on"
@@ -3195,7 +3400,13 @@ def generar_carta_pdf(request):
     # Logo solo para cartas administrativas
     if empresa.logo:
         try:
-            logo = ImageReader(empresa.logo.path)
+            with empresa.logo.storage.open(
+                empresa.logo.name,
+                "rb",
+            ) as archivo_logo:
+                logo = ImageReader(
+                    BytesIO(archivo_logo.read())
+                )
             pdf.drawImage(logo, 50, 705, width=75, height=75, preserveAspectRatio=True, mask="auto")
         except Exception:
             pass
@@ -3382,11 +3593,138 @@ def editar_dia_no_docencia(request, dia_id):
 def planificacion_menu_escolar(request):
     empresa = obtener_empresa(request)
     calendarios = CalendarioEscolar.objects.filter(empresa=empresa).prefetch_related("dias")
-    programas = ProgramaMenu.objects.filter(empresa=empresa).prefetch_related("versiones")
+    programas = ProgramaMenu.objects.filter(
+        empresa=empresa
+    ).prefetch_related(
+        "versiones__items"
+    )
+    programas_asignables = ProgramaMenu.objects.filter(
+        empresa=empresa,
+        versiones__estado=VersionProgramaMenu.Estado.ACTIVA,
+    ).distinct().order_by("nombre")
+
+    for programa in programas:
+        for version in programa.versiones.all():
+            items_version = list(version.items.all())
+
+            if programa.modalidad in (
+                ProgramaMenu.Modalidad.REGULAR,
+                ProgramaMenu.Modalidad.PREPARA,
+            ):
+                semanas_matriz = range(1, version.semanas_ciclo + 1)
+                if programa.modalidad == ProgramaMenu.Modalidad.PREPARA:
+                    dias = [
+                        (5, "Sábado"),
+                        (6, "Domingo"),
+                    ]
+                else:
+                    # La matriz REGULAR conserva exactamente su preparación existente.
+                    dias = [
+                        (0, "Lunes"),
+                        (1, "Martes"),
+                        (2, "Miércoles"),
+                        (3, "Jueves"),
+                        (4, "Viernes"),
+                    ]
+
+                posiciones_requeridas = {
+                    (semana, dia)
+                    for semana in semanas_matriz
+                    for dia, _nombre in dias
+                }
+
+                mapa_items = {
+                    (item.semana, item.dia_semana): item
+                    for item in items_version
+                    if item.dia_semana in {numero for numero, _nombre in dias}
+                }
+
+                posiciones_configuradas = set(mapa_items.keys())
+
+                version.total_posiciones_requeridas = len(
+                    posiciones_requeridas
+                )
+
+                version.total_posiciones_configuradas = len(
+                    posiciones_configuradas & posiciones_requeridas
+                )
+
+                version.posiciones_faltantes = (
+                    version.total_posiciones_requeridas
+                    - version.total_posiciones_configuradas
+                )
+
+                version.ciclo_completo = (
+                    version.posiciones_faltantes == 0
+                )
+
+                version.matriz_ciclo = []
+                version.matriz_dias = dias
+                version.tiene_importacion_automatica = any(
+                    item.observacion == "Importado automáticamente desde documento oficial."
+                    for item in items_version
+                )
+
+                for semana in semanas_matriz:
+                    fila = {
+                        "semana": semana,
+                        "dias": [],
+                    }
+
+                    for numero_dia, nombre_dia in dias:
+                        fila["dias"].append({
+                            "numero": numero_dia,
+                            "nombre": nombre_dia,
+                            "item": mapa_items.get(
+                                (semana, numero_dia)
+                            ),
+                        })
+
+                    version.matriz_ciclo.append(fila)
+
+            else:
+                version.total_posiciones_requeridas = None
+                version.total_posiciones_configuradas = len(
+                    items_version
+                )
+                version.posiciones_faltantes = None
+                version.ciclo_completo = bool(items_version)
+                version.matriz_ciclo = None
+                version.matriz_dias = None
+                version.ciclo_completo = version.items.exists()
     asignaciones = AsignacionProgramaCentro.objects.filter(
         centro__empresa=empresa,
         programa__empresa=empresa,
     ).select_related("centro", "programa")
+    nombres_dias = ("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+    for asignacion in asignaciones:
+        asignacion.dias_entrega_nombres = " · ".join(
+            nombres_dias[dia] for dia in asignacion.dias_entrega if 0 <= dia < len(nombres_dias)
+        )
+
+        materializadas = ProgramacionMenuEscolar.objects.filter(
+            empresa=empresa,
+            asignacion=asignacion,
+        ).order_by("fecha")
+
+        asignacion.total_fechas_programadas = materializadas.count()
+        primera_programada = materializadas.first()
+        ultima_programada = materializadas.last()
+
+        asignacion.programada_desde = (
+            primera_programada.fecha if primera_programada else None
+        )
+        asignacion.programada_hasta = (
+            ultima_programada.fecha if ultima_programada else None
+        )
+
+        ultima_actualizada = materializadas.order_by(
+            "-actualizada_en", "-id"
+        ).first()
+
+        asignacion.calendario_programado = (
+            ultima_actualizada.calendario if ultima_actualizada else None
+        )
     programaciones = ProgramacionMenuEscolar.objects.filter(empresa=empresa).select_related(
         "centro", "programa", "version"
     )[:100]
@@ -3426,6 +3764,7 @@ def planificacion_menu_escolar(request):
         "empresa": empresa,
         "calendarios": calendarios,
         "programas": programas,
+        "programas_asignables": programas_asignables,
         "asignaciones": asignaciones,
         "programaciones": programaciones,
         "centros": CentroEducativo.objects.filter(empresa=empresa).order_by("nombre"),
@@ -3736,9 +4075,123 @@ def crear_version_programa_menu(request, programa_id):
         version.full_clean()
         version.save()
         messages.success(request, "Version creada en borrador.")
+        if version.documento_fuente:
+            return redirect("analizar_version_programa_menu", version_id=version.id)
     except (ValidationError, ValueError, TypeError) as error:
         messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
     return redirect("planificacion_menu_escolar")
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+def analizar_version_programa_menu(request, version_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    version = get_object_or_404(VersionProgramaMenu, pk=version_id, programa__empresa=empresa)
+    if not version.documento_fuente:
+        messages.error(request, "Esta versión no tiene un documento oficial cargado.")
+        return redirect("planificacion_menu_escolar")
+    try:
+        from .menu_document_parser import LocalMenuPDFProvider
+        with version.documento_fuente.open("rb") as archivo:
+            resultado = LocalMenuPDFProvider().extract(archivo, modalidad=version.programa.modalidad)
+    except Exception:
+        logger_menu_documento.exception("Error analizando documento de menú version_id=%s", version.id)
+        messages.error(request, "No fue posible analizar el documento oficial del menú.")
+        return redirect("planificacion_menu_escolar")
+    dias = {0:"Lunes",1:"Martes",2:"Miércoles",3:"Jueves",4:"Viernes",5:"Sábado",6:"Domingo"}
+    dias_modalidad = [5, 6] if version.programa.modalidad == ProgramaMenu.Modalidad.PREPARA else [0, 1, 2, 3, 4]
+    total_esperado = 10 if version.programa.modalidad == ProgramaMenu.Modalidad.PREPARA else 25
+    encontrados = {(item.semana, item.dia_semana): item for item in resultado.items}
+    matriz = []
+    for semana in range(1, resultado.semanas_ciclo + 1):
+        fila = {"semana": semana, "items": []}
+        for dia in dias_modalidad:
+            item = encontrados.get((semana, dia))
+            fila["items"].append({"dia": dias[dia], "producto": item.producto if item else "", "detectado": bool(item)})
+        matriz.append(fila)
+    contexto = {
+        "version_menu": version,
+        "resultado": resultado,
+        "matriz": matriz,
+        "dias_columnas": [dias[dia] for dia in dias_modalidad],
+        "total_esperado": total_esperado,
+        "fecha_uso_sugerida": version.fecha_uso_desde or resultado.vigente_desde,
+    }
+    return render(request, "menu_analisis_documento.html", contexto)
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def aplicar_documento_programa_menu(request, version_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    version = get_object_or_404(VersionProgramaMenu, pk=version_id, programa__empresa=empresa)
+    if version.estado != VersionProgramaMenu.Estado.BORRADOR:
+        messages.error(request, "Solo puede importar el documento sobre una versión en borrador.")
+        return redirect("planificacion_menu_escolar")
+    if not version.documento_fuente:
+        messages.error(request, "Esta versión no tiene un documento oficial cargado.")
+        return redirect("planificacion_menu_escolar")
+    fecha_uso = convertir_fecha(request.POST.get("fecha_uso_desde"))
+    if not fecha_uso:
+        messages.error(request, "Seleccione la fecha desde la cual SASTRE utilizará este menú.")
+        return redirect("analizar_version_programa_menu", version_id=version.id)
+    try:
+        from .menu_document_parser import LocalMenuPDFProvider
+        with version.documento_fuente.open("rb") as archivo:
+            resultado = LocalMenuPDFProvider().extract(archivo, modalidad=version.programa.modalidad)
+        total_esperado = 10 if version.programa.modalidad == ProgramaMenu.Modalidad.PREPARA else 25
+        if not resultado.completo or len(resultado.items) != total_esperado or resultado.advertencias:
+            messages.error(request, f"El documento no contiene una matriz {version.programa.get_modalidad_display()} completa y segura de {total_esperado} posiciones. Revise el análisis antes de aplicarlo.")
+            return redirect("analizar_version_programa_menu", version_id=version.id)
+        vigencia_oficial = resultado.vigente_desde or version.vigente_desde
+        if fecha_uso < vigencia_oficial:
+            messages.error(request, "La fecha de uso en SASTRE no puede ser anterior a la vigencia oficial detectada.")
+            return redirect("analizar_version_programa_menu", version_id=version.id)
+        if version.vigente_hasta and fecha_uso > version.vigente_hasta:
+            messages.error(request, "La fecha de uso en SASTRE no puede ser posterior al fin de vigencia de esta versión.")
+            return redirect("analizar_version_programa_menu", version_id=version.id)
+        with transaction.atomic():
+            version.vigente_desde = vigencia_oficial
+            version.fecha_uso_desde = fecha_uso
+            version.semanas_ciclo = 5
+            version.full_clean()
+            version.save(update_fields=("vigente_desde", "fecha_uso_desde", "semanas_ciclo"))
+            posiciones_detectadas = {(detectado.semana, detectado.dia_semana) for detectado in resultado.items}
+            for existente in ItemCicloMenu.objects.filter(version=version):
+                if (existente.semana, existente.dia_semana) not in posiciones_detectadas:
+                    existente.delete()
+            for detectado in resultado.items:
+                item, creado = ItemCicloMenu.objects.update_or_create(version=version, semana=detectado.semana, dia_semana=detectado.dia_semana, defaults={"producto": detectado.producto, "es_suministrado": True, "observacion": "Importado automáticamente desde documento oficial."})
+                item.full_clean()
+                item.save()
+            registrar_evento(
+                empresa=empresa,
+                accion="CREAR",
+                modulo="planificacion_menu",
+                descripcion=f"Menú oficial aplicado a la versión {version.nombre}: {total_esperado} posiciones.",
+                usuario=request.user,
+                objeto=version,
+                request=request,
+                datos_nuevos={
+                    "version_id": version.id,
+                    "documento": os.path.basename(version.documento_fuente.name),
+                    "posiciones": total_esperado,
+                    "fecha_uso_desde": fecha_uso.isoformat(),
+                },
+            )
+        messages.success(request, f"Menú oficial aplicado correctamente: {total_esperado} de {total_esperado} posiciones de panadería fueron configuradas.")
+        return redirect("planificacion_menu_escolar")
+    except (ValidationError, ValueError, TypeError) as error:
+        messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
+    except Exception:
+        logger_menu_documento.exception("Error aplicando documento de menú version_id=%s", version.id)
+        messages.error(request, "No fue posible aplicar el documento oficial del menú.")
+    return redirect("analizar_version_programa_menu", version_id=version.id)
 
 
 @login_required(login_url="login_usuario")
@@ -3746,46 +4199,270 @@ def crear_version_programa_menu(request, programa_id):
 @require_POST
 def guardar_item_ciclo_menu(request, version_id):
     empresa = obtener_empresa(request)
+
     if not puede_gestionar_planificacion(request.user):
         raise PermissionDenied
-    version = get_object_or_404(VersionProgramaMenu, pk=version_id, programa__empresa=empresa)
-    if version.estado != VersionProgramaMenu.Estado.BORRADOR:
-        messages.error(request, "Solo puede editar items de una version en borrador.")
-        return redirect("planificacion_menu_escolar")
-    try:
-        item = ItemCicloMenu(
-            version=version,
-            semana=int(request.POST.get("semana")),
-            dia_semana=int(request.POST.get("dia_semana")),
-            producto=request.POST.get("producto", "").strip(),
-            es_suministrado=request.POST.get("es_suministrado") == "on",
-            observacion=request.POST.get("observacion", "").strip(),
-        )
-        item.full_clean()
-        ItemCicloMenu.objects.update_or_create(
-            version=version, semana=item.semana, dia_semana=item.dia_semana,
-            defaults={"producto": item.producto, "es_suministrado": item.es_suministrado, "observacion": item.observacion},
-        )
-        messages.success(request, "Item del ciclo guardado.")
-    except (ValidationError, ValueError, TypeError) as error:
-        messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
-    return redirect("planificacion_menu_escolar")
 
+    version = get_object_or_404(
+        VersionProgramaMenu,
+        pk=version_id,
+        programa__empresa=empresa,
+    )
+
+    if version.estado != VersionProgramaMenu.Estado.BORRADOR:
+        messages.error(
+            request,
+            "Solo puede editar posiciones de una versión en borrador."
+        )
+        return redirect("planificacion_menu_escolar")
+
+    try:
+        semana = int(request.POST.get("semana"))
+        dia_semana = int(request.POST.get("dia_semana"))
+        producto = request.POST.get("producto", "").strip()
+        es_suministrado = request.POST.get("es_suministrado") == "on"
+        observacion = request.POST.get("observacion", "").strip()
+
+        item_existente = ItemCicloMenu.objects.filter(
+            version=version,
+            semana=semana,
+            dia_semana=dia_semana,
+        ).first()
+
+        if item_existente:
+            item_existente.producto = producto
+            item_existente.es_suministrado = es_suministrado
+            item_existente.observacion = observacion
+
+            item_existente.full_clean(
+                exclude=["version", "semana", "dia_semana"]
+            )
+            item_existente.save(
+                update_fields=(
+                    "producto",
+                    "es_suministrado",
+                    "observacion",
+                )
+            )
+
+            messages.success(
+                request,
+                "Posición del menú actualizada correctamente."
+            )
+
+        else:
+            item = ItemCicloMenu(
+                version=version,
+                semana=semana,
+                dia_semana=dia_semana,
+                producto=producto,
+                es_suministrado=es_suministrado,
+                observacion=observacion,
+            )
+
+            item.full_clean()
+            item.save()
+
+            messages.success(
+                request,
+                "Posición del menú agregada correctamente."
+            )
+
+    except (ValidationError, ValueError, TypeError) as error:
+        messages.error(
+            request,
+            "; ".join(error.messages)
+            if hasattr(error, "messages")
+            else str(error)
+        )
+
+    return redirect("planificacion_menu_escolar")
 
 @login_required(login_url="login_usuario")
 @modulo_requerido("modulo_menu")
 @require_POST
 def activar_version_programa_menu(request, version_id):
     empresa = obtener_empresa(request)
+
     if not puede_gestionar_planificacion(request.user):
         raise PermissionDenied
-    version = get_object_or_404(VersionProgramaMenu, pk=version_id, programa__empresa=empresa)
-    if not version.items.exists():
-        messages.error(request, "La version no contiene items de ciclo.")
-    else:
-        version.estado = VersionProgramaMenu.Estado.ACTIVA
-        version.save(update_fields=("estado",))
-        messages.success(request, "Version de menu activada.")
+
+    version = get_object_or_404(
+        VersionProgramaMenu,
+        pk=version_id,
+        programa__empresa=empresa,
+    )
+
+    if version.estado != VersionProgramaMenu.Estado.BORRADOR:
+        messages.error(
+            request,
+            "Solo puede activar una versión que se encuentre en borrador."
+        )
+        return redirect("planificacion_menu_escolar")
+
+    if version.programa.modalidad in (
+        ProgramaMenu.Modalidad.REGULAR,
+        ProgramaMenu.Modalidad.PREPARA,
+    ):
+        if not version.fecha_uso_desde:
+            messages.error(
+                request,
+                "Indique desde qué fecha esta versión se utilizará operativamente antes de activarla."
+            )
+            return redirect("planificacion_menu_escolar")
+
+        if version.semanas_ciclo != 5:
+            messages.error(
+                request,
+                "La versión debe tener exactamente 5 semanas de ciclo antes de activarla."
+            )
+            return redirect("planificacion_menu_escolar")
+
+        if version.programa.modalidad == ProgramaMenu.Modalidad.PREPARA:
+            dias_requeridos = {
+                5: "sábado",
+                6: "domingo",
+            }
+        else:
+            dias_requeridos = {
+                0: "lunes",
+                1: "martes",
+                2: "miércoles",
+                3: "jueves",
+                4: "viernes",
+            }
+
+        posiciones_existentes = set(
+            version.items.filter(
+                semana__range=(1, 5),
+                dia_semana__in=dias_requeridos.keys(),
+            ).values_list("semana", "dia_semana")
+        )
+
+        posiciones_requeridas = {
+            (semana, dia)
+            for semana in range(1, 6)
+            for dia in dias_requeridos
+        }
+
+        posiciones_faltantes = sorted(
+            posiciones_requeridas - posiciones_existentes
+        )
+        total_requerido = len(posiciones_requeridas)
+        total_items = version.items.count()
+
+        if posiciones_faltantes or total_items != total_requerido:
+            total_configurado = len(posiciones_requeridas & posiciones_existentes)
+
+            faltantes_texto = [
+                f"Semana {semana} · {dias_requeridos[dia]}"
+                for semana, dia in posiciones_faltantes
+            ]
+
+            detalle_faltantes = ""
+            if faltantes_texto:
+                vista_faltantes = ", ".join(faltantes_texto[:10])
+                if len(faltantes_texto) > 10:
+                    vista_faltantes += (
+                        f" y {len(faltantes_texto) - 10} posiciones más"
+                    )
+                detalle_faltantes = f" Faltan: {vista_faltantes}."
+
+            detalle_extra = ""
+            if total_items > total_requerido:
+                detalle_extra = (
+                    f" Además existen {total_items - total_requerido} "
+                    "posiciones fuera de la matriz requerida."
+                )
+
+            messages.error(
+                request,
+                (
+                    "No se puede activar esta versión. "
+                    f"Hay {total_configurado} de {total_requerido} "
+                    "posiciones válidas configuradas."
+                    f"{detalle_faltantes}{detalle_extra}"
+                ),
+            )
+            return redirect("planificacion_menu_escolar")
+
+    elif not version.items.exists():
+        messages.error(
+            request,
+            "La versión no contiene posiciones de menú configuradas."
+        )
+        return redirect("planificacion_menu_escolar")
+
+    inicio_nuevo = version.fecha_uso_desde or version.vigente_desde
+    fin_nuevo = version.vigente_hasta
+    versiones_activas = VersionProgramaMenu.objects.filter(
+        programa=version.programa,
+        estado=VersionProgramaMenu.Estado.ACTIVA,
+    ).exclude(pk=version.pk)
+    superpuestas = []
+    for activa in versiones_activas:
+        inicio_activo = activa.fecha_uso_desde or activa.vigente_desde
+        if (fin_nuevo is None or inicio_activo <= fin_nuevo) and (
+            activa.vigente_hasta is None or inicio_nuevo <= activa.vigente_hasta
+        ):
+            superpuestas.append(activa.nombre)
+    if superpuestas:
+        messages.error(
+            request,
+            "No se puede activar esta versión porque su período operativo se superpone con "
+            f"una versión activa del mismo programa: {', '.join(superpuestas)}. "
+            "Cierre o revise primero la vigencia de la versión anterior.",
+        )
+        return redirect("planificacion_menu_escolar")
+
+    version.estado = VersionProgramaMenu.Estado.ACTIVA
+    version.save(update_fields=("estado",))
+
+    messages.success(
+        request,
+        "Versión de menú activada correctamente."
+    )
+
+    return redirect("planificacion_menu_escolar")
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def eliminar_version_programa_menu(request, version_id):
+    from django.db.models.deletion import ProtectedError
+
+    empresa = obtener_empresa(request)
+
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+
+    version = get_object_or_404(
+        VersionProgramaMenu,
+        pk=version_id,
+        programa__empresa=empresa,
+    )
+
+    if version.estado != VersionProgramaMenu.Estado.BORRADOR:
+        messages.error(
+            request,
+            "Solo se pueden eliminar versiones que se encuentren en borrador."
+        )
+        return redirect("planificacion_menu_escolar")
+
+    try:
+        with transaction.atomic():
+            version.items.all().delete()
+            version.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            "Esta versión no puede eliminarse porque posee información histórica u operativa relacionada."
+        )
+        return redirect("planificacion_menu_escolar")
+
+    messages.success(
+        request,
+        "Versión eliminada correctamente."
+    )
     return redirect("planificacion_menu_escolar")
 
 
@@ -3796,23 +4473,134 @@ def asignar_programa_centro(request):
     empresa = obtener_empresa(request)
     if not puede_gestionar_planificacion(request.user):
         raise PermissionDenied
-    centro = get_object_or_404(CentroEducativo, pk=request.POST.get("centro_id"), empresa=empresa)
-    programa = get_object_or_404(ProgramaMenu, pk=request.POST.get("programa_id"), empresa=empresa)
     try:
-        dias = sorted({int(valor) for valor in request.POST.getlist("dias_entrega")})
+        centro, programa, dias, vigente_desde, vigente_hasta = _datos_asignacion_desde_post(request, empresa)
         asignacion = AsignacionProgramaCentro(
             centro=centro, programa=programa, modalidad=programa.modalidad,
             dias_entrega=dias,
-            vigente_desde=convertir_fecha(request.POST.get("vigente_desde")),
-            vigente_hasta=convertir_fecha(request.POST.get("vigente_hasta")),
+            vigente_desde=vigente_desde,
+            vigente_hasta=vigente_hasta,
             creado_por=request.user,
         )
         asignacion.full_clean()
         asignacion.save()
-        messages.success(request, "Programacion de entregas asignada al centro.")
+        registrar_evento(
+            empresa=empresa, accion="CREAR", modulo="planificacion_menu",
+            descripcion=f"Asignación de menú creada para {centro}.", usuario=request.user,
+            objeto=asignacion, request=request,
+            datos_nuevos={"centro_id": centro.pk, "programa_id": programa.pk, "dias_entrega": dias,
+                          "vigente_desde": vigente_desde.isoformat(),
+                          "vigente_hasta": vigente_hasta.isoformat() if vigente_hasta else None},
+        )
+        messages.success(request, "Programación de entregas asignada al centro.")
     except (ValidationError, ValueError, TypeError) as error:
         messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
     return redirect("planificacion_menu_escolar")
+
+
+def _datos_asignacion_desde_post(request, empresa):
+    centro = get_object_or_404(CentroEducativo, pk=request.POST.get("centro_id"), empresa=empresa)
+    programa = get_object_or_404(ProgramaMenu, pk=request.POST.get("programa_id"), empresa=empresa)
+    if not programa.versiones.filter(estado=VersionProgramaMenu.Estado.ACTIVA).exists():
+        raise ValidationError("El programa seleccionado no tiene ninguna versión activa.")
+    dias = sorted({int(valor) for valor in request.POST.getlist("dias_entrega")})
+    if not dias:
+        raise ValidationError("Seleccione al menos un día de entrega.")
+    if any(dia < 0 or dia > 6 for dia in dias):
+        raise ValidationError("Los días de entrega deben estar entre lunes y domingo.")
+    vigente_desde = convertir_fecha(request.POST.get("vigente_desde"))
+    vigente_hasta = convertir_fecha(request.POST.get("vigente_hasta"))
+    if not vigente_desde:
+        raise ValidationError("La fecha inicial de vigencia es obligatoria.")
+    if vigente_hasta and vigente_hasta < vigente_desde:
+        raise ValidationError("La vigencia final no puede preceder a la inicial.")
+    return centro, programa, dias, vigente_desde, vigente_hasta
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+def editar_asignacion_programa_centro(request, asignacion_id):
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    asignacion = get_object_or_404(
+        AsignacionProgramaCentro.objects.select_related("centro", "programa"),
+        pk=asignacion_id, centro__empresa=empresa, programa__empresa=empresa,
+    )
+    if request.method == "POST":
+        try:
+            centro, programa, dias, vigente_desde, vigente_hasta = _datos_asignacion_desde_post(request, empresa)
+            anteriores = {
+                "centro_id": asignacion.centro_id, "programa_id": asignacion.programa_id,
+                "dias_entrega": asignacion.dias_entrega, "vigente_desde": asignacion.vigente_desde.isoformat(),
+                "vigente_hasta": asignacion.vigente_hasta.isoformat() if asignacion.vigente_hasta else None,
+            }
+            asignacion.centro = centro
+            asignacion.programa = programa
+            asignacion.modalidad = programa.modalidad
+            asignacion.dias_entrega = dias
+            asignacion.vigente_desde = vigente_desde
+            asignacion.vigente_hasta = vigente_hasta
+            asignacion.full_clean()
+            asignacion.save()
+            registrar_evento(
+                empresa=empresa, accion="EDITAR", modulo="planificacion_menu",
+                descripcion=f"Asignación de menú {asignacion.pk} actualizada.", usuario=request.user,
+                objeto=asignacion, request=request, datos_anteriores=anteriores,
+                datos_nuevos={"centro_id": centro.pk, "programa_id": programa.pk, "dias_entrega": dias,
+                              "vigente_desde": vigente_desde.isoformat(),
+                              "vigente_hasta": vigente_hasta.isoformat() if vigente_hasta else None},
+            )
+            messages.success(request, "Asignación actualizada correctamente.")
+            return redirect("planificacion_menu_escolar")
+        except (ValidationError, ValueError, TypeError) as error:
+            messages.error(request, "; ".join(error.messages) if hasattr(error, "messages") else str(error))
+    return render(request, "editar_asignacion_programa_centro.html", {
+        "asignacion": asignacion,
+        "centros": CentroEducativo.objects.filter(empresa=empresa).order_by("nombre"),
+        "programas_asignables": ProgramaMenu.objects.filter(
+            empresa=empresa, versiones__estado=VersionProgramaMenu.Estado.ACTIVA,
+        ).distinct().order_by("nombre"),
+        "dias_semana": ((0, "Lun"), (1, "Mar"), (2, "Mié"), (3, "Jue"),
+                         (4, "Vie"), (5, "Sáb"), (6, "Dom")),
+    })
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_menu")
+@require_POST
+def eliminar_asignacion_programa_centro(request, asignacion_id):
+    from django.db.models.deletion import ProtectedError
+
+    empresa = obtener_empresa(request)
+    if not puede_gestionar_planificacion(request.user):
+        raise PermissionDenied
+    asignacion = get_object_or_404(
+        AsignacionProgramaCentro.objects.select_related("centro", "programa"),
+        pk=asignacion_id, centro__empresa=empresa, programa__empresa=empresa,
+    )
+    referencia = f"{asignacion.centro} · {asignacion.programa}"
+    try:
+        with transaction.atomic():
+            registrar_evento(
+                empresa=empresa, accion="OTRO", modulo="planificacion_menu",
+                descripcion=f"Asignación de menú eliminada: {referencia}.", usuario=request.user,
+                objeto=asignacion, request=request,
+                datos_anteriores={"asignacion_id": asignacion.pk, "centro_id": asignacion.centro_id,
+                                  "programa_id": asignacion.programa_id,
+                                  "dias_entrega": asignacion.dias_entrega},
+            )
+            asignacion.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            "Esta asignación no puede eliminarse porque posee programación histórica. "
+            "El historial y sus snapshots se conservaron sin cambios.",
+        )
+        return redirect("planificacion_menu_escolar")
+    messages.success(request, "Asignación eliminada correctamente.")
+    return redirect("planificacion_menu_escolar")
+
 
 
 @login_required(login_url="login_usuario")
@@ -3820,17 +4608,69 @@ def asignar_programa_centro(request):
 @require_POST
 def generar_programacion_menu(request, asignacion_id, calendario_id):
     empresa = obtener_empresa(request)
-    asignacion = get_object_or_404(AsignacionProgramaCentro, pk=asignacion_id, centro__empresa=empresa, programa__empresa=empresa)
-    calendario = get_object_or_404(CalendarioEscolar, pk=calendario_id, empresa=empresa)
+
+    asignacion = get_object_or_404(
+        AsignacionProgramaCentro,
+        pk=asignacion_id,
+        centro__empresa=empresa,
+        programa__empresa=empresa,
+    )
+
+    calendario = get_object_or_404(
+        CalendarioEscolar,
+        pk=calendario_id,
+        empresa=empresa,
+    )
+
+    es_actualizacion = request.POST.get("actualizar_programacion") == "1"
+
+    fecha_inicio = convertir_fecha(request.POST.get("fecha_inicio"))
+    fecha_fin = convertir_fecha(request.POST.get("fecha_fin"))
+
+    if es_actualizacion:
+        existentes = ProgramacionMenuEscolar.objects.filter(
+            empresa=empresa,
+            asignacion=asignacion,
+            calendario=calendario,
+        ).order_by("fecha")
+
+        primera = existentes.first()
+        ultima = existentes.last()
+
+        if not primera or not ultima:
+            messages.error(
+                request,
+                "No existe una programación materializada que pueda actualizarse."
+            )
+            return redirect("planificacion_menu_escolar")
+
+        fecha_inicio = primera.fecha
+        fecha_fin = ultima.fecha
+
     try:
         resultados = materializar_programacion(
-            asignacion, calendario, usuario=request.user, request=request,
-            fecha_inicio=convertir_fecha(request.POST.get("fecha_inicio")),
-            fecha_fin=convertir_fecha(request.POST.get("fecha_fin")),
+            asignacion,
+            calendario,
+            usuario=request.user,
+            request=request,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
         )
-        messages.success(request, f"Programacion generada: {len(resultados)} fechas.")
+
+        if es_actualizacion:
+            messages.success(
+                request,
+                f"Programación actualizada correctamente: {len(resultados)} fechas revisadas."
+            )
+        else:
+            messages.success(
+                request,
+                f"Programación generada correctamente: {len(resultados)} fechas."
+            )
+
     except ValidationError as error:
         messages.error(request, "; ".join(error.messages))
+
     return redirect("planificacion_menu_escolar")
 
 
@@ -3838,26 +4678,307 @@ def generar_programacion_menu(request, asignacion_id, calendario_id):
 @modulo_requerido("modulo_menu")
 def exportar_programacion_excel(request):
     empresa = obtener_empresa(request)
-    filas = ProgramacionMenuEscolar.objects.filter(empresa=empresa).select_related("centro", "programa", "version")
+
+    filas = ProgramacionMenuEscolar.objects.filter(
+        empresa=empresa
+    ).select_related(
+        "centro", "programa", "version"
+    ).order_by(
+        "fecha", "centro__nombre", "centro_id"
+    )
+
     fecha_inicio = convertir_fecha(request.GET.get("fecha_inicio"))
     fecha_fin = convertir_fecha(request.GET.get("fecha_fin"))
-    modalidad = request.GET.get("modalidad", "")
+    modalidad = request.GET.get("modalidad", "").strip()
+
     if fecha_inicio:
         filas = filas.filter(fecha__gte=fecha_inicio)
+
     if fecha_fin:
         filas = filas.filter(fecha__lte=fecha_fin)
+
     if modalidad:
         filas = filas.filter(modalidad_snapshot=modalidad)
+
+    primera = filas.first()
+    ultima = filas.order_by("-fecha").first()
+
+    periodo_desde = fecha_inicio or (primera.fecha if primera else None)
+    periodo_hasta = fecha_fin or (ultima.fecha if ultima else None)
+
+    generado_en = timezone.localtime()
+    generado_por = (
+        request.user.get_full_name().strip()
+        or request.user.get_username()
+    )
+
     wb = Workbook()
     ws = wb.active
-    ws.title = "Programacion escolar"
-    ws.append(["Fecha", "Dia", "Centro", "Semana menu", "Producto", "Programa", "Version", "Modalidad", "Estado"])
-    dias = ("Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo")
+    ws.title = "Programación menú"
+    ws.sheet_view.showGridLines = False
+
+    # --------------------------------------------------------
+    # Logo
+    # --------------------------------------------------------
+    if empresa.logo:
+        try:
+            with empresa.logo.storage.open(
+                empresa.logo.name,
+                "rb",
+            ) as archivo_logo:
+                logo_buffer = BytesIO(
+                    archivo_logo.read()
+                )
+
+            logo = XLImage(
+                logo_buffer
+            )
+
+            # Conserva una referencia al stream hasta
+            # finalizar la construcción del workbook.
+            logo._sastre_buffer = logo_buffer
+
+            proporcion = (
+                logo.width / logo.height
+                if logo.height else 2
+            )
+
+            logo.height = 55
+            logo.width = 55 * proporcion
+
+            ws.add_image(
+                logo,
+                "A1",
+            )
+        except Exception:
+            logger_menu_documento.exception(
+                "No fue posible incorporar logo al Excel de programación."
+            )
+
+    # --------------------------------------------------------
+    # Identidad empresarial
+    # --------------------------------------------------------
+    ws.merge_cells("C1:J1")
+    ws["C1"] = empresa.nombre
+    ws["C1"].font = Font(size=18, bold=True)
+    ws["C1"].alignment = Alignment(vertical="center")
+
+    ws.merge_cells("C2:J2")
+    ws["C2"] = (
+        f"RNC: {empresa.rnc or '-'}"
+        f"  |  Tel.: {empresa.telefono or '-'}"
+        f"  |  Correo: {empresa.correo or '-'}"
+    )
+    ws["C2"].font = Font(size=9)
+
+    ws.merge_cells("C3:J3")
+    direccion_empresa = " · ".join(
+        dato for dato in [
+            empresa.direccion,
+            empresa.ciudad,
+        ] if dato
+    )
+    ws["C3"] = direccion_empresa or "Dirección no registrada"
+    ws["C3"].font = Font(size=9)
+
+    ws.merge_cells("A5:J5")
+    ws["A5"] = "PROGRAMACIÓN DE MENÚ ESCOLAR"
+    ws["A5"].font = Font(size=16, bold=True)
+    ws["A5"].alignment = Alignment(horizontal="center")
+
+    periodo_texto = "Todos los registros"
+    if periodo_desde or periodo_hasta:
+        periodo_texto = (
+            f"{periodo_desde.strftime('%d/%m/%Y') if periodo_desde else 'Inicio'}"
+            f" – "
+            f"{periodo_hasta.strftime('%d/%m/%Y') if periodo_hasta else 'Actualidad'}"
+        )
+
+    ws.merge_cells("A6:E6")
+    ws["A6"] = f"Período: {periodo_texto}"
+    ws["A6"].font = Font(size=9, bold=True)
+
+    ws.merge_cells("F6:J6")
+    ws["F6"] = f"Generado: {generado_en:%d/%m/%Y %H:%M}"
+    ws["F6"].font = Font(size=9)
+    ws["F6"].alignment = Alignment(horizontal="right")
+
+    ws.merge_cells("A7:J7")
+    ws["A7"] = f"Generado por: {generado_por}"
+    ws["A7"].font = Font(size=9)
+
+    encabezados = [
+        "Fecha",
+        "Día",
+        "Código centro",
+        "Centro educativo",
+        "Semana",
+        "Producto",
+        "Programa",
+        "Versión",
+        "Modalidad",
+        "Estado",
+    ]
+
+    fila_encabezado = 9
+
+    for columna, valor in enumerate(encabezados, start=1):
+        celda = ws.cell(row=fila_encabezado, column=columna, value=valor)
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = PatternFill("solid", fgColor="1F4E78")
+        celda.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+
+    borde = Border(
+        left=Side(style="thin", color="D9E2F3"),
+        right=Side(style="thin", color="D9E2F3"),
+        top=Side(style="thin", color="D9E2F3"),
+        bottom=Side(style="thin", color="D9E2F3"),
+    )
+
+    dias = (
+        "Lunes",
+        "Martes",
+        "Miércoles",
+        "Jueves",
+        "Viernes",
+        "Sábado",
+        "Domingo",
+    )
+
+    fila_actual = fila_encabezado + 1
+
     for fila in filas:
-        ws.append([fila.fecha, dias[fila.dia_semana], fila.centro.nombre, fila.semana_ciclo, fila.producto,
-                   fila.programa_snapshot, fila.version_snapshot, fila.modalidad_snapshot, fila.get_estado_display()])
-    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    response["Content-Disposition"] = 'attachment; filename="programacion_menu_escolar.xlsx"'
+        codigo_centro = (
+            getattr(fila.centro, "codigo", "")
+            or getattr(fila.centro, "codigo_centro", "")
+            or ""
+        )
+
+        codigo_centro = str(codigo_centro).strip()
+
+        if codigo_centro.isdigit():
+            codigo_centro = codigo_centro.zfill(5)
+
+        valores = [
+            fila.fecha,
+            dias[fila.dia_semana],
+            codigo_centro,
+            fila.centro.nombre,
+            fila.semana_ciclo,
+            fila.producto or "-",
+            fila.programa_snapshot,
+            fila.version_snapshot,
+            fila.modalidad_snapshot,
+            fila.get_estado_display(),
+        ]
+
+        for columna, valor in enumerate(valores, start=1):
+            celda = ws.cell(
+                row=fila_actual,
+                column=columna,
+                value=valor,
+            )
+            celda.border = borde
+            celda.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
+
+        ws.cell(
+            row=fila_actual,
+            column=1
+        ).number_format = "dd/mm/yyyy"
+
+        # Código del centro como texto para preservar 00154, 00025, etc.
+        ws.cell(
+            row=fila_actual,
+            column=3
+        ).number_format = "@"
+
+        # Color visual por tipo de día.
+        #
+        # Prioridad:
+        # 1. SIN_DOCENCIA real
+        # 2. Sábado
+        # 3. Domingo
+        #
+        # Esto es únicamente presentación del reporte.
+        color_fila = None
+
+        if fila.estado == ProgramacionMenuEscolar.Estado.SIN_DOCENCIA:
+            color_fila = "FDE2E2"
+        elif fila.fecha.weekday() == 5:
+            color_fila = "EAF4FF"
+        elif fila.fecha.weekday() == 6:
+            color_fila = "FFF4CC"
+
+        if color_fila:
+            for columna in range(1, 11):
+                ws.cell(
+                    row=fila_actual,
+                    column=columna
+                ).fill = PatternFill(
+                    "solid",
+                    fgColor=color_fila,
+                )
+
+        fila_actual += 1
+
+    anchos = {
+        "A": 13,
+        "B": 13,
+        "C": 16,
+        "D": 34,
+        "E": 10,
+        "F": 30,
+        "G": 22,
+        "H": 20,
+        "I": 14,
+        "J": 18,
+    }
+
+    for columna, ancho in anchos.items():
+        ws.column_dimensions[columna].width = ancho
+
+    ws.row_dimensions[1].height = 24
+    ws.row_dimensions[5].height = 26
+    ws.row_dimensions[fila_encabezado].height = 30
+
+    ultima_fila = max(fila_actual - 1, fila_encabezado)
+
+    ws.auto_filter.ref = f"A{fila_encabezado}:J{ultima_fila}"
+    ws.freeze_panes = f"A{fila_encabezado + 1}"
+
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+    ws.print_title_rows = f"1:{fila_encabezado}"
+    ws.print_area = f"A1:J{ultima_fila}"
+
+    ws.oddFooter.center.text = (
+        "Generado por SASTRE ERP"
+    )
+    ws.oddFooter.right.text = (
+        "Página &[Page] de &[Pages]"
+    )
+
+    response = HttpResponse(
+        content_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        )
+    )
+
+    response["Content-Disposition"] = (
+        'attachment; filename="programacion_menu_escolar.xlsx"'
+    )
+
     wb.save(response)
     return response
 
@@ -3866,27 +4987,4942 @@ def exportar_programacion_excel(request):
 @modulo_requerido("modulo_menu")
 def exportar_programacion_pdf(request):
     empresa = obtener_empresa(request)
-    filas = ProgramacionMenuEscolar.objects.filter(empresa=empresa).select_related("centro")
+
+    filas = list(
+        ProgramacionMenuEscolar.objects.filter(
+            empresa=empresa
+        ).select_related(
+            "centro", "programa", "version"
+        ).order_by(
+            "fecha", "centro__nombre", "centro_id"
+        )
+    )
+
     fecha_inicio = convertir_fecha(request.GET.get("fecha_inicio"))
     fecha_fin = convertir_fecha(request.GET.get("fecha_fin"))
+    modalidad = request.GET.get("modalidad", "").strip()
+
     if fecha_inicio:
-        filas = filas.filter(fecha__gte=fecha_inicio)
+        filas = [
+            fila for fila in filas
+            if fila.fecha >= fecha_inicio
+        ]
+
     if fecha_fin:
-        filas = filas.filter(fecha__lte=fecha_fin)
+        filas = [
+            fila for fila in filas
+            if fila.fecha <= fecha_fin
+        ]
+
+    if modalidad:
+        filas = [
+            fila for fila in filas
+            if fila.modalidad_snapshot == modalidad
+        ]
+
+    periodo_desde = (
+        fecha_inicio
+        or (min((fila.fecha for fila in filas), default=None))
+    )
+
+    periodo_hasta = (
+        fecha_fin
+        or (max((fila.fecha for fila in filas), default=None))
+    )
+
+    generado_en = timezone.localtime()
+    generado_por = (
+        request.user.get_full_name().strip()
+        or request.user.get_username()
+    )
+
     buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
-    y = 750
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(45, y, "SASTRE ERP - Programacion de menu escolar")
-    y -= 18
-    pdf.setFont("Helvetica", 9)
-    pdf.drawString(45, y, empresa.nombre)
-    y -= 24
-    for fila in filas:
-        if y < 55:
-            pdf.showPage(); y = 750; pdf.setFont("Helvetica", 8)
-        texto = f"{fila.fecha:%d/%m/%Y} | {fila.centro.nombre[:22]} | S{fila.semana_ciclo or '-'} | {fila.producto or '-'} | {fila.version_snapshot} | {fila.estado}"
-        pdf.drawString(45, y, texto[:105])
-        y -= 12
-    pdf.save(); buffer.seek(0)
-    return FileResponse(buffer, content_type="application/pdf", filename="programacion_menu_escolar.pdf")
+
+    ancho, alto = landscape(letter)
+    pdf = canvas.Canvas(
+        buffer,
+        pagesize=(ancho, alto),
+    )
+
+    margen = 36
+    filas_por_pagina = 18
+
+    total_paginas = max(
+        1,
+        (len(filas) + filas_por_pagina - 1)
+        // filas_por_pagina
+    )
+
+    dias = (
+        "Lunes",
+        "Martes",
+        "Miércoles",
+        "Jueves",
+        "Viernes",
+        "Sábado",
+        "Domingo",
+    )
+
+    estilo_celda = ParagraphStyle(
+        "ProgramacionCelda",
+        fontName="Helvetica",
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#1F2937"),
+    )
+
+    estilo_celda_centro = ParagraphStyle(
+        "ProgramacionCentro",
+        parent=estilo_celda,
+        fontSize=7,
+        leading=8,
+    )
+
+    def texto_seguro(valor):
+        texto = str(valor or "-")
+        return (
+            texto.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+
+    def dibujar_encabezado(numero_pagina):
+        y_superior = alto - 38
+
+        if empresa.logo:
+            try:
+                with empresa.logo.storage.open(
+                    empresa.logo.name,
+                    "rb",
+                ) as archivo_logo:
+                    logo = ImageReader(
+                        BytesIO(
+                            archivo_logo.read()
+                        )
+                    )
+
+                pdf.drawImage(
+                    logo,
+                    margen,
+                    alto - 90,
+                    width=92,
+                    height=48,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+            except Exception:
+                logger_menu_documento.exception(
+                    "No fue posible incorporar logo al PDF de programación."
+                )
+
+        x_empresa = 142
+
+        pdf.setFillColor(colors.HexColor("#0F172A"))
+        pdf.setFont("Helvetica-Bold", 15)
+        pdf.drawString(
+            x_empresa,
+            y_superior,
+            empresa.nombre[:60],
+        )
+
+        pdf.setFont("Helvetica", 8)
+        pdf.setFillColor(colors.HexColor("#475569"))
+
+        pdf.drawString(
+            x_empresa,
+            y_superior - 15,
+            f"RNC: {empresa.rnc or '-'}",
+        )
+
+        contacto = " · ".join(
+            dato for dato in [
+                empresa.telefono,
+                empresa.correo,
+            ] if dato
+        )
+
+        if contacto:
+            pdf.drawString(
+                x_empresa,
+                y_superior - 28,
+                contacto[:90],
+            )
+
+        direccion = " · ".join(
+            dato for dato in [
+                empresa.direccion,
+                empresa.ciudad,
+            ] if dato
+        )
+
+        if direccion:
+            pdf.drawString(
+                x_empresa,
+                y_superior - 41,
+                direccion[:100],
+            )
+
+        pdf.setFillColor(colors.HexColor("#1F4E78"))
+        pdf.setFont("Helvetica-Bold", 17)
+        pdf.drawRightString(
+            ancho - margen,
+            y_superior,
+            "PROGRAMACIÓN DE MENÚ ESCOLAR",
+        )
+
+        periodo_texto = "Todos los registros"
+
+        if periodo_desde or periodo_hasta:
+            periodo_texto = (
+                f"{periodo_desde.strftime('%d/%m/%Y') if periodo_desde else 'Inicio'}"
+                f" – "
+                f"{periodo_hasta.strftime('%d/%m/%Y') if periodo_hasta else 'Actualidad'}"
+            )
+
+        pdf.setFillColor(colors.HexColor("#475569"))
+        pdf.setFont("Helvetica", 8)
+
+        pdf.drawRightString(
+            ancho - margen,
+            y_superior - 18,
+            f"Período: {periodo_texto}",
+        )
+
+        pdf.drawRightString(
+            ancho - margen,
+            y_superior - 31,
+            f"Generado: {generado_en:%d/%m/%Y %H:%M}",
+        )
+
+        pdf.drawRightString(
+            ancho - margen,
+            y_superior - 44,
+            f"Usuario: {generado_por}",
+        )
+
+        pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
+        pdf.line(
+            margen,
+            alto - 103,
+            ancho - margen,
+            alto - 103,
+        )
+
+        # Pie
+        pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
+        pdf.line(
+            margen,
+            30,
+            ancho - margen,
+            30,
+        )
+
+        pdf.setFont("Helvetica", 7)
+        pdf.setFillColor(colors.HexColor("#64748B"))
+
+        pdf.drawString(
+            margen,
+            18,
+            "Generado por SASTRE ERP",
+        )
+
+        pdf.drawRightString(
+            ancho - margen,
+            18,
+            f"Página {numero_pagina} de {total_paginas}",
+        )
+
+    encabezados = [
+        "Fecha",
+        "Día",
+        "Centro educativo",
+        "Semana",
+        "Producto",
+        "Programa / versión",
+        "Modalidad",
+        "Estado",
+    ]
+
+    if not filas:
+        dibujar_encabezado(1)
+
+        pdf.setFillColor(colors.HexColor("#475569"))
+        pdf.setFont("Helvetica", 11)
+        pdf.drawCentredString(
+            ancho / 2,
+            alto / 2,
+            "No existen registros de programación para los filtros seleccionados.",
+        )
+
+        pdf.save()
+        buffer.seek(0)
+
+        return FileResponse(
+            buffer,
+            content_type="application/pdf",
+            filename="programacion_menu_escolar.pdf",
+        )
+
+    for numero_pagina in range(1, total_paginas + 1):
+        inicio = (numero_pagina - 1) * filas_por_pagina
+        fin = inicio + filas_por_pagina
+        pagina_filas = filas[inicio:fin]
+
+        dibujar_encabezado(numero_pagina)
+
+        datos = [encabezados]
+
+        estados_sin_docencia = []
+        filas_sabado = []
+        filas_domingo = []
+
+        for indice, fila in enumerate(
+            pagina_filas,
+            start=1,
+        ):
+            codigo_centro = (
+                getattr(fila.centro, "codigo", "")
+                or getattr(fila.centro, "codigo_centro", "")
+                or ""
+            )
+
+            centro_texto = (
+                f"{codigo_centro} · {fila.centro.nombre}"
+                if codigo_centro
+                else fila.centro.nombre
+            )
+
+            programa_version = (
+                f"{fila.programa_snapshot} / "
+                f"{fila.version_snapshot}"
+            )
+
+            datos.append([
+                Paragraph(
+                    texto_seguro(f"{fila.fecha:%d/%m/%Y}"),
+                    estilo_celda,
+                ),
+                Paragraph(
+                    texto_seguro(dias[fila.dia_semana]),
+                    estilo_celda,
+                ),
+                Paragraph(
+                    texto_seguro(centro_texto),
+                    estilo_celda_centro,
+                ),
+                Paragraph(
+                    texto_seguro(
+                        f"S{fila.semana_ciclo}"
+                        if fila.semana_ciclo
+                        else "-"
+                    ),
+                    estilo_celda,
+                ),
+                Paragraph(
+                    texto_seguro(fila.producto or "-"),
+                    estilo_celda,
+                ),
+                Paragraph(
+                    texto_seguro(programa_version),
+                    estilo_celda,
+                ),
+                Paragraph(
+                    texto_seguro(fila.modalidad_snapshot),
+                    estilo_celda,
+                ),
+                Paragraph(
+                    texto_seguro(fila.get_estado_display()),
+                    estilo_celda,
+                ),
+            ])
+
+            if (
+                fila.estado
+                == ProgramacionMenuEscolar.Estado.SIN_DOCENCIA
+            ):
+                estados_sin_docencia.append(indice)
+            elif fila.fecha.weekday() == 5:
+                filas_sabado.append(indice)
+            elif fila.fecha.weekday() == 6:
+                filas_domingo.append(indice)
+
+        tabla = Table(
+            datos,
+            colWidths=[
+                58,
+                65,
+                175,
+                48,
+                155,
+                125,
+                70,
+                72,
+            ],
+            repeatRows=1,
+        )
+
+        comandos = [
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor("#1F4E78"),
+            ),
+            (
+                "TEXTCOLOR",
+                (0, 0),
+                (-1, 0),
+                colors.white,
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold",
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, 0),
+                7,
+            ),
+            (
+                "ALIGN",
+                (0, 0),
+                (-1, 0),
+                "CENTER",
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "TOP",
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.35,
+                colors.HexColor("#D9E2F3"),
+            ),
+            (
+                "ROWBACKGROUNDS",
+                (0, 1),
+                (-1, -1),
+                [
+                    colors.white,
+                    colors.HexColor("#F8FAFC"),
+                ],
+            ),
+            (
+                "LEFTPADDING",
+                (0, 0),
+                (-1, -1),
+                5,
+            ),
+            (
+                "RIGHTPADDING",
+                (0, 0),
+                (-1, -1),
+                5,
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                5,
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                5,
+            ),
+        ]
+
+        for indice in filas_sabado:
+            comandos.append(
+                (
+                    "BACKGROUND",
+                    (0, indice),
+                    (-1, indice),
+                    colors.HexColor("#EAF4FF"),
+                )
+            )
+
+        for indice in filas_domingo:
+            comandos.append(
+                (
+                    "BACKGROUND",
+                    (0, indice),
+                    (-1, indice),
+                    colors.HexColor("#FFF4CC"),
+                )
+            )
+
+        for indice in estados_sin_docencia:
+            comandos.append(
+                (
+                    "BACKGROUND",
+                    (0, indice),
+                    (-1, indice),
+                    colors.HexColor("#FDE2E2"),
+                )
+            )
+
+        tabla.setStyle(
+            TableStyle(comandos)
+        )
+
+        ancho_tabla = ancho - (margen * 2)
+        _, alto_tabla = tabla.wrap(
+            ancho_tabla,
+            alto - 165,
+        )
+
+        tabla.drawOn(
+            pdf,
+            margen,
+            alto - 125 - alto_tabla,
+        )
+
+        if numero_pagina < total_paginas:
+            pdf.showPage()
+
+    pdf.save()
+    buffer.seek(0)
+
+    return FileResponse(
+        buffer,
+        content_type="application/pdf",
+        filename="programacion_menu_escolar.pdf",
+    )
+
+# ===== MOTOR DOCUMENTAL SASTRE 02 =====
+
+from django.db import transaction as documento_transaction
+from django.shortcuts import get_object_or_404 as documento_get_object_or_404
+from django.views.decorators.http import require_POST as documento_require_POST
+from django.utils.html import escape as documento_escape
+
+from .models import (
+    DocumentoInstitucional,
+    DiaCalendarioEscolar,
+    DiaNoDocencia,
+)
+
+
+def _numero_documento_siguiente(empresa, anio):
+    prefijo = f"DOC-{anio}-"
+
+    numeros = (
+        DocumentoInstitucional.objects
+        .filter(
+            empresa=empresa,
+            numero__startswith=prefijo,
+        )
+        .values_list("numero", flat=True)
+    )
+
+    mayor = 0
+
+    for numero in numeros:
+        try:
+            mayor = max(
+                mayor,
+                int(str(numero).rsplit("-", 1)[-1]),
+            )
+        except (TypeError, ValueError):
+            pass
+
+    return f"{prefijo}{mayor + 1:06d}"
+
+
+def _dias_no_laborables_documento(empresa, fecha_desde, fecha_hasta):
+    resultado = []
+    fechas = set()
+
+    dias = (
+        DiaCalendarioEscolar.objects
+        .filter(
+            calendario__empresa=empresa,
+            calendario__estado="ACTIVO",
+            fecha__range=[fecha_desde, fecha_hasta],
+        )
+        .exclude(
+            clasificacion__in=[
+                DiaCalendarioEscolar.Clasificacion.DOCENCIA,
+                DiaCalendarioEscolar.Clasificacion.REQUIERE_REVISION,
+            ]
+        )
+        .order_by("fecha")
+    )
+
+    for dia in dias:
+        if (dia.origen or "").upper().startswith("PREVISUALIZACION"):
+            continue
+
+        resultado.append({
+            "fecha": dia.fecha.isoformat(),
+            "clasificacion": dia.clasificacion,
+            "clasificacion_texto": dia.get_clasificacion_display(),
+            "motivo": dia.motivo or dia.get_clasificacion_display(),
+            "origen": dia.origen or "",
+            "fuente": "CALENDARIO_ESCOLAR",
+        })
+
+        fechas.add(dia.fecha)
+
+    legacy = (
+        DiaNoDocencia.objects
+        .filter(
+            empresa=empresa,
+            fecha__range=[fecha_desde, fecha_hasta],
+            activo=True,
+        )
+        .order_by("fecha")
+    )
+
+    for dia in legacy:
+        if dia.fecha in fechas:
+            continue
+
+        resultado.append({
+            "fecha": dia.fecha.isoformat(),
+            "clasificacion": dia.tipo,
+            "clasificacion_texto": dia.get_tipo_display(),
+            "motivo": dia.motivo or dia.get_tipo_display(),
+            "origen": "LEGACY",
+            "fuente": "DIA_NO_DOCENCIA",
+        })
+
+    resultado.sort(key=lambda x: x["fecha"])
+
+    return resultado
+
+
+
+import re
+from html.parser import HTMLParser
+from html import escape as _html_escape_documento
+
+
+class _SanitizadorDocumentoHTML(HTMLParser):
+    ETIQUETAS = {
+        "p", "br", "strong", "b", "em", "i", "u",
+        "ul", "ol", "li", "h1", "h2", "h3",
+        "div", "span", "blockquote", "table", "thead", "tbody", "tr", "th", "td",
+    }
+
+    ALINEACIONES = {"left", "center", "right", "justify"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.salida = []
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+
+        if tag not in self.ETIQUETAS:
+            return
+
+        atributos_limpios = []
+
+        for nombre, valor in attrs:
+            nombre = nombre.lower()
+            valor = (valor or "").strip()
+
+            if nombre == "style":
+                estilos = []
+
+                for regla in valor.split(";"):
+                    if ":" not in regla:
+                        continue
+
+                    propiedad, dato = regla.split(":", 1)
+                    propiedad = propiedad.strip().lower()
+                    dato = dato.strip().lower()
+
+                    if (
+                        propiedad == "text-align"
+                        and dato in self.ALINEACIONES
+                    ):
+                        estilos.append(f"text-align:{dato}")
+
+                    elif propiedad == "margin-left":
+                        match = re.fullmatch(r"(\d{1,3})px", dato)
+                        if match and int(match.group(1)) <= 160:
+                            estilos.append(f"margin-left:{dato}")
+
+                    elif propiedad == "font-size":
+                        match = re.fullmatch(r"(\d{1,2})px", dato)
+                        if match and 10 <= int(match.group(1)) <= 32:
+                            estilos.append(f"font-size:{dato}")
+
+                if estilos:
+                    atributos_limpios.append(
+                        ' style="' +
+                        _html_escape_documento(";".join(estilos), quote=True) +
+                        '"'
+                    )
+
+        self.salida.append(
+            "<" + tag + "".join(atributos_limpios) + ">"
+        )
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in self.ETIQUETAS and tag != "br":
+            self.salida.append(f"</{tag}>")
+
+    def handle_data(self, data):
+        self.salida.append(_html_escape_documento(data))
+
+    def handle_entityref(self, name):
+        self.salida.append(f"&{name};")
+
+    def handle_charref(self, name):
+        self.salida.append(f"&#{name};")
+
+
+def _sanitizar_html_documento(valor):
+    valor = (valor or "").strip()
+
+    if not valor:
+        return ""
+
+    parser = _SanitizadorDocumentoHTML()
+    parser.feed(valor)
+    parser.close()
+
+    return "".join(parser.salida)
+
+
+
+def _conduces_anulados_documento(
+    empresa,
+    fecha_desde,
+    fecha_hasta,
+    dias_no_laborables=None,
+):
+    """
+    Snapshot de anulaciones particulares de centros.
+
+    Las fechas generales sin docencia pertenecen al calendario escolar
+    y no se duplican como incidencias particulares.
+    """
+    from datetime import date
+
+    fechas_generales = set()
+
+    for item in (dias_no_laborables or []):
+        try:
+            fechas_generales.add(
+                date.fromisoformat(item.get("fecha", ""))
+            )
+        except (TypeError, ValueError):
+            continue
+
+    qs = (
+        Conduce.all_objects
+        .filter(
+            empresa=empresa,
+            estado="anulado",
+            fecha__range=[fecha_desde, fecha_hasta],
+            eliminado_en__isnull=True,
+        )
+        .select_related("centro")
+        .order_by("fecha", "numero", "id")
+    )
+
+    resultado = []
+
+    for conduce in qs:
+
+        # Un feriado/suspensión general no se presenta como
+        # incidencia particular de un centro.
+        if conduce.fecha in fechas_generales:
+            continue
+
+        resultado.append({
+            "id": conduce.id,
+            "fecha": conduce.fecha.isoformat(),
+            "numero": str(conduce.numero or ""),
+            "codigo_centro": str(
+                getattr(conduce.centro, "codigo", "") or ""
+            ),
+            "centro": str(
+                getattr(conduce.centro, "nombre", "") or ""
+            ),
+            "producto": str(conduce.producto or ""),
+            "cantidad": int(conduce.cantidad or 0),
+            "motivo": str(
+                (conduce.observaciones or "").strip()
+                or "Sin motivo de anulación registrado."
+            ),
+        })
+
+    return resultado
+
+
+def _fecha_documental_espanol(fecha):
+    meses = {
+        1: "enero",
+        2: "febrero",
+        3: "marzo",
+        4: "abril",
+        5: "mayo",
+        6: "junio",
+        7: "julio",
+        8: "agosto",
+        9: "septiembre",
+        10: "octubre",
+        11: "noviembre",
+        12: "diciembre",
+    }
+
+    return (
+        f"{fecha.day} de "
+        f"{meses.get(fecha.month, '')} de "
+        f"{fecha.year}"
+    )
+
+
+def _texto_sugerido_nota_aclaratoria(
+    fecha_desde,
+    fecha_hasta,
+    dias_no_laborables,
+    conduces_anulados=None,
+):
+    """
+    Redacción institucional basada exclusivamente en hechos
+    almacenados en SASTRE.
+    """
+    from datetime import date
+
+    conduces_anulados = conduces_anulados or []
+
+    desde_texto = _fecha_documental_espanol(fecha_desde)
+    hasta_texto = _fecha_documental_espanol(fecha_hasta)
+
+    html = (
+        '<p style="text-align:justify;">'
+        "Por medio de la presente, tenemos a bien informar y dejar "
+        "constancia formal de las incidencias correspondientes al período "
+        f"comprendido entre el <strong>{desde_texto}</strong> y el "
+        f"<strong>{hasta_texto}</strong>, con el objetivo de documentar "
+        "los días sin docencia de carácter general establecidos en el "
+        "calendario escolar y las incidencias particulares que hayan "
+        "motivado la anulación de conduces durante dicho período."
+        "</p>"
+    )
+
+    # --------------------------------------------------------
+    # DIAS GENERALES
+    # --------------------------------------------------------
+
+    html += (
+        "<h3>1. DÍAS SIN DOCENCIA DE CARÁCTER GENERAL</h3>"
+    )
+
+    if dias_no_laborables:
+
+        html += (
+            '<p style="text-align:justify;">'
+            "Durante el período indicado, el calendario escolar "
+            "registra los siguientes días sin docencia de carácter "
+            "general, aplicables a los centros educativos:"
+            "</p><ul>"
+        )
+
+        for dia in dias_no_laborables:
+
+            try:
+                fecha = date.fromisoformat(
+                    dia.get("fecha", "")
+                )
+                fecha_texto = _fecha_documental_espanol(fecha)
+            except (TypeError, ValueError):
+                fecha_texto = documento_escape(
+                    dia.get("fecha", "")
+                )
+
+            motivo = documento_escape(
+                dia.get("motivo", "")
+            )
+
+            clasificacion = documento_escape(
+                dia.get("clasificacion_texto", "")
+            )
+
+            html += (
+                f"<li><strong>{fecha_texto}:</strong> "
+                f"{motivo}"
+            )
+
+            if (
+                clasificacion
+                and clasificacion.lower()
+                not in motivo.lower()
+            ):
+                html += f" ({clasificacion})"
+
+            html += ".</li>"
+
+        html += "</ul>"
+
+    else:
+
+        html += (
+            '<p style="text-align:justify;">'
+            "No se identificaron días sin docencia de carácter general "
+            "registrados en el calendario escolar para el período indicado."
+            "</p>"
+        )
+
+    # --------------------------------------------------------
+    # CONDUCES ANULADOS
+    # --------------------------------------------------------
+
+    html += (
+        "<h3>2. CONDUCES ANULADOS POR INCIDENCIAS PARTICULARES "
+        "DE CENTROS EDUCATIVOS</h3>"
+    )
+
+    if conduces_anulados:
+
+        html += (
+            '<p style="text-align:justify;">'
+            "En fechas establecidas con docencia programada, determinados "
+            "centros educativos presentaron incidencias particulares que "
+            "dieron lugar a la anulación de conduces previamente "
+            "generados. El detalle se presenta a continuación:"
+            "</p>"
+        )
+
+        html += (
+            "<table>"
+            "<thead>"
+            "<tr>"
+            "<th>Fecha</th>"
+            "<th>No. conduce</th>"
+            "<th>Código</th>"
+            "<th>Centro educativo</th>"
+            "<th>Producto</th>"
+            "<th>Cantidad</th>"
+            "<th>Motivo de anulación</th>"
+            "</tr>"
+            "</thead>"
+            "<tbody>"
+        )
+
+        for item in conduces_anulados:
+
+            try:
+                fecha = date.fromisoformat(
+                    item.get("fecha", "")
+                )
+                fecha_texto = fecha.strftime("%d/%m/%Y")
+            except (TypeError, ValueError):
+                fecha_texto = documento_escape(
+                    item.get("fecha", "")
+                )
+
+            numero = documento_escape(
+                item.get("numero", "")
+            )
+
+            codigo = documento_escape(
+                item.get("codigo_centro", "")
+            )
+
+            centro = documento_escape(
+                item.get("centro", "")
+            )
+
+            producto = documento_escape(
+                item.get("producto", "")
+            )
+
+            cantidad = int(
+                item.get("cantidad", 0) or 0
+            )
+
+            motivo = documento_escape(
+                item.get("motivo", "")
+            )
+
+            html += (
+                "<tr>"
+                f"<td>{fecha_texto}</td>"
+                f"<td>{numero}</td>"
+                f"<td>{codigo}</td>"
+                f"<td>{centro}</td>"
+                f"<td>{producto}</td>"
+                f"<td>{cantidad:,}</td>"
+                f"<td>{motivo}</td>"
+                "</tr>"
+            )
+
+        html += "</tbody></table>"
+
+        html += (
+            '<p style="text-align:justify;">'
+            "Los conduces relacionados anteriormente corresponden "
+            "exclusivamente a anulaciones registradas en SASTRE por "
+            "incidencias particulares de los centros educativos en las "
+            "fechas indicadas."
+            "</p>"
+        )
+
+    else:
+
+        html += (
+            '<p style="text-align:justify;">'
+            "No se identificaron conduces anulados por incidencias "
+            "particulares de centros educativos dentro del período "
+            "seleccionado."
+            "</p>"
+        )
+
+    # --------------------------------------------------------
+    # CIERRE
+    # --------------------------------------------------------
+
+    html += "<h3>3. CONSIDERACIÓN FINAL</h3>"
+
+    html += (
+        '<p style="text-align:justify;">'
+        "La presente comunicación se emite para los fines "
+        "correspondientes, dejando constancia de los días sin docencia "
+        "de carácter general registrados en el calendario escolar y de "
+        "las incidencias particulares que motivaron la anulación de "
+        "conduces durante el período indicado."
+        "</p>"
+    )
+
+    html += (
+        '<p style="text-align:justify;">'
+        "Agradecemos su atención y quedamos a disposición para cualquier "
+        "información adicional que sea requerida."
+        "</p>"
+    )
+
+    return _sanitizar_html_documento(html)
+
+
+def _finalizar_documento_institucional(
+    documento,
+    empresa,
+    usuario,
+):
+    """
+    Congela un documento institucional.
+
+    El PDF final se genera una sola vez y queda almacenado
+    como evidencia histórica de la emisión.
+    """
+
+    if documento.estado != DocumentoInstitucional.Estado.BORRADOR:
+        return False, "Solo los borradores pueden finalizarse."
+
+    # --------------------------------------------------------
+    # Completar identidad desde la empresa si aún está vacía.
+    # --------------------------------------------------------
+
+    if not documento.firmante:
+        documento.firmante = (
+            getattr(
+                empresa,
+                "firmante_predeterminado",
+                "",
+            )
+            or ""
+        )
+
+    if not documento.cargo_firmante:
+        documento.cargo_firmante = (
+            getattr(
+                empresa,
+                "cargo_firmante_predeterminado",
+                "",
+            )
+            or ""
+        )
+
+    # --------------------------------------------------------
+    # Validaciones antes de emitir.
+    # --------------------------------------------------------
+
+    errores = []
+
+    if not documento.destinatario:
+        errores.append("destinatario")
+
+    if not documento.contenido_html:
+        errores.append("contenido")
+
+    if not documento.firmante:
+        errores.append("nombre del firmante")
+
+    if not documento.cargo_firmante:
+        errores.append("cargo del firmante")
+
+    if (
+        documento.incluir_firma
+        and not getattr(
+            empresa,
+            "firma_autorizada",
+            None,
+        )
+    ):
+        errores.append("imagen de firma autorizada")
+
+    if (
+        documento.incluir_sello
+        and not getattr(
+            empresa,
+            "sello_institucional",
+            None,
+        )
+    ):
+        errores.append("sello institucional")
+
+    if errores:
+        return (
+            False,
+            "No se puede finalizar. Falta: "
+            + ", ".join(errores)
+            + "."
+        )
+
+    momento = timezone.now()
+
+    # --------------------------------------------------------
+    # Snapshot de emisión
+    # --------------------------------------------------------
+
+    snapshot = dict(
+        documento.datos_snapshot
+        or {}
+    )
+
+    snapshot["empresa_emision"] = {
+        "nombre": empresa.nombre or "",
+        "rnc": getattr(empresa, "rnc", "") or "",
+        "direccion": getattr(
+            empresa,
+            "direccion",
+            "",
+        ) or "",
+        "telefono": getattr(
+            empresa,
+            "telefono",
+            "",
+        ) or "",
+        "ciudad": getattr(
+            empresa,
+            "ciudad",
+            "",
+        ) or "",
+        "correo": getattr(
+            empresa,
+            "correo",
+            "",
+        ) or "",
+    }
+
+    snapshot["firma_emision"] = {
+        "firmante": documento.firmante,
+        "cargo": documento.cargo_firmante,
+        "incluir_firma": bool(
+            documento.incluir_firma
+        ),
+        "incluir_sello": bool(
+            documento.incluir_sello
+        ),
+        "firma_archivo": (
+            empresa.firma_autorizada.name
+            if getattr(
+                empresa,
+                "firma_autorizada",
+                None,
+            )
+            else ""
+        ),
+        "sello_archivo": (
+            empresa.sello_institucional.name
+            if getattr(
+                empresa,
+                "sello_institucional",
+                None,
+            )
+            else ""
+        ),
+        "logo_archivo": (
+            empresa.logo.name
+            if getattr(
+                empresa,
+                "logo",
+                None,
+            )
+            else ""
+        ),
+    }
+
+    snapshot["emision"] = {
+        "estado": "FINALIZADO",
+        "finalizado_en": momento.isoformat(),
+        "finalizado_por_id": (
+            usuario.id
+            if usuario
+            else None
+        ),
+    }
+
+    documento.datos_snapshot = snapshot
+
+    # --------------------------------------------------------
+    # Generar PDF definitivo ANTES de cambiar el estado.
+    # --------------------------------------------------------
+
+    try:
+        pdf_buffer = _pdf_documento_institucional(
+            documento,
+            empresa,
+        )
+    except Exception:
+        return (
+            False,
+            "No fue posible generar el PDF definitivo. "
+            "El documento continúa como borrador."
+        )
+
+    from django.core.files.base import ContentFile
+
+    nombre_pdf = (
+        f"{documento.numero}.pdf"
+    )
+
+    documento.pdf_final.save(
+        nombre_pdf,
+        ContentFile(
+            pdf_buffer.getvalue()
+        ),
+        save=False,
+    )
+
+    # --------------------------------------------------------
+    # WORD HISTORICO DE EMISION
+    # --------------------------------------------------------
+    #
+    # El PDF sigue siendo el artefacto oficial principal.
+    # Si Word no pudiera generarse, no bloquea la emisión.
+    # --------------------------------------------------------
+
+    try:
+
+        docx_buffer = (
+            _docx_documento_institucional(
+                documento,
+                empresa,
+            )
+        )
+
+        documento.docx_final.save(
+            f"{documento.numero}.docx",
+            ContentFile(
+                docx_buffer.getvalue()
+            ),
+            save=False,
+        )
+
+    except Exception:
+        pass
+
+    documento.estado = (
+        DocumentoInstitucional.Estado.FINALIZADO
+    )
+
+    documento.finalizado_en = momento
+    documento.finalizado_por = usuario
+    documento.modificado_por = usuario
+
+    documento.save()
+
+    return (
+        True,
+        f"Documento {documento.numero} finalizado correctamente."
+    )
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def documentos_institucionales(request):
+    empresa = obtener_empresa(request)
+
+    documentos = (
+        DocumentoInstitucional.objects
+        .filter(
+            empresa=empresa,
+            eliminado_en__isnull=True,
+        )
+        .order_by("-fecha_documento", "-id")
+    )
+
+    return render(
+        request,
+        "documentos_institucionales.html",
+        {
+            "empresa": empresa,
+            "documentos": documentos,
+        },
+    )
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def nuevo_documento_institucional(request):
+    empresa = obtener_empresa(request)
+
+    fecha_desde_inicial = (
+        request.GET.get("fecha_inicio", "").strip()
+        or request.POST.get("fecha_desde", "").strip()
+    )
+
+    fecha_hasta_inicial = (
+        request.GET.get("fecha_fin", "").strip()
+        or request.POST.get("fecha_hasta", "").strip()
+    )
+
+    if request.method == "POST":
+        from datetime import date
+
+        fecha_desde = date.fromisoformat(
+            request.POST.get("fecha_desde")
+        )
+
+        fecha_hasta = date.fromisoformat(
+            request.POST.get("fecha_hasta")
+        )
+
+        if fecha_desde > fecha_hasta:
+            messages.error(
+                request,
+                "La fecha inicial no puede ser mayor que la fecha final.",
+            )
+            return redirect("nuevo_documento_institucional")
+
+        dias = _dias_no_laborables_documento(
+            empresa,
+            fecha_desde,
+            fecha_hasta,
+        )
+
+        conduces_anulados = _conduces_anulados_documento(
+            empresa,
+            fecha_desde,
+            fecha_hasta,
+            dias,
+        )
+
+        contenido = _sanitizar_html_documento(
+            request.POST.get(
+                "contenido_html",
+                "",
+            )
+        )
+
+        if not contenido:
+            contenido = _texto_sugerido_nota_aclaratoria(
+                fecha_desde,
+                fecha_hasta,
+                dias,
+                conduces_anulados,
+            )
+
+        with documento_transaction.atomic():
+            numero = _numero_documento_siguiente(
+                empresa,
+                timezone.localdate().year,
+            )
+
+            documento = DocumentoInstitucional.objects.create(
+                empresa=empresa,
+                numero=numero,
+                tipo=DocumentoInstitucional.Tipo.NOTA_ACLARATORIA,
+                estado=DocumentoInstitucional.Estado.BORRADOR,
+                origen=DocumentoInstitucional.Origen.ASISTIDO,
+                fecha_documento=timezone.localdate(),
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                destinatario=(
+                    request.POST.get("destinatario", "").strip()
+                    or "Instituto Nacional de Bienestar Estudiantil (INABIE)"
+                ),
+                asunto=(
+                    request.POST.get("asunto", "").strip()
+                    or "Nota aclaratoria"
+                ),
+                contenido_html=contenido,
+                firmante=(
+                    request.POST.get("firmante", "").strip()
+                    or empresa.firmante_predeterminado
+                    or ""
+                ),
+                cargo_firmante=(
+                    request.POST.get(
+                        "cargo_firmante",
+                        "",
+                    ).strip()
+                    or empresa.cargo_firmante_predeterminado
+                    or ""
+                ),
+                incluir_firma=(
+                    "incluir_firma" in request.POST
+                ),
+                incluir_sello=(
+                    "incluir_sello" in request.POST
+                ),
+                dias_no_laborables_snapshot=dias,
+                datos_snapshot={
+                    "periodo": {
+                        "desde": fecha_desde.isoformat(),
+                        "hasta": fecha_hasta.isoformat(),
+                    },
+                    "conduces_anulados": conduces_anulados,
+                    "totales": {
+                        "cantidad_conduces_anulados": len(
+                            conduces_anulados
+                        ),
+                        "unidades_conduces_anulados": sum(
+                            int(item.get("cantidad", 0) or 0)
+                            for item in conduces_anulados
+                        ),
+                    },
+                },
+                creado_por=request.user,
+                modificado_por=request.user,
+            )
+
+        messages.success(
+            request,
+            f"Documento {documento.numero} creado como borrador.",
+        )
+
+        return redirect(
+            "editar_documento_institucional",
+            documento_id=documento.id,
+        )
+
+    return render(
+        request,
+        "documento_institucional_form.html",
+        {
+            "empresa": empresa,
+            "fecha_desde": fecha_desde_inicial,
+            "fecha_hasta": fecha_hasta_inicial,
+        },
+    )
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def editar_documento_institucional(request, documento_id):
+    empresa = obtener_empresa(request)
+
+    documento = documento_get_object_or_404(
+        DocumentoInstitucional,
+        id=documento_id,
+        empresa=empresa,
+        eliminado_en__isnull=True,
+    )
+
+    if documento.estado != DocumentoInstitucional.Estado.BORRADOR:
+        messages.error(
+            request,
+            "Solo los documentos en borrador pueden editarse.",
+        )
+        return redirect("documentos_institucionales")
+
+    # ========================================================
+    # AUTOCOMPLETAR IDENTIDAD DEL FIRMANTE
+    # ========================================================
+    # Solo aplica a BORRADORES que todavía no tienen estos datos.
+    # Una vez copiados al documento, quedan independientes de
+    # cambios futuros realizados en la configuración de la empresa.
+    campos_identidad_actualizados = []
+
+    if (
+        not documento.firmante
+        and empresa.firmante_predeterminado
+    ):
+        documento.firmante = empresa.firmante_predeterminado
+        campos_identidad_actualizados.append("firmante")
+
+    if (
+        not documento.cargo_firmante
+        and empresa.cargo_firmante_predeterminado
+    ):
+        documento.cargo_firmante = (
+            empresa.cargo_firmante_predeterminado
+        )
+        campos_identidad_actualizados.append("cargo_firmante")
+
+    if campos_identidad_actualizados:
+        campos_identidad_actualizados.append("modificado_en")
+        documento.save(
+            update_fields=campos_identidad_actualizados
+        )
+
+    if request.method == "POST":
+        accion = request.POST.get("accion", "guardar")
+
+        if accion == "restaurar_sastre":
+            documento.contenido_html = _texto_sugerido_nota_aclaratoria(
+                documento.fecha_desde,
+                documento.fecha_hasta,
+                documento.dias_no_laborables_snapshot or [],
+                (
+                    (documento.datos_snapshot or {}).get(
+                        "conduces_anulados",
+                        [],
+                    )
+                ),
+            )
+            documento.modificado_por = request.user
+            documento.origen = DocumentoInstitucional.Origen.ASISTIDO
+            documento.save(
+                update_fields=(
+                    "contenido_html",
+                    "modificado_por",
+                    "origen",
+                    "modificado_en",
+                )
+            )
+
+            messages.success(
+                request,
+                "Se restauró la redacción sugerida por SASTRE.",
+            )
+
+            return redirect(
+                "editar_documento_institucional",
+                documento_id=documento.id,
+            )
+
+        documento.destinatario = request.POST.get(
+            "destinatario",
+            "",
+        ).strip()
+
+        documento.asunto = request.POST.get(
+            "asunto",
+            "",
+        ).strip()
+
+        documento.contenido_html = _sanitizar_html_documento(
+            request.POST.get(
+                "contenido_html",
+                "",
+            )
+        )
+
+        documento.firmante = request.POST.get(
+            "firmante",
+            "",
+        ).strip()
+
+        documento.cargo_firmante = request.POST.get(
+            "cargo_firmante",
+            "",
+        ).strip()
+
+        documento.incluir_firma = (
+            "incluir_firma" in request.POST
+        )
+
+        documento.incluir_sello = (
+            "incluir_sello" in request.POST
+        )
+
+        documento.modificado_por = request.user
+        documento.save()
+
+        if accion == "finalizar":
+            ok, mensaje = _finalizar_documento_institucional(
+                documento,
+                empresa,
+                request.user,
+            )
+
+            if ok:
+                messages.success(
+                    request,
+                    mensaje,
+                )
+                return redirect(
+                    "documentos_institucionales"
+                )
+
+            messages.error(
+                request,
+                mensaje,
+            )
+
+            return redirect(
+                "editar_documento_institucional",
+                documento_id=documento.id,
+            )
+
+        messages.success(
+            request,
+            "Borrador guardado correctamente.",
+        )
+
+        return redirect(
+            "editar_documento_institucional",
+            documento_id=documento.id,
+        )
+
+    return render(
+        request,
+        "documento_institucional_form.html",
+        {
+            "empresa": empresa,
+            "documento": documento,
+            "dias_snapshot": documento.dias_no_laborables_snapshot,
+            "conduces_snapshot": (
+                (documento.datos_snapshot or {}).get(
+                    "conduces_anulados",
+                    [],
+                )
+            ),
+        },
+    )
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+@documento_require_POST
+def eliminar_documento_institucional(request, documento_id):
+    empresa = obtener_empresa(request)
+
+    documento = documento_get_object_or_404(
+        DocumentoInstitucional,
+        id=documento_id,
+        empresa=empresa,
+        eliminado_en__isnull=True,
+    )
+
+    if documento.estado != DocumentoInstitucional.Estado.BORRADOR:
+        messages.error(
+            request,
+            "Solo los borradores pueden eliminarse.",
+        )
+        return redirect("documentos_institucionales")
+
+    documento.eliminar_logicamente(request.user)
+
+    messages.success(
+        request,
+        f"Documento {documento.numero} eliminado.",
+    )
+
+    return redirect("documentos_institucionales")
+
+
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+@documento_require_POST
+def finalizar_documento_institucional(
+    request,
+    documento_id,
+):
+    empresa = obtener_empresa(request)
+
+    documento = documento_get_object_or_404(
+        DocumentoInstitucional,
+        id=documento_id,
+        empresa=empresa,
+        eliminado_en__isnull=True,
+    )
+
+    ok, mensaje = _finalizar_documento_institucional(
+        documento,
+        empresa,
+        request.user,
+    )
+
+    if ok:
+        messages.success(
+            request,
+            mensaje,
+        )
+    else:
+        messages.error(
+            request,
+            mensaje,
+        )
+
+    return redirect(
+        "documentos_institucionales"
+    )
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+@documento_require_POST
+def duplicar_documento_institucional(
+    request,
+    documento_id,
+):
+    """
+    Crea una nueva versión editable de un documento emitido.
+
+    El documento original nunca se modifica.
+    """
+
+    from copy import deepcopy
+
+    empresa = obtener_empresa(request)
+
+    documento = documento_get_object_or_404(
+        DocumentoInstitucional,
+        id=documento_id,
+        empresa=empresa,
+        eliminado_en__isnull=True,
+    )
+
+    if documento.estado not in (
+        DocumentoInstitucional.Estado.FINALIZADO,
+        DocumentoInstitucional.Estado.ANULADO,
+    ):
+        messages.error(
+            request,
+            "Solo los documentos finalizados o anulados "
+            "pueden generar una nueva versión.",
+        )
+        return redirect(
+            "documentos_institucionales"
+        )
+
+    # El documento_base siempre debe apuntar al primer
+    # documento de la serie.
+    base = (
+        documento.documento_base
+        or documento
+    )
+
+    with documento_transaction.atomic():
+
+        base = (
+            DocumentoInstitucional.objects
+            .select_for_update()
+            .get(
+                pk=base.pk,
+                empresa=empresa,
+            )
+        )
+
+        ultima_version = (
+            DocumentoInstitucional.objects
+            .filter(
+                empresa=empresa,
+                documento_base=base,
+            )
+            .order_by("-version")
+            .values_list(
+                "version",
+                flat=True,
+            )
+            .first()
+        )
+
+        siguiente_version = (
+            max(
+                int(base.version or 1),
+                int(ultima_version or 1),
+            )
+            + 1
+        )
+
+        numero = _numero_documento_siguiente(
+            empresa,
+            timezone.localdate().year,
+        )
+
+        snapshot = deepcopy(
+            documento.datos_snapshot
+            or {}
+        )
+
+        # Una nueva versión todavía no es una emisión.
+        snapshot.pop(
+            "emision",
+            None,
+        )
+
+        snapshot["versionado"] = {
+            "documento_base_id": base.id,
+            "documento_base_numero": base.numero,
+            "version": siguiente_version,
+            "creado_desde_id": documento.id,
+            "creado_desde_numero": documento.numero,
+            "creado_en": timezone.now().isoformat(),
+        }
+
+        nuevo = DocumentoInstitucional.objects.create(
+            empresa=empresa,
+            numero=numero,
+            tipo=documento.tipo,
+            estado=DocumentoInstitucional.Estado.BORRADOR,
+            origen=documento.origen,
+            fecha_documento=timezone.localdate(),
+            fecha_desde=documento.fecha_desde,
+            fecha_hasta=documento.fecha_hasta,
+            destinatario=documento.destinatario,
+            asunto=documento.asunto,
+            contenido_html=documento.contenido_html,
+            firmante=documento.firmante,
+            cargo_firmante=documento.cargo_firmante,
+            incluir_firma=documento.incluir_firma,
+            incluir_sello=documento.incluir_sello,
+            dias_no_laborables_snapshot=deepcopy(
+                documento.dias_no_laborables_snapshot
+                or []
+            ),
+            datos_snapshot=snapshot,
+            documento_base=base,
+            version=siguiente_version,
+            creado_por=request.user,
+            modificado_por=request.user,
+        )
+
+    messages.success(
+        request,
+        (
+            f"Nueva versión V{nuevo.version} creada como "
+            f"borrador: {nuevo.numero}."
+        ),
+    )
+
+    return redirect(
+        "editar_documento_institucional",
+        documento_id=nuevo.id,
+    )
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+@documento_require_POST
+def anular_documento_institucional(
+    request,
+    documento_id,
+):
+    empresa = obtener_empresa(request)
+
+    documento = documento_get_object_or_404(
+        DocumentoInstitucional,
+        id=documento_id,
+        empresa=empresa,
+        eliminado_en__isnull=True,
+    )
+
+    if (
+        documento.estado
+        != DocumentoInstitucional.Estado.FINALIZADO
+    ):
+        messages.error(
+            request,
+            "Solo los documentos finalizados pueden anularse.",
+        )
+        return redirect(
+            "documentos_institucionales"
+        )
+
+    motivo = request.POST.get(
+        "motivo_anulacion",
+        "",
+    ).strip()
+
+    if not motivo:
+        messages.error(
+            request,
+            "Debe indicar el motivo de la anulación.",
+        )
+        return redirect(
+            "documentos_institucionales"
+        )
+
+    momento = timezone.now()
+
+    snapshot = dict(
+        documento.datos_snapshot
+        or {}
+    )
+
+    emision = dict(
+        snapshot.get(
+            "emision",
+            {},
+        )
+    )
+
+    emision.update({
+        "estado": "ANULADO",
+        "anulado_en": momento.isoformat(),
+        "anulado_por_id": request.user.id,
+        "motivo_anulacion": motivo,
+    })
+
+    snapshot["emision"] = emision
+
+    documento.datos_snapshot = snapshot
+    documento.estado = (
+        DocumentoInstitucional.Estado.ANULADO
+    )
+    documento.anulado_en = momento
+    documento.anulado_por = request.user
+    documento.motivo_anulacion = motivo
+    documento.modificado_por = request.user
+
+    documento.save(
+        update_fields=[
+            "datos_snapshot",
+            "estado",
+            "anulado_en",
+            "anulado_por",
+            "motivo_anulacion",
+            "modificado_por",
+            "modificado_en",
+        ]
+    )
+
+    messages.success(
+        request,
+        f"Documento {documento.numero} anulado correctamente.",
+    )
+
+    return redirect(
+        "documentos_institucionales"
+    )
+
+
+# ============================================================
+# DOCUMENTOS INSTITUCIONALES - SALIDA PDF
+# ============================================================
+
+def _pdf_documento_institucional(documento, empresa):
+    import os
+    from io import BytesIO
+    from html import escape as html_escape
+    from html.parser import HTMLParser
+
+    from reportlab.lib import colors
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.enums import (
+        TA_CENTER,
+        TA_JUSTIFY,
+        TA_LEFT,
+        TA_RIGHT,
+    )
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import (
+        ParagraphStyle,
+        getSampleStyleSheet,
+    )
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Table,
+        TableStyle,
+        Image,
+        HRFlowable,
+        KeepTogether,
+        CondPageBreak,
+        Flowable,
+    )
+
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=16 * mm,
+        rightMargin=16 * mm,
+        topMargin=12 * mm,
+        bottomMargin=16 * mm,
+        title=documento.asunto or "Nota aclaratoria",
+        author=empresa.nombre or "",
+    )
+
+    estilos = getSampleStyleSheet()
+
+    estilo_empresa = ParagraphStyle(
+        "EmpresaDocumento",
+        parent=estilos["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11.5,
+        leading=13,
+        alignment=TA_CENTER,
+        spaceAfter=2,
+    )
+
+    estilo_datos = ParagraphStyle(
+        "DatosEmpresaDocumento",
+        parent=estilos["Normal"],
+        fontName="Times-Roman",
+        fontSize=9.2,
+        leading=10.8,
+        alignment=TA_CENTER,
+        spaceAfter=1,
+    )
+
+    estilo_numero = ParagraphStyle(
+        "NumeroDocumento",
+        parent=estilos["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        alignment=TA_LEFT,
+    )
+
+    estilo_fecha = ParagraphStyle(
+        "FechaDocumento",
+        parent=estilos["Normal"],
+        fontName="Times-Roman",
+        fontSize=9.8,
+        leading=11.5,
+        alignment=TA_RIGHT,
+    )
+
+    estilo_titulo = ParagraphStyle(
+        "TituloDocumento",
+        parent=estilos["Normal"],
+        fontName="Times-Bold",
+        fontSize=15.5,
+        leading=18,
+        alignment=TA_CENTER,
+        textColor=HexColor("#123B72"),
+        spaceBefore=5,
+        spaceAfter=12,
+    )
+
+    estilo_destinatario = ParagraphStyle(
+        "DestinatarioDocumento",
+        parent=estilos["Normal"],
+        fontName="Times-Roman",
+        fontSize=10.3,
+        leading=12.7,
+        alignment=TA_LEFT,
+        spaceAfter=11,
+    )
+
+    estilo_cuerpo = ParagraphStyle(
+        "CuerpoDocumento",
+        parent=estilos["Normal"],
+        fontName="Times-Roman",
+        fontSize=10.3,
+        leading=14.7,
+        alignment=TA_JUSTIFY,
+        spaceAfter=8,
+    )
+
+    estilo_seccion = ParagraphStyle(
+        "SeccionDocumento",
+        parent=estilos["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10.1,
+        leading=12.5,
+        alignment=TA_LEFT,
+        textColor=HexColor("#123B72"),
+        spaceBefore=6,
+        spaceAfter=5,
+    )
+
+    estilo_lista = ParagraphStyle(
+        "ListaDocumento",
+        parent=estilo_cuerpo,
+        leftIndent=16,
+        firstLineIndent=-7,
+    )
+
+    estilo_tabla = ParagraphStyle(
+        "CeldaDocumento",
+        parent=estilos["Normal"],
+        fontName="Helvetica",
+        fontSize=7.1,
+        leading=8.5,
+        alignment=TA_LEFT,
+    )
+
+    estilo_tabla_centro = ParagraphStyle(
+        "CeldaCentroDocumento",
+        parent=estilo_tabla,
+        alignment=TA_CENTER,
+    )
+
+    story = []
+
+    # ========================================================
+    # MEMBRETE
+    # ========================================================
+
+    if getattr(empresa, "logo", None):
+        try:
+            with empresa.logo.storage.open(
+                empresa.logo.name,
+                "rb",
+            ) as archivo_logo:
+                logo_buffer = BytesIO(
+                    archivo_logo.read()
+                )
+
+            logo = Image(
+                logo_buffer
+            )
+
+            # Membrete institucional:
+            # aumenta ligeramente el logo pero conserva
+            # siempre su proporción original.
+            logo._restrictSize(
+                45 * mm,
+                24 * mm,
+            )
+
+            logo.hAlign = "CENTER"
+
+            story.append(logo)
+            story.append(Spacer(1, 1.5 * mm))
+
+        except Exception:
+            pass
+
+    story.append(
+        Paragraph(
+            html_escape((empresa.nombre or "").upper()),
+            estilo_empresa,
+        )
+    )
+
+    if empresa.direccion:
+        story.append(
+            Paragraph(
+                html_escape(empresa.direccion),
+                estilo_datos,
+            )
+        )
+
+    contacto = []
+
+    if empresa.telefono:
+        contacto.append(
+            "Teléfono.: " + html_escape(empresa.telefono)
+        )
+
+    if empresa.rnc:
+        contacto.append(
+            "RNC.: " + html_escape(empresa.rnc)
+        )
+
+    if contacto:
+        story.append(
+            Paragraph(
+                " &nbsp;&nbsp;|&nbsp;&nbsp; ".join(contacto),
+                estilo_datos,
+            )
+        )
+
+    if empresa.correo:
+        story.append(
+            Paragraph(
+                html_escape(empresa.correo),
+                estilo_datos,
+            )
+        )
+
+    story.append(Spacer(1, 2.5 * mm))
+
+    story.append(
+        HRFlowable(
+            width="100%",
+            thickness=1.1,
+            color=HexColor("#123B72"),
+        )
+    )
+
+    story.append(Spacer(1, 2.5 * mm))
+
+    # ========================================================
+    # NUMERO / LUGAR / FECHA
+    # ========================================================
+
+    fecha_documento = (
+        documento.fecha_documento
+        or timezone.localdate()
+    )
+
+    fecha_texto = _fecha_documental_espanol(
+        fecha_documento
+    )
+
+    ciudad = html_escape(
+        empresa.ciudad or ""
+    )
+
+    meta = Table(
+        [[
+            Paragraph(
+                html_escape(documento.numero or ""),
+                estilo_numero,
+            ),
+            Paragraph(
+                (
+                    f"{ciudad}<br/>{fecha_texto}"
+                    if ciudad
+                    else fecha_texto
+                ),
+                estilo_fecha,
+            ),
+        ]],
+        colWidths=[80 * mm, 96 * mm],
+    )
+
+    meta.setStyle(
+        TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ])
+    )
+
+    story.append(meta)
+
+    story.append(
+        Paragraph(
+            "<u>NOTA ACLARATORIA</u>",
+            estilo_titulo,
+        )
+    )
+
+    # ========================================================
+    # DESTINATARIO
+    # ========================================================
+
+    destinatario = html_escape(
+        documento.destinatario
+        or "Instituto Nacional de Bienestar Estudiantil (INABIE)"
+    )
+
+    story.append(
+        Paragraph(
+            "Señores<br/>"
+            f"<b>{destinatario}</b><br/>"
+            "Su despacho.-<br/>"
+            "Distinguidos señores:",
+            estilo_destinatario,
+        )
+    )
+
+    # ========================================================
+    # PARSER DEL HTML EDITABLE
+    # ========================================================
+
+    class ParserDocumento(HTMLParser):
+
+        def __init__(self):
+            super().__init__()
+
+            self.story = []
+
+            self.tipo = None
+            self.texto = []
+
+            self.en_tabla = False
+            self.tabla = []
+
+            self.fila = None
+            self.celda = None
+
+        def _texto_actual(self):
+            return "".join(self.texto).strip()
+
+        def _cerrar_bloque(self):
+
+            texto = self._texto_actual()
+
+            if texto:
+
+                if self.tipo in ("h1", "h2", "h3"):
+                    estilo = estilo_seccion
+
+                elif self.tipo == "li":
+                    estilo = estilo_lista
+                    texto = "• " + texto
+
+                else:
+                    estilo = estilo_cuerpo
+
+                self.story.append(
+                    Paragraph(
+                        texto,
+                        estilo,
+                    )
+                )
+
+            self.tipo = None
+            self.texto = []
+
+        def handle_starttag(self, tag, attrs):
+
+            tag = tag.lower()
+
+            if tag in ("p", "h1", "h2", "h3", "li"):
+                self._cerrar_bloque()
+                self.tipo = tag
+                return
+
+            if tag == "br":
+                self.texto.append("<br/>")
+                return
+
+            if tag in ("strong", "b"):
+                self.texto.append("<b>")
+                return
+
+            if tag in ("em", "i"):
+                self.texto.append("<i>")
+                return
+
+            if tag == "u":
+                self.texto.append("<u>")
+                return
+
+            if tag == "table":
+                self._cerrar_bloque()
+                self.en_tabla = True
+                self.tabla = []
+                return
+
+            if tag == "tr" and self.en_tabla:
+                self.fila = []
+                return
+
+            if tag in ("th", "td") and self.en_tabla:
+
+                self.celda = {
+                    "tag": tag,
+                    "texto": [],
+                }
+
+                return
+
+        def handle_endtag(self, tag):
+
+            tag = tag.lower()
+
+            if tag in ("strong", "b"):
+                self.texto.append("</b>")
+                return
+
+            if tag in ("em", "i"):
+                self.texto.append("</i>")
+                return
+
+            if tag == "u":
+                self.texto.append("</u>")
+                return
+
+            if tag in ("p", "h1", "h2", "h3", "li"):
+                self._cerrar_bloque()
+                return
+
+            if (
+                tag in ("th", "td")
+                and self.en_tabla
+                and self.celda is not None
+            ):
+
+                texto = "".join(
+                    self.celda["texto"]
+                ).strip()
+
+                self.fila.append({
+                    "tag": self.celda["tag"],
+                    "texto": texto,
+                })
+
+                self.celda = None
+                return
+
+            if tag == "tr" and self.en_tabla:
+
+                if self.fila:
+                    self.tabla.append(
+                        self.fila
+                    )
+
+                self.fila = None
+                return
+
+            if tag == "table" and self.en_tabla:
+                self._cerrar_tabla()
+                return
+
+        def handle_data(self, data):
+
+            seguro = html_escape(
+                data,
+                quote=False,
+            )
+
+            if (
+                self.en_tabla
+                and self.celda is not None
+            ):
+                self.celda["texto"].append(
+                    seguro
+                )
+
+            else:
+                self.texto.append(
+                    seguro
+                )
+
+        def _cerrar_tabla(self):
+
+            if not self.tabla:
+                self.en_tabla = False
+                return
+
+            data = []
+
+            for fila in self.tabla:
+
+                fila_pdf = []
+
+                for celda in fila:
+
+                    estilo = (
+                        estilo_tabla_centro
+                        if celda.get("tag") == "th"
+                        else estilo_tabla
+                    )
+
+                    fila_pdf.append(
+                        Paragraph(
+                            celda.get(
+                                "texto",
+                                "",
+                            ),
+                            estilo,
+                        )
+                    )
+
+                data.append(
+                    fila_pdf
+                )
+
+            # Ancho total aproximado: 520 pt
+            col_widths = [
+                47,   # Fecha
+                47,   # No. conduce
+                42,   # Codigo
+                102,  # Centro
+                52,   # Producto
+                44,   # Cantidad
+                186,  # Motivo
+            ]
+
+            tabla = Table(
+                data,
+                colWidths=col_widths,
+                repeatRows=1,
+                hAlign="CENTER",
+            )
+
+            tabla.setStyle(
+                TableStyle([
+
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        HexColor("#123B72"),
+                    ),
+
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (-1, 0),
+                        "Helvetica-Bold",
+                    ),
+
+                    (
+                        "ALIGN",
+                        (0, 0),
+                        (-1, 0),
+                        "CENTER",
+                    ),
+
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "MIDDLE",
+                    ),
+
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        HexColor("#7E8A9A"),
+                    ),
+
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        4,
+                    ),
+
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        4,
+                    ),
+
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                ])
+            )
+
+            self.story.append(
+                Spacer(
+                    1,
+                    2 * mm,
+                )
+            )
+
+            self.story.append(
+                tabla
+            )
+
+            self.story.append(
+                Spacer(
+                    1,
+                    3 * mm,
+                )
+            )
+
+            self.tabla = []
+            self.en_tabla = False
+
+        def finalizar(self):
+
+            self._cerrar_bloque()
+
+            if self.en_tabla:
+                self._cerrar_tabla()
+
+            return self.story
+
+    parser = ParserDocumento()
+
+    contenido_pdf = documento.contenido_html or ""
+
+    # --------------------------------------------------------
+    # SEGURIDAD DOCUMENTAL EXTERNA
+    # --------------------------------------------------------
+    # Ninguna comunicación emitida debe revelar que fue
+    # preparada mediante software o automatización.
+
+    contenido_pdf = contenido_pdf.replace(
+        "Los conduces relacionados anteriormente corresponden "
+        "exclusivamente a anulaciones registradas en SASTRE por "
+        "incidencias particulares de los centros educativos en las "
+        "fechas indicadas.",
+        "Los conduces relacionados anteriormente corresponden "
+        "a anulaciones realizadas conforme a las incidencias "
+        "particulares reportadas por los centros educativos en las "
+        "fechas indicadas."
+    )
+
+    contenido_pdf = contenido_pdf.replace(
+        "realizadas conforme a las incidencias particulares",
+        "realizadas conforme a las incidencias particulares"
+    )
+
+    contenido_pdf = contenido_pdf.replace(
+        "registrados en SASTRE por incidencias particulares",
+        "realizados conforme a las incidencias particulares"
+    )
+
+    contenido_pdf = contenido_pdf.replace(
+        "SASTRE ERP",
+        ""
+    )
+
+    parser.feed(
+        contenido_pdf
+    )
+
+    story.extend(
+        parser.finalizar()
+    )
+
+    # ========================================================
+    # CIERRE DOCUMENTAL
+    # ========================================================
+    #
+    # Atentamente + firma + firmante + cargo + sello forman
+    # una sola unidad visual.
+    #
+    # No utiliza:
+    # - CondPageBreak
+    # - KeepTogether
+    # - tablas auxiliares
+    #
+    # Platypus decide naturalmente si el bloque cabe.
+    #
+    # Dimensiones institucionales:
+    # - Firma: 60 x 21 mm
+    # - Sello: 45 x 45 mm
+    #
+    # El sello aprovecha parcialmente el margen inferior
+    # sin modificar los márgenes generales del documento.
+    # ========================================================
+
+    class CierreDocumentoFlowable(Flowable):
+
+        def __init__(
+            self,
+            firma_path=None,
+            sello_path=None,
+            firmante="",
+            cargo="",
+        ):
+            Flowable.__init__(self)
+
+            self.firma_path = firma_path
+            self.sello_path = sello_path
+            self.firmante = firmante or ""
+            self.cargo = cargo or ""
+
+            # Altura lógica del cierre.
+            #
+            # Es suficiente para el texto y la firma.
+            # El sello utiliza también una pequeña porción
+            # del margen inferior sin afectar el flujo.
+            self.height = 36 * mm
+            self._avail_width = 0
+
+        def wrap(self, availWidth, availHeight):
+
+            self._avail_width = availWidth
+
+            return (
+                availWidth,
+                self.height,
+            )
+
+        def draw(self):
+
+            c = self.canv
+            w = self._avail_width
+
+            # ------------------------------------------------
+            # POSICIONES GENERALES
+            # ------------------------------------------------
+
+            firma_centro_x = 72 * mm
+            sello_centro_x = 143 * mm
+
+            # ------------------------------------------------
+            # ATENTAMENTE
+            # ------------------------------------------------
+
+            c.saveState()
+
+            c.setFillColor(
+                colors.black
+            )
+
+            c.setFont(
+                "Helvetica",
+                9.5,
+            )
+
+            c.drawString(
+                0,
+                32.5 * mm,
+                "Atentamente,"
+            )
+
+            c.restoreState()
+
+            # ------------------------------------------------
+            # FIRMA GRAFICA
+            # ------------------------------------------------
+
+            if self.firma_path:
+
+                firma_w = 60 * mm
+                firma_h = 21 * mm
+
+                firma_x = (
+                    firma_centro_x
+                    - firma_w / 2
+                )
+
+                firma_y = 9 * mm
+
+                try:
+
+                    c.drawImage(
+                        self.firma_path,
+                        firma_x,
+                        firma_y,
+                        width=firma_w,
+                        height=firma_h,
+                        preserveAspectRatio=True,
+                        mask="auto",
+                    )
+
+                except Exception:
+                    pass
+
+            # ------------------------------------------------
+            # LINEA DE FIRMA
+            # ------------------------------------------------
+
+            linea_w = 72 * mm
+
+            linea_x1 = (
+                firma_centro_x
+                - linea_w / 2
+            )
+
+            linea_x2 = (
+                firma_centro_x
+                + linea_w / 2
+            )
+
+            linea_y = 7.5 * mm
+
+            c.saveState()
+
+            c.setStrokeColor(
+                colors.black
+            )
+
+            c.setLineWidth(
+                0.55
+            )
+
+            c.line(
+                linea_x1,
+                linea_y,
+                linea_x2,
+                linea_y,
+            )
+
+            c.restoreState()
+
+            # ------------------------------------------------
+            # NOMBRE DEL FIRMANTE
+            # ------------------------------------------------
+
+            if self.firmante:
+
+                c.saveState()
+
+                c.setFillColor(
+                    colors.black
+                )
+
+                c.setFont(
+                    "Helvetica-Bold",
+                    9,
+                )
+
+                c.drawCentredString(
+                    firma_centro_x,
+                    4.2 * mm,
+                    self.firmante,
+                )
+
+                c.restoreState()
+
+            # ------------------------------------------------
+            # CARGO
+            # ------------------------------------------------
+
+            if self.cargo:
+
+                c.saveState()
+
+                c.setFillColor(
+                    colors.black
+                )
+
+                c.setFont(
+                    "Helvetica",
+                    8.5,
+                )
+
+                c.drawCentredString(
+                    firma_centro_x,
+                    1 * mm,
+                    self.cargo,
+                )
+
+                c.restoreState()
+
+            # ------------------------------------------------
+            # SELLO INSTITUCIONAL
+            # ------------------------------------------------
+
+            if self.sello_path:
+
+                sello_d = 45 * mm
+
+                sello_x = (
+                    sello_centro_x
+                    - sello_d / 2
+                )
+
+                # El bloque mide 36 mm.
+                # El sello utiliza 8 mm adicionales del margen
+                # inferior, sin interferir con el texto.
+                sello_y = -8 * mm
+
+                try:
+
+                    c.drawImage(
+                        self.sello_path,
+                        sello_x,
+                        sello_y,
+                        width=sello_d,
+                        height=sello_d,
+                        preserveAspectRatio=True,
+                        mask="auto",
+                    )
+
+                except Exception:
+                    pass
+
+
+    # ========================================================
+    # ARCHIVOS INSTITUCIONALES
+    # ========================================================
+
+    firma_path_cierre = None
+    sello_path_cierre = None
+
+
+    if documento.incluir_firma:
+
+        firma_empresa = getattr(
+            empresa,
+            "firma_autorizada",
+            None,
+        )
+
+        if firma_empresa:
+
+            try:
+
+                with firma_empresa.storage.open(
+                    firma_empresa.name,
+                    "rb",
+                ) as archivo_firma:
+                    firma_path_cierre = ImageReader(
+                        BytesIO(
+                            archivo_firma.read()
+                        )
+                    )
+
+            except Exception:
+                firma_path_cierre = None
+
+
+    if documento.incluir_sello:
+
+        sello_empresa = getattr(
+            empresa,
+            "sello_institucional",
+            None,
+        )
+
+        if sello_empresa:
+
+            try:
+
+                with sello_empresa.storage.open(
+                    sello_empresa.name,
+                    "rb",
+                ) as archivo_sello:
+                    sello_path_cierre = ImageReader(
+                        BytesIO(
+                            archivo_sello.read()
+                        )
+                    )
+
+            except Exception:
+                sello_path_cierre = None
+
+
+    # ========================================================
+    # INCORPORAR CIERRE AL DOCUMENTO
+    # ========================================================
+    #
+    # Sin CondPageBreak.
+    #
+    # Si quedan 36 mm o más, se coloca en la página actual.
+    # Si realmente no caben, Platypus lo llevará a la siguiente.
+    # ========================================================
+
+    story.append(
+        CierreDocumentoFlowable(
+            firma_path=firma_path_cierre,
+            sello_path=sello_path_cierre,
+            firmante=documento.firmante,
+            cargo=documento.cargo_firmante,
+        )
+    )
+
+    # ========================================================
+    # PAGINACION NEUTRA
+    # ========================================================
+
+    def pagina(canvas, document):
+
+        canvas.saveState()
+
+        canvas.setFont(
+            "Helvetica",
+            7,
+        )
+
+        canvas.setFillColor(
+            HexColor("#6B7280")
+        )
+
+        canvas.drawCentredString(
+            letter[0] / 2,
+            8 * mm,
+            f"Página {document.page}",
+        )
+
+        canvas.restoreState()
+
+    doc.build(
+        story,
+        onFirstPage=pagina,
+        onLaterPages=pagina,
+    )
+
+    buffer.seek(0)
+
+    return buffer
+
+
+
+# ============================================================
+# DOCUMENTOS INSTITUCIONALES - WORD EDITABLE
+# ============================================================
+
+def _html_externo_documento(valor):
+    """
+    Limpia referencias internas que no deben aparecer
+    en un documento dirigido a terceros.
+    """
+
+    valor = _sanitizar_html_documento(valor or "")
+
+    valor = valor.replace(
+        "Los conduces relacionados anteriormente corresponden "
+        "exclusivamente a anulaciones registradas en SASTRE por "
+        "incidencias particulares de los centros educativos en las "
+        "fechas indicadas.",
+        "Los conduces relacionados anteriormente corresponden "
+        "exclusivamente a anulaciones derivadas de incidencias "
+        "particulares de los centros educativos en las fechas indicadas.",
+    )
+
+    valor = valor.replace(
+        "registrados en SASTRE por incidencias particulares",
+        "realizados conforme a las incidencias particulares",
+    )
+
+    valor = valor.replace(
+        "SASTRE ERP",
+        "",
+    )
+
+    return valor
+
+
+def _word_datos_empresa(
+    documento,
+    empresa,
+):
+    snapshot = documento.datos_snapshot or {}
+
+    historico = (
+        snapshot.get("empresa_emision", {})
+        or {}
+    )
+
+    if historico:
+        return {
+            "nombre": historico.get("nombre", "") or "",
+            "rnc": historico.get("rnc", "") or "",
+            "direccion": historico.get("direccion", "") or "",
+            "telefono": historico.get("telefono", "") or "",
+            "ciudad": historico.get("ciudad", "") or "",
+            "correo": historico.get("correo", "") or "",
+        }
+
+    return {
+        "nombre": getattr(empresa, "nombre", "") or "",
+        "rnc": getattr(empresa, "rnc", "") or "",
+        "direccion": getattr(empresa, "direccion", "") or "",
+        "telefono": getattr(empresa, "telefono", "") or "",
+        "ciudad": getattr(empresa, "ciudad", "") or "",
+        "correo": getattr(empresa, "correo", "") or "",
+    }
+
+
+def _word_imagen_empresa(
+    documento,
+    empresa,
+    tipo,
+):
+    """
+    Prioriza el archivo utilizado al momento de emisión.
+    Si no existe snapshot, utiliza la configuración actual.
+    """
+
+    from io import BytesIO
+    from django.core.files.storage import default_storage
+
+    snapshot = documento.datos_snapshot or {}
+
+    firma_snapshot = (
+        snapshot.get("firma_emision", {})
+        or {}
+    )
+
+    mapa = {
+        "logo": (
+            "logo_archivo",
+            "logo",
+        ),
+        "firma": (
+            "firma_archivo",
+            "firma_autorizada",
+        ),
+        "sello": (
+            "sello_archivo",
+            "sello_institucional",
+        ),
+    }
+
+    clave_snapshot, campo_empresa = mapa[tipo]
+
+    historico = (
+        firma_snapshot.get(clave_snapshot)
+        or ""
+    )
+
+    if historico:
+        try:
+            with default_storage.open(
+                historico,
+                "rb",
+            ) as archivo:
+                return BytesIO(
+                    archivo.read()
+                )
+        except Exception:
+            pass
+
+    campo = getattr(
+        empresa,
+        campo_empresa,
+        None,
+    )
+
+    if campo:
+        try:
+            with campo.storage.open(
+                campo.name,
+                "rb",
+            ) as archivo:
+                return BytesIO(
+                    archivo.read()
+                )
+        except Exception:
+            pass
+
+    return None
+
+
+class _DocumentoWordHTMLParser(HTMLParser):
+
+    BLOQUES = {
+        "p",
+        "div",
+        "h1",
+        "h2",
+        "h3",
+        "blockquote",
+        "li",
+    }
+
+    INLINE = {
+        "strong",
+        "b",
+        "em",
+        "i",
+        "u",
+        "span",
+    }
+
+    def __init__(self):
+        super().__init__(
+            convert_charrefs=True
+        )
+
+        self.bloques = []
+
+        self.parrafo = None
+
+        self.tabla = None
+        self.fila = None
+        self.celda = None
+
+        self.inline = []
+
+        self.listas = []
+
+
+    def _estilos(self, attrs):
+
+        salida = {}
+
+        attrs = dict(
+            attrs or []
+        )
+
+        valor = (
+            attrs.get("style", "")
+            or ""
+        )
+
+        for regla in valor.split(";"):
+
+            if ":" not in regla:
+                continue
+
+            clave, dato = regla.split(
+                ":",
+                1,
+            )
+
+            clave = clave.strip().lower()
+            dato = dato.strip().lower()
+
+            if clave == "text-align":
+                salida["align"] = dato
+
+            elif clave == "margin-left":
+                match = re.fullmatch(
+                    r"(\d+)px",
+                    dato,
+                )
+
+                if match:
+                    salida["margin_left"] = int(
+                        match.group(1)
+                    )
+
+            elif clave == "font-size":
+                match = re.fullmatch(
+                    r"(\d+)px",
+                    dato,
+                )
+
+                if match:
+                    salida["font_size"] = int(
+                        match.group(1)
+                    )
+
+        return salida
+
+
+    def _formato_inline(self):
+
+        formato = {
+            "bold": False,
+            "italic": False,
+            "underline": False,
+            "font_size": None,
+        }
+
+        for tag, attrs in self.inline:
+
+            if tag in (
+                "strong",
+                "b",
+            ):
+                formato["bold"] = True
+
+            elif tag in (
+                "em",
+                "i",
+            ):
+                formato["italic"] = True
+
+            elif tag == "u":
+                formato["underline"] = True
+
+            estilos = self._estilos(
+                attrs
+            )
+
+            if estilos.get("font_size"):
+                formato["font_size"] = estilos[
+                    "font_size"
+                ]
+
+        return formato
+
+
+    def _nuevo_parrafo(
+        self,
+        tag="p",
+        attrs=None,
+    ):
+
+        self._cerrar_parrafo()
+
+        estilos = self._estilos(
+            attrs or []
+        )
+
+        self.parrafo = {
+            "tipo": "parrafo",
+            "tag": tag,
+            "align": estilos.get(
+                "align"
+            ),
+            "margin_left": estilos.get(
+                "margin_left",
+                0,
+            ),
+            "font_size": estilos.get(
+                "font_size"
+            ),
+            "runs": [],
+        }
+
+        if (
+            tag == "li"
+            and self.listas
+        ):
+
+            lista = self.listas[-1]
+
+            if lista["tipo"] == "ol":
+                lista["contador"] += 1
+
+                prefijo = (
+                    f'{lista["contador"]}. '
+                )
+
+            else:
+                prefijo = "• "
+
+            self.parrafo["runs"].append({
+                "texto": prefijo,
+                "bold": False,
+                "italic": False,
+                "underline": False,
+                "font_size": None,
+            })
+
+
+    def _cerrar_parrafo(self):
+
+        if not self.parrafo:
+            return
+
+        texto = "".join(
+            run.get("texto", "")
+            for run
+            in self.parrafo["runs"]
+        )
+
+        if texto.strip():
+
+            if self.celda is not None:
+
+                self.celda.setdefault(
+                    "parrafos",
+                    [],
+                ).append(
+                    self.parrafo
+                )
+
+            else:
+
+                self.bloques.append(
+                    self.parrafo
+                )
+
+        self.parrafo = None
+
+
+    def _texto(self, valor):
+
+        if not valor:
+            return
+
+        if (
+            not valor.strip()
+            and self.parrafo is None
+        ):
+            return
+
+        if self.parrafo is None:
+            self._nuevo_parrafo(
+                "p",
+                [],
+            )
+
+        formato = (
+            self._formato_inline()
+        )
+
+        self.parrafo["runs"].append({
+            "texto": valor,
+            **formato,
+        })
+
+
+    def handle_starttag(
+        self,
+        tag,
+        attrs,
+    ):
+
+        tag = tag.lower()
+
+        if tag == "table":
+
+            self._cerrar_parrafo()
+
+            self.tabla = {
+                "tipo": "tabla",
+                "filas": [],
+            }
+
+            return
+
+        if tag == "tr":
+
+            self._cerrar_parrafo()
+
+            self.fila = []
+
+            return
+
+        if tag in (
+            "th",
+            "td",
+        ):
+
+            self._cerrar_parrafo()
+
+            self.celda = {
+                "header": (
+                    tag == "th"
+                ),
+                "parrafos": [],
+            }
+
+            self._nuevo_parrafo(
+                "p",
+                attrs,
+            )
+
+            return
+
+        if tag in (
+            "ul",
+            "ol",
+        ):
+
+            self._cerrar_parrafo()
+
+            self.listas.append({
+                "tipo": tag,
+                "contador": 0,
+            })
+
+            return
+
+        if tag in self.BLOQUES:
+
+            self._nuevo_parrafo(
+                tag,
+                attrs,
+            )
+
+            return
+
+        if tag == "br":
+
+            self._texto("\n")
+
+            return
+
+        if tag in self.INLINE:
+
+            self.inline.append(
+                (
+                    tag,
+                    attrs,
+                )
+            )
+
+
+    def handle_endtag(
+        self,
+        tag,
+    ):
+
+        tag = tag.lower()
+
+        if tag in self.INLINE:
+
+            for indice in range(
+                len(self.inline) - 1,
+                -1,
+                -1,
+            ):
+
+                if (
+                    self.inline[indice][0]
+                    == tag
+                ):
+
+                    self.inline.pop(
+                        indice
+                    )
+
+                    break
+
+            return
+
+        if tag in self.BLOQUES:
+
+            self._cerrar_parrafo()
+
+            return
+
+        if tag in (
+            "ul",
+            "ol",
+        ):
+
+            self._cerrar_parrafo()
+
+            if self.listas:
+                self.listas.pop()
+
+            return
+
+        if tag in (
+            "th",
+            "td",
+        ):
+
+            self._cerrar_parrafo()
+
+            if (
+                self.fila is not None
+                and self.celda is not None
+            ):
+
+                self.fila.append(
+                    self.celda
+                )
+
+            self.celda = None
+
+            return
+
+        if tag == "tr":
+
+            self._cerrar_parrafo()
+
+            if (
+                self.tabla is not None
+                and self.fila is not None
+            ):
+
+                self.tabla["filas"].append(
+                    self.fila
+                )
+
+            self.fila = None
+
+            return
+
+        if tag == "table":
+
+            self._cerrar_parrafo()
+
+            if self.tabla is not None:
+
+                self.bloques.append(
+                    self.tabla
+                )
+
+            self.tabla = None
+
+
+    def handle_data(
+        self,
+        data,
+    ):
+
+        self._texto(
+            data
+        )
+
+
+    def finalizar(self):
+
+        self._cerrar_parrafo()
+
+        return self.bloques
+
+
+def _word_quitar_bordes_tabla(
+    table,
+):
+
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    tbl_pr = table._tbl.tblPr
+
+    bordes = OxmlElement(
+        "w:tblBorders"
+    )
+
+    for lado in (
+        "top",
+        "left",
+        "bottom",
+        "right",
+        "insideH",
+        "insideV",
+    ):
+
+        elemento = OxmlElement(
+            f"w:{lado}"
+        )
+
+        elemento.set(
+            qn("w:val"),
+            "nil",
+        )
+
+        bordes.append(
+            elemento
+        )
+
+    tbl_pr.append(
+        bordes
+    )
+
+
+def _word_sombrear_celda(
+    cell,
+    fill,
+):
+
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    tc_pr = (
+        cell._tc.get_or_add_tcPr()
+    )
+
+    shd = OxmlElement(
+        "w:shd"
+    )
+
+    shd.set(
+        qn("w:fill"),
+        fill,
+    )
+
+    tc_pr.append(
+        shd
+    )
+
+
+def _word_borde_inferior(
+    paragraph,
+):
+
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    p_pr = (
+        paragraph._p.get_or_add_pPr()
+    )
+
+    p_bdr = OxmlElement(
+        "w:pBdr"
+    )
+
+    bottom = OxmlElement(
+        "w:bottom"
+    )
+
+    bottom.set(
+        qn("w:val"),
+        "single",
+    )
+
+    bottom.set(
+        qn("w:sz"),
+        "6",
+    )
+
+    bottom.set(
+        qn("w:space"),
+        "1",
+    )
+
+    bottom.set(
+        qn("w:color"),
+        "000000",
+    )
+
+    p_bdr.append(
+        bottom
+    )
+
+    p_pr.append(
+        p_bdr
+    )
+
+
+def _word_agregar_runs(
+    paragraph,
+    node,
+    default_size=10.5,
+    color=None,
+):
+
+    from docx.shared import Pt, RGBColor
+
+    for item in node.get(
+        "runs",
+        [],
+    ):
+
+        texto = item.get(
+            "texto",
+            "",
+        )
+
+        if not texto:
+            continue
+
+        run = paragraph.add_run(
+            texto
+        )
+
+        run.bold = bool(
+            item.get("bold")
+        )
+
+        run.italic = bool(
+            item.get("italic")
+        )
+
+        run.underline = bool(
+            item.get("underline")
+        )
+
+        px = (
+            item.get("font_size")
+            or node.get("font_size")
+        )
+
+        if px:
+
+            size = max(
+                8,
+                min(
+                    24,
+                    float(px) * 0.75,
+                ),
+            )
+
+        else:
+
+            size = default_size
+
+        run.font.size = Pt(
+            size
+        )
+
+        run.font.name = (
+            "Times New Roman"
+        )
+
+        if color:
+
+            run.font.color.rgb = RGBColor(
+                *color
+            )
+
+
+def _docx_documento_institucional(
+    documento,
+    empresa,
+):
+
+    from io import BytesIO
+
+    from docx import Document
+    from docx.shared import (
+        Mm,
+        Pt,
+        RGBColor,
+    )
+
+    from docx.enum.text import (
+        WD_ALIGN_PARAGRAPH,
+    )
+
+    from docx.enum.table import (
+        WD_TABLE_ALIGNMENT,
+        WD_CELL_VERTICAL_ALIGNMENT,
+    )
+
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    salida = BytesIO()
+
+    doc = Document()
+
+    section = doc.sections[0]
+
+    # Carta 8.5 x 11
+    section.page_width = Mm(
+        215.9
+    )
+
+    section.page_height = Mm(
+        279.4
+    )
+
+    section.left_margin = Mm(
+        16
+    )
+
+    section.right_margin = Mm(
+        16
+    )
+
+    section.top_margin = Mm(
+        12
+    )
+
+    section.bottom_margin = Mm(
+        16
+    )
+
+    section.footer_distance = Mm(
+        7
+    )
+
+
+    # --------------------------------------------------------
+    # ESTILO GENERAL
+    # --------------------------------------------------------
+
+    normal = doc.styles[
+        "Normal"
+    ]
+
+    normal.font.name = (
+        "Times New Roman"
+    )
+
+    normal.font.size = Pt(
+        10.5
+    )
+
+    normal._element.rPr.rFonts.set(
+        qn("w:eastAsia"),
+        "Times New Roman",
+    )
+
+
+    datos_empresa = (
+        _word_datos_empresa(
+            documento,
+            empresa,
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # LOGO
+    # --------------------------------------------------------
+
+    logo = _word_imagen_empresa(
+        documento,
+        empresa,
+        "logo",
+    )
+
+    if logo:
+
+        p = doc.add_paragraph()
+
+        p.alignment = (
+            WD_ALIGN_PARAGRAPH.CENTER
+        )
+
+        p.paragraph_format.space_after = Pt(
+            1
+        )
+
+        run = p.add_run()
+
+        run.add_picture(
+            logo,
+            width=Mm(45),
+        )
+
+
+    # --------------------------------------------------------
+    # NOMBRE EMPRESA
+    # --------------------------------------------------------
+
+    p = doc.add_paragraph()
+
+    p.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    p.paragraph_format.space_after = Pt(
+        1
+    )
+
+    run = p.add_run(
+        (
+            datos_empresa[
+                "nombre"
+            ]
+            or ""
+        ).upper()
+    )
+
+    run.bold = True
+    run.font.name = "Arial"
+    run.font.size = Pt(
+        11.5
+    )
+
+
+    if datos_empresa[
+        "direccion"
+    ]:
+
+        p = doc.add_paragraph()
+
+        p.alignment = (
+            WD_ALIGN_PARAGRAPH.CENTER
+        )
+
+        p.paragraph_format.space_after = Pt(
+            0
+        )
+
+        run = p.add_run(
+            datos_empresa[
+                "direccion"
+            ]
+        )
+
+        run.font.size = Pt(
+            9
+        )
+
+
+    datos_contacto = []
+
+    if datos_empresa[
+        "telefono"
+    ]:
+
+        datos_contacto.append(
+            "Teléfono: "
+            + datos_empresa[
+                "telefono"
+            ]
+        )
+
+    if datos_empresa[
+        "rnc"
+    ]:
+
+        datos_contacto.append(
+            "RNC: "
+            + datos_empresa[
+                "rnc"
+            ]
+        )
+
+    if datos_contacto:
+
+        p = doc.add_paragraph()
+
+        p.alignment = (
+            WD_ALIGN_PARAGRAPH.CENTER
+        )
+
+        p.paragraph_format.space_after = Pt(
+            5
+        )
+
+        run = p.add_run(
+            "    ·    ".join(
+                datos_contacto
+            )
+        )
+
+        run.font.size = Pt(
+            9
+        )
+
+
+    # --------------------------------------------------------
+    # NUMERO + FECHA
+    # --------------------------------------------------------
+
+    meta = doc.add_table(
+        rows=1,
+        cols=2,
+    )
+
+    meta.autofit = False
+
+    meta.alignment = (
+        WD_TABLE_ALIGNMENT.CENTER
+    )
+
+    _word_quitar_bordes_tabla(
+        meta
+    )
+
+    meta.cell(
+        0,
+        0,
+    ).width = Mm(
+        91
+    )
+
+    meta.cell(
+        0,
+        1,
+    ).width = Mm(
+        91
+    )
+
+
+    p = meta.cell(
+        0,
+        0,
+    ).paragraphs[0]
+
+    p.alignment = (
+        WD_ALIGN_PARAGRAPH.LEFT
+    )
+
+    run = p.add_run(
+        documento.numero
+        or ""
+    )
+
+    run.bold = True
+    run.font.size = Pt(
+        9
+    )
+
+
+    p = meta.cell(
+        0,
+        1,
+    ).paragraphs[0]
+
+    p.alignment = (
+        WD_ALIGN_PARAGRAPH.RIGHT
+    )
+
+    fecha_texto = (
+        _fecha_documental_espanol(
+            documento.fecha_documento
+        )
+    )
+
+    if datos_empresa[
+        "ciudad"
+    ]:
+
+        fecha_texto = (
+            datos_empresa[
+                "ciudad"
+            ]
+            + ", "
+            + fecha_texto
+        )
+
+    run = p.add_run(
+        fecha_texto
+    )
+
+    run.font.size = Pt(
+        9.5
+    )
+
+
+    # --------------------------------------------------------
+    # TITULO
+    # --------------------------------------------------------
+
+    p = doc.add_paragraph()
+
+    p.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    p.paragraph_format.space_before = Pt(
+        8
+    )
+
+    p.paragraph_format.space_after = Pt(
+        8
+    )
+
+    run = p.add_run(
+        (
+            documento.get_tipo_display()
+            or "Documento institucional"
+        ).upper()
+    )
+
+    run.bold = True
+    run.underline = True
+    run.font.name = "Arial"
+    run.font.size = Pt(
+        11
+    )
+
+
+    # --------------------------------------------------------
+    # DESTINATARIO
+    # --------------------------------------------------------
+
+    if documento.destinatario:
+
+        p = doc.add_paragraph()
+
+        p.paragraph_format.space_after = Pt(
+            7
+        )
+
+        run = p.add_run(
+            "Señores:\n"
+        )
+
+        run.bold = True
+
+        run = p.add_run(
+            documento.destinatario
+        )
+
+        run.bold = True
+
+
+    # --------------------------------------------------------
+    # CONTENIDO HTML
+    # --------------------------------------------------------
+
+    parser = (
+        _DocumentoWordHTMLParser()
+    )
+
+    parser.feed(
+        _html_externo_documento(
+            documento.contenido_html
+        )
+    )
+
+    parser.close()
+
+    bloques = parser.finalizar()
+
+
+    mapa_alineacion = {
+        "left": (
+            WD_ALIGN_PARAGRAPH.LEFT
+        ),
+        "center": (
+            WD_ALIGN_PARAGRAPH.CENTER
+        ),
+        "right": (
+            WD_ALIGN_PARAGRAPH.RIGHT
+        ),
+        "justify": (
+            WD_ALIGN_PARAGRAPH.JUSTIFY
+        ),
+    }
+
+
+    for node in bloques:
+
+        if (
+            node.get("tipo")
+            == "parrafo"
+        ):
+
+            p = doc.add_paragraph()
+
+            tag = node.get(
+                "tag",
+                "p",
+            )
+
+            if node.get(
+                "align"
+            ):
+
+                p.alignment = (
+                    mapa_alineacion.get(
+                        node["align"],
+                        WD_ALIGN_PARAGRAPH.JUSTIFY,
+                    )
+                )
+
+            elif tag in (
+                "h1",
+                "h2",
+                "h3",
+            ):
+
+                p.alignment = (
+                    WD_ALIGN_PARAGRAPH.LEFT
+                )
+
+            else:
+
+                p.alignment = (
+                    WD_ALIGN_PARAGRAPH.JUSTIFY
+                )
+
+
+            if node.get(
+                "margin_left"
+            ):
+
+                p.paragraph_format.left_indent = Pt(
+                    node[
+                        "margin_left"
+                    ]
+                    * 0.75
+                )
+
+
+            if tag in (
+                "h1",
+                "h2",
+                "h3",
+            ):
+
+                p.paragraph_format.space_before = Pt(
+                    5
+                )
+
+                p.paragraph_format.space_after = Pt(
+                    3
+                )
+
+                p.paragraph_format.keep_with_next = True
+
+            else:
+
+                p.paragraph_format.space_after = Pt(
+                    5
+                )
+
+
+            if tag == "h1":
+                size = 14
+
+            elif tag == "h2":
+                size = 12
+
+            elif tag == "h3":
+                size = 10.5
+
+            else:
+                size = 10.5
+
+
+            _word_agregar_runs(
+                p,
+                node,
+                default_size=size,
+            )
+
+
+            if tag in (
+                "h1",
+                "h2",
+                "h3",
+            ):
+
+                for run in p.runs:
+
+                    run.bold = True
+                    run.font.name = "Arial"
+
+
+        elif (
+            node.get("tipo")
+            == "tabla"
+        ):
+
+            filas = node.get(
+                "filas",
+                [],
+            )
+
+            if not filas:
+                continue
+
+            columnas = max(
+                len(fila)
+                for fila in filas
+            )
+
+            tabla = doc.add_table(
+                rows=len(filas),
+                cols=columnas,
+            )
+
+            tabla.style = (
+                "Table Grid"
+            )
+
+            tabla.alignment = (
+                WD_TABLE_ALIGNMENT.CENTER
+            )
+
+            tabla.autofit = True
+
+
+            for i, fila in enumerate(
+                filas
+            ):
+
+                for j, cell_node in enumerate(
+                    fila
+                ):
+
+                    cell = tabla.cell(
+                        i,
+                        j,
+                    )
+
+                    cell.vertical_alignment = (
+                        WD_CELL_VERTICAL_ALIGNMENT.CENTER
+                    )
+
+                    es_header = bool(
+                        cell_node.get(
+                            "header"
+                        )
+                    )
+
+                    if es_header:
+
+                        _word_sombrear_celda(
+                            cell,
+                            "174A7E",
+                        )
+
+
+                    parrafos = (
+                        cell_node.get(
+                            "parrafos",
+                            [],
+                        )
+                    )
+
+                    if not parrafos:
+                        continue
+
+
+                    for indice, node_p in enumerate(
+                        parrafos
+                    ):
+
+                        if indice == 0:
+
+                            p = (
+                                cell.paragraphs[0]
+                            )
+
+                        else:
+
+                            p = (
+                                cell.add_paragraph()
+                            )
+
+
+                        p.alignment = (
+                            WD_ALIGN_PARAGRAPH.CENTER
+                            if es_header
+                            else WD_ALIGN_PARAGRAPH.LEFT
+                        )
+
+                        p.paragraph_format.space_after = Pt(
+                            0
+                        )
+
+
+                        _word_agregar_runs(
+                            p,
+                            node_p,
+                            default_size=7.5,
+                            color=(
+                                (255, 255, 255)
+                                if es_header
+                                else None
+                            ),
+                        )
+
+
+                        for run in p.runs:
+
+                            run.font.size = Pt(
+                                7.5
+                            )
+
+                            if es_header:
+
+                                run.bold = True
+                                run.font.name = "Arial"
+
+
+            p = doc.add_paragraph()
+
+            p.paragraph_format.space_after = Pt(
+                0
+            )
+
+
+    # --------------------------------------------------------
+    # CIERRE
+    # --------------------------------------------------------
+
+    p = doc.add_paragraph()
+
+    p.paragraph_format.space_before = Pt(
+        5
+    )
+
+    p.paragraph_format.space_after = Pt(
+        4
+    )
+
+    run = p.add_run(
+        "Atentamente,"
+    )
+
+    run.font.size = Pt(
+        10.5
+    )
+
+
+    cierre = doc.add_table(
+        rows=1,
+        cols=2,
+    )
+
+    cierre.autofit = False
+
+    cierre.alignment = (
+        WD_TABLE_ALIGNMENT.CENTER
+    )
+
+    _word_quitar_bordes_tabla(
+        cierre
+    )
+
+
+    cell_firma = cierre.cell(
+        0,
+        0,
+    )
+
+    cell_sello = cierre.cell(
+        0,
+        1,
+    )
+
+
+    cell_firma.width = Mm(
+        115
+    )
+
+    cell_sello.width = Mm(
+        55
+    )
+
+
+    cell_firma.vertical_alignment = (
+        WD_CELL_VERTICAL_ALIGNMENT.BOTTOM
+    )
+
+    cell_sello.vertical_alignment = (
+        WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    )
+
+
+    # --------------------------------------------------------
+    # FIRMA
+    # --------------------------------------------------------
+
+    p = cell_firma.paragraphs[
+        0
+    ]
+
+    p.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    p.paragraph_format.space_after = Pt(
+        0
+    )
+
+
+    if documento.incluir_firma:
+
+        firma = _word_imagen_empresa(
+            documento,
+            empresa,
+            "firma",
+        )
+
+        if firma:
+
+            run = p.add_run()
+
+            run.add_picture(
+                firma,
+                width=Mm(60),
+            )
+
+
+    # Línea física aproximadamente 72 mm.
+    linea = cell_firma.add_paragraph()
+
+    linea.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    linea.paragraph_format.left_indent = Mm(
+        20
+    )
+
+    linea.paragraph_format.right_indent = Mm(
+        20
+    )
+
+    linea.paragraph_format.space_before = Pt(
+        0
+    )
+
+    linea.paragraph_format.space_after = Pt(
+        2
+    )
+
+    _word_borde_inferior(
+        linea
+    )
+
+
+    if documento.firmante:
+
+        p = cell_firma.add_paragraph()
+
+        p.alignment = (
+            WD_ALIGN_PARAGRAPH.CENTER
+        )
+
+        p.paragraph_format.space_after = Pt(
+            0
+        )
+
+        run = p.add_run(
+            documento.firmante
+        )
+
+        run.bold = True
+        run.font.name = "Arial"
+        run.font.size = Pt(
+            9
+        )
+
+
+    if documento.cargo_firmante:
+
+        p = cell_firma.add_paragraph()
+
+        p.alignment = (
+            WD_ALIGN_PARAGRAPH.CENTER
+        )
+
+        p.paragraph_format.space_after = Pt(
+            0
+        )
+
+        run = p.add_run(
+            documento.cargo_firmante
+        )
+
+        run.font.size = Pt(
+            9
+        )
+
+
+    # --------------------------------------------------------
+    # SELLO
+    # --------------------------------------------------------
+
+    p = cell_sello.paragraphs[
+        0
+    ]
+
+    p.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+
+    if documento.incluir_sello:
+
+        sello = _word_imagen_empresa(
+            documento,
+            empresa,
+            "sello",
+        )
+
+        if sello:
+
+            run = p.add_run()
+
+            run.add_picture(
+                sello,
+                width=Mm(45),
+            )
+
+
+    # --------------------------------------------------------
+    # PIE DE PAGINA
+    # --------------------------------------------------------
+
+    footer = section.footer
+
+    p = footer.paragraphs[
+        0
+    ]
+
+    p.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+
+    run = p.add_run(
+        "Página "
+    )
+
+    run.font.name = "Arial"
+    run.font.size = Pt(
+        7
+    )
+
+
+    field = OxmlElement(
+        "w:fldSimple"
+    )
+
+    field.set(
+        qn("w:instr"),
+        "PAGE",
+    )
+
+    p._p.append(
+        field
+    )
+
+
+    # --------------------------------------------------------
+    # METADATOS NEUTROS
+    # --------------------------------------------------------
+
+    doc.core_properties.title = (
+        documento.asunto
+        or documento.get_tipo_display()
+    )
+
+    doc.core_properties.subject = (
+        documento.numero
+        or ""
+    )
+
+    doc.core_properties.author = (
+        datos_empresa[
+            "nombre"
+        ]
+    )
+
+    doc.core_properties.keywords = (
+        "documento institucional"
+    )
+
+
+    doc.save(
+        salida
+    )
+
+    salida.seek(
+        0
+    )
+
+    return salida
+
+
+def _contenido_docx_documento_institucional(
+    documento,
+    empresa,
+):
+
+    # Documento emitido:
+    # usar siempre el Word histórico si ya existe.
+    if (
+        documento.estado
+        in (
+            DocumentoInstitucional.Estado.FINALIZADO,
+            DocumentoInstitucional.Estado.ANULADO,
+        )
+        and documento.docx_final
+    ):
+
+        try:
+
+            documento.docx_final.open(
+                "rb"
+            )
+
+            return (
+                documento.docx_final.read()
+            )
+
+        finally:
+
+            try:
+                documento.docx_final.close()
+            except Exception:
+                pass
+
+
+    buffer = (
+        _docx_documento_institucional(
+            documento,
+            empresa,
+        )
+    )
+
+    contenido = (
+        buffer.getvalue()
+    )
+
+
+    # Compatibilidad:
+    # documentos emitidos antes de incorporar Word
+    # se congelan al descargarse por primera vez.
+    if (
+        documento.estado
+        in (
+            DocumentoInstitucional.Estado.FINALIZADO,
+            DocumentoInstitucional.Estado.ANULADO,
+        )
+        and not documento.docx_final
+    ):
+
+        try:
+
+            from django.core.files.base import ContentFile
+
+            documento.docx_final.save(
+                f"{documento.numero}.docx",
+                ContentFile(
+                    contenido
+                ),
+                save=False,
+            )
+
+            documento.save(
+                update_fields=[
+                    "docx_final",
+                ]
+            )
+
+        except Exception:
+            pass
+
+
+    return contenido
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def descargar_word_documento_institucional(
+    request,
+    documento_id,
+):
+
+    empresa = obtener_empresa(
+        request
+    )
+
+    documento = (
+        documento_get_object_or_404(
+            DocumentoInstitucional,
+            id=documento_id,
+            empresa=empresa,
+            eliminado_en__isnull=True,
+        )
+    )
+
+    contenido = (
+        _contenido_docx_documento_institucional(
+            documento,
+            empresa,
+        )
+    )
+
+    response = HttpResponse(
+        contenido,
+        content_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "wordprocessingml.document"
+        ),
+    )
+
+    response[
+        "Content-Disposition"
+    ] = (
+        f'attachment; filename="{documento.numero}.docx"'
+    )
+
+    return response
+
+
+def _contenido_pdf_documento_institucional(
+    documento,
+    empresa,
+):
+    """
+    FINALIZADO / ANULADO:
+        devuelve el PDF histórico almacenado.
+
+    BORRADOR:
+        genera una vista dinámica.
+    """
+
+    if (
+        documento.estado
+        in (
+            DocumentoInstitucional.Estado.FINALIZADO,
+            DocumentoInstitucional.Estado.ANULADO,
+        )
+        and documento.pdf_final
+    ):
+        try:
+            documento.pdf_final.open("rb")
+            return documento.pdf_final.read()
+        finally:
+            try:
+                documento.pdf_final.close()
+            except Exception:
+                pass
+
+    pdf_buffer = _pdf_documento_institucional(
+        documento,
+        empresa,
+    )
+
+    contenido = pdf_buffer.getvalue()
+
+    # Compatibilidad con documentos finalizados antes
+    # de incorporar almacenamiento histórico del PDF.
+    if (
+        documento.estado
+        in (
+            DocumentoInstitucional.Estado.FINALIZADO,
+            DocumentoInstitucional.Estado.ANULADO,
+        )
+        and not documento.pdf_final
+    ):
+        try:
+            from django.core.files.base import ContentFile
+
+            documento.pdf_final.save(
+                f"{documento.numero}.pdf",
+                ContentFile(contenido),
+                save=False,
+            )
+
+            documento.save(
+                update_fields=[
+                    "pdf_final",
+                ]
+            )
+        except Exception:
+            pass
+
+    return contenido
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def ver_pdf_documento_institucional(
+    request,
+    documento_id,
+):
+    empresa = obtener_empresa(request)
+
+    documento = documento_get_object_or_404(
+        DocumentoInstitucional,
+        id=documento_id,
+        empresa=empresa,
+        eliminado_en__isnull=True,
+    )
+
+    pdf_bytes = _contenido_pdf_documento_institucional(
+        documento,
+        empresa,
+    )
+
+    response = HttpResponse(
+        pdf_bytes,
+        content_type="application/pdf",
+    )
+
+    response["Content-Disposition"] = (
+        f'inline; filename="{documento.numero}.pdf"'
+    )
+
+    return response
+
+
+@login_required(login_url="login_usuario")
+@modulo_requerido("modulo_reportes")
+@suscripcion_requerida
+def descargar_pdf_documento_institucional(
+    request,
+    documento_id,
+):
+    empresa = obtener_empresa(request)
+
+    documento = documento_get_object_or_404(
+        DocumentoInstitucional,
+        id=documento_id,
+        empresa=empresa,
+        eliminado_en__isnull=True,
+    )
+
+    pdf_bytes = _contenido_pdf_documento_institucional(
+        documento,
+        empresa,
+    )
+
+    response = HttpResponse(
+        pdf_bytes,
+        content_type="application/pdf",
+    )
+
+    response["Content-Disposition"] = (
+        f'attachment; filename="{documento.numero}.pdf"'
+    )
+
+    return response
+
+
+
+# ===== FIN MOTOR DOCUMENTAL SASTRE 02 =====

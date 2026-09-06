@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="app-page">
+<style>
+.menu-preview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.menu-preview-kpi{border:1px solid #e2e8f0;border-radius:14px;padding:16px;background:#fff}
+.menu-preview-kpi span{display:block;color:#64748b;font-size:12px;margin-bottom:5px}
+.menu-preview-kpi strong{display:block;color:#0f172a;font-size:18px}
+.menu-preview-table-wrap{overflow-x:auto}
+.menu-preview-table{width:100%;border-collapse:separate;border-spacing:0;min-width:900px}
+.menu-preview-table th,.menu-preview-table td{padding:13px 14px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;vertical-align:top}
+.menu-preview-table th{background:#f8fafc;color:#334155;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+.menu-preview-table tr:first-child th{border-top:1px solid #e2e8f0}
+.menu-preview-table th:first-child,.menu-preview-table td:first-child{border-left:1px solid #e2e8f0}
+.menu-preview-table tr:first-child th:first-child{border-top-left-radius:12px}
+.menu-preview-table tr:first-child th:last-child{border-top-right-radius:12px}
+.menu-preview-product{font-weight:700;color:#0f172a}
+.menu-preview-empty{color:#b91c1c;font-weight:700}
+.menu-preview-status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.menu-preview-status.ok{background:#ecfdf5;color:#047857}
+.menu-preview-status.warn{background:#fff7ed;color:#c2410c}
+.menu-preview-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,480px);gap:24px;align-items:start;margin-top:24px}.menu-preview-actions form{width:100%;padding:18px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc;box-sizing:border-box}.menu-preview-actions form label{display:block;margin-bottom:9px;color:#0f172a}.menu-preview-actions form input[type="date"]{display:block;width:100%;height:44px;padding:8px 12px;margin-bottom:8px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;box-sizing:border-box;font:inherit;color:#0f172a}.menu-preview-actions form .menu-preview-note{margin:8px 0 14px;max-width:none;line-height:1.5}.menu-preview-actions form .btn{width:100%;justify-content:center}
+.menu-preview-note{color:#64748b;font-size:13px;max-width:720px}
+@media(max-width:900px){.menu-preview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.menu-preview-actions{grid-template-columns:1fr}}
+@media(max-width:560px){.menu-preview-grid{grid-template-columns:1fr}.menu-preview-actions .btn{width:100%}}
+</style>
+
+<header class="topbar">
+  <div>
+    <h1>Vista previa del menú oficial</h1>
+    <p>Revise los datos detectados antes de incorporarlos al ciclo operativo.</p>
+  </div>
+  <div class="form-actions">
+    <a class="btn btn-light" href="{% url 'planificacion_menu_escolar' %}">Volver a planificación</a>
+  </div>
+</header>
+
+<section class="card">
+  <div class="section-header">
+    <h2>Documento analizado</h2>
+    <p>{{ version_menu.programa.nombre }} · {{ version_menu.nombre }}</p>
+  </div>
+
+  <div class="menu-preview-grid">
+    <div class="menu-preview-kpi"><span>Modalidad detectada</span><strong>{{ resultado.codigo_modalidad|default:"Requiere revisión" }}</strong></div>
+    <div class="menu-preview-kpi"><span>Versión detectada</span><strong>{{ resultado.version|default:"No indicada en documento" }}</strong></div>
+    <div class="menu-preview-kpi"><span>Período</span><strong>{{ resultado.periodo|default:"Requiere revisión" }}</strong></div>
+    <div class="menu-preview-kpi"><span>Vigente desde</span><strong>{% if resultado.vigente_desde %}{{ resultado.vigente_desde|date:"d/m/Y" }}{% else %}Requiere revisión{% endif %}</strong></div>
+  </div>
+
+  {% if resultado.completo and not resultado.advertencias %}
+    <div class="menu-preview-status ok">Lectura completa · {{ resultado.items|length }} de {{ total_esperado }} posiciones</div>
+  {% else %}
+    <div class="menu-preview-status warn">Documento requiere revisión antes de aplicar</div>
+  {% endif %}
+
+  {% if resultado.advertencias %}
+    <div class="message warning" style="margin-top:14px">
+      {% for advertencia in resultado.advertencias %}<div>{{ advertencia }}</div>{% endfor %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="section-header">
+    <h2>Componente de panadería detectado</h2>
+    <p>SASTRE excluyó los componentes no suministrados por panadería y organizó el ciclo por semana y día.</p>
+  </div>
+
+  <div class="menu-preview-table-wrap">
+    <table class="menu-preview-table">
+      <thead>
+        <tr>
+          <th>Semana</th>
+          {% for dia in dias_columnas %}
+          <th>{{ dia }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in matriz %}
+        <tr>
+          <td><strong>Semana {{ fila.semana }}</strong></td>
+          {% for item in fila.items %}
+          <td>
+            {% if item.detectado %}
+              <div class="menu-preview-product">{{ item.producto }}</div>
+            {% else %}
+              <div class="menu-preview-empty">No detectado</div>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">No se detectaron semanas en el documento.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="menu-preview-actions">
+    <div class="menu-preview-note">La aplicación configura únicamente las {{ total_esperado }} posiciones de panadería de esta modalidad y mantiene la versión en borrador.</div>
+    {% if version_menu.estado == 'BORRADOR' and resultado.completo and resultado.items|length == total_esperado and not resultado.advertencias %}
+    <form method="post" action="{% url 'aplicar_documento_programa_menu' version_menu.id %}">
+      {% csrf_token %}
+      <label for="fecha_uso_desde"><strong>Usar este menú en SASTRE a partir de</strong></label>
+      <input id="fecha_uso_desde" type="date" name="fecha_uso_desde" required{% if resultado.vigente_desde %} min="{{ resultado.vigente_desde|date:'Y-m-d' }}"{% endif %}{% if fecha_uso_sugerida %} value="{{ fecha_uso_sugerida|date:'Y-m-d' }}"{% endif %}>
+      <div class="menu-preview-note">Define desde qué fecha esta versión participará en la programación operativa. Puede ser posterior a la vigencia indicada en el documento oficial.</div>
+      <button class="btn" type="submit">Aplicar menú detectado</button>
+    </form>
+    {% else %}
+    <button class="btn" type="button" disabled>Aplicar menú detectado</button>
+    {% endif %}
+  </div>
+</section>
+</div>
+{% endblock %}

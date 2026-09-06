@@ -1,0 +1,988 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+.doc-shell{max-width:1280px;margin:0 auto}
+.doc-heading{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.doc-subtitle{color:#667085;margin-top:6px}
+.doc-badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:#eef4ff;color:#2457d6;font-size:12px;font-weight:700}
+.doc-editor-card{overflow:hidden;padding:0!important}
+.doc-toolbar{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid #e4e9f1;background:#f8fafc;position:sticky;top:0;z-index:3}
+.doc-tool{height:34px;min-width:34px;border:1px solid #d9e1ec;background:white;border-radius:7px;cursor:pointer;font-weight:700;padding:0 9px}
+.doc-tool:hover{background:#edf3ff;border-color:#b8c9ee}
+.doc-tool-select{
+    height:34px!important;
+    width:auto!important;
+    min-width:90px;
+    max-width:180px;
+    flex:0 0 auto!important;
+    border:1px solid #d9e1ec!important;
+    background:white!important;
+    border-radius:7px!important;
+    padding:0 30px 0 9px!important;
+}
+.doc-separator{width:1px;height:24px;background:#dce3ed;margin:0 3px}
+.doc-editor-wrap{background:#eef1f5;padding:26px}
+.doc-paper{width:min(816px,100%);min-height:700px;margin:auto;background:white;border:1px solid #dfe4ec;box-shadow:0 5px 20px rgba(16,24,40,.08);padding:64px 72px;box-sizing:border-box;font-family:Arial,sans-serif;font-size:15px;line-height:1.7;color:#182230;outline:none}
+.doc-paper:focus{border-color:#9eb7ed}
+.doc-paper p{margin:0 0 16px}
+.doc-paper ul,.doc-paper ol{margin:0 0 16px;padding-left:28px}
+.doc-facts{display:flex;gap:8px;flex-wrap:wrap}
+.doc-fact{padding:9px 12px;border:1px solid #dfe6ef;border-radius:10px;background:#f8fafc;font-size:13px}
+.doc-actions-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.doc-actions-left,.doc-actions-right{display:flex;gap:8px;flex-wrap:wrap}
+.doc-muted{color:#667085;font-size:13px}
+
+.doc-toolbar button,
+.doc-toolbar select{
+    margin:0!important;
+}
+
+.doc-toolbar{
+    align-items:center!important;
+}
+
+.doc-paper strong,
+.doc-paper b{
+    display:inline!important;
+    font-weight:700!important;
+}
+
+.doc-paper em,
+.doc-paper i,
+.doc-paper u,
+.doc-paper span{
+    display:inline;
+}
+
+.doc-paper h1,
+.doc-paper h2,
+.doc-paper h3{
+    display:block;
+    line-height:1.3;
+    margin:0 0 16px;
+}
+
+.doc-paper li strong{
+    display:inline!important;
+}
+
+.doc-paper p{
+    display:block!important;
+    white-space:normal;
+}
+
+@media(max-width:800px){
+    .doc-paper{padding:32px 24px;min-height:560px}
+    .doc-editor-wrap{padding:12px}
+}
+
+/* ==========================================================
+   SASTRE DOCUMENT ENGINE 04C
+   PREVISUALIZACION INSTITUCIONAL
+   ========================================================== */
+
+.doc-paper{
+    width:816px!important;
+    max-width:100%!important;
+    min-height:1056px;
+    box-sizing:border-box!important;
+    margin:24px auto!important;
+    padding:0!important;
+    background:#fff!important;
+    color:#111827!important;
+    overflow:visible!important;
+    box-shadow:
+        0 0 0 1px rgba(15,23,42,.05),
+        0 12px 35px rgba(15,23,42,.08);
+}
+
+.doc-letterhead{
+    padding:34px 54px 0;
+    text-align:center;
+    user-select:none;
+}
+
+.doc-letterhead-logo{
+    width:auto;
+    max-width:170px;
+    max-height:86px;
+    object-fit:contain;
+    display:block;
+    margin:0 auto 7px;
+}
+
+.doc-letterhead-company{
+    font-size:15px;
+    line-height:1.25;
+    font-weight:800;
+    text-transform:uppercase;
+    margin:0;
+    color:#111827;
+}
+
+.doc-letterhead-details{
+    margin:7px auto 0;
+    max-width:650px;
+    font-family:Georgia, "Times New Roman", serif;
+    font-size:12.5px;
+    line-height:1.35;
+    color:#111827;
+}
+
+.doc-letterhead-line{
+    height:2px;
+    background:#123b72;
+    margin:18px 0 13px;
+}
+
+.doc-document-meta{
+    display:flex;
+    justify-content:space-between;
+    gap:30px;
+    align-items:flex-start;
+    padding:0 54px;
+    margin-bottom:12px;
+    font-family:Georgia, "Times New Roman", serif;
+}
+
+.doc-number{
+    font-family:Arial, Helvetica, sans-serif;
+    font-size:12px;
+    font-weight:800;
+    color:#111827;
+}
+
+.doc-place-date{
+    margin-left:auto;
+    text-align:right;
+    font-size:12.5px;
+    line-height:1.4;
+}
+
+.doc-title{
+    text-align:center;
+    margin:14px 54px 22px;
+    font-family:Georgia, "Times New Roman", serif;
+    font-weight:800;
+    font-size:22px;
+    color:#123b72;
+    letter-spacing:.2px;
+    text-transform:uppercase;
+}
+
+.doc-title span{
+    border-bottom:2px solid #123b72;
+    padding:0 10px 4px;
+}
+
+.doc-recipient{
+    padding:0 54px;
+    margin-bottom:18px;
+    font-family:Georgia, "Times New Roman", serif;
+    font-size:12.5px;
+    line-height:1.45;
+    color:#111827;
+}
+
+.doc-recipient strong{
+    font-weight:700;
+}
+
+.doc-editable-body{
+    padding:0 54px 8px;
+}
+
+/* ----------------------------------------------------------
+   TEXTO
+   ---------------------------------------------------------- */
+
+.doc-editable-body p,
+.doc-paper p{
+    margin:0 0 12px;
+    font-family:Georgia, "Times New Roman", serif;
+    font-size:12.5px;
+    line-height:1.58;
+    text-align:justify!important;
+    text-justify:inter-word!important;
+    hyphens:auto;
+}
+
+.doc-editable-body h1,
+.doc-editable-body h2,
+.doc-editable-body h3{
+    font-family:Arial, Helvetica, sans-serif;
+}
+
+.doc-editable-body h3{
+    margin:18px 0 9px;
+    font-size:13px;
+    line-height:1.35;
+    font-weight:800;
+    color:#123b72;
+    text-transform:uppercase;
+}
+
+.doc-editable-body ul,
+.doc-editable-body ol{
+    margin:5px 0 15px 28px;
+    padding:0;
+    font-family:Georgia, "Times New Roman", serif;
+    font-size:12.5px;
+}
+
+.doc-editable-body li{
+    margin-bottom:5px;
+    line-height:1.5;
+}
+
+/* ----------------------------------------------------------
+   TABLA - ESTILO RELACION DIARIA
+   ---------------------------------------------------------- */
+
+.doc-editable-body table{
+    width:100%!important;
+    max-width:100%!important;
+    border-collapse:collapse!important;
+    table-layout:fixed!important;
+    margin:14px 0 14px!important;
+    font-family:Arial, Helvetica, sans-serif;
+    font-size:9.7px!important;
+}
+
+.doc-editable-body thead th{
+    background:#123b72!important;
+    color:#fff!important;
+    border:1px solid #0c2c56!important;
+    padding:7px 4px!important;
+    font-size:8.7px!important;
+    line-height:1.2!important;
+    font-weight:700!important;
+    text-align:center!important;
+    vertical-align:middle!important;
+    text-transform:uppercase;
+}
+
+.doc-editable-body tbody td{
+    border:1px solid #a9b4c3!important;
+    padding:7px 5px!important;
+    line-height:1.28!important;
+    vertical-align:middle!important;
+    background:#fff;
+    overflow-wrap:break-word!important;
+    word-break:normal!important;
+}
+
+.doc-editable-body tbody tr:nth-child(even) td{
+    background:#f7f9fc!important;
+}
+
+/*
+  Fecha
+  No. conduce
+  Codigo
+  Centro
+  Producto
+  Cantidad
+  Motivo
+*/
+.doc-editable-body table th:nth-child(1),
+.doc-editable-body table td:nth-child(1){
+    width:10%!important;
+    text-align:center!important;
+}
+
+.doc-editable-body table th:nth-child(2),
+.doc-editable-body table td:nth-child(2){
+    width:10%!important;
+    text-align:center!important;
+}
+
+.doc-editable-body table th:nth-child(3),
+.doc-editable-body table td:nth-child(3){
+    width:9%!important;
+    text-align:center!important;
+}
+
+.doc-editable-body table th:nth-child(4),
+.doc-editable-body table td:nth-child(4){
+    width:20%!important;
+}
+
+.doc-editable-body table th:nth-child(5),
+.doc-editable-body table td:nth-child(5){
+    width:10%!important;
+}
+
+.doc-editable-body table th:nth-child(6),
+.doc-editable-body table td:nth-child(6){
+    width:9%!important;
+    text-align:center!important;
+}
+
+.doc-editable-body table th:nth-child(7),
+.doc-editable-body table td:nth-child(7){
+    width:32%!important;
+}
+
+/* ----------------------------------------------------------
+   FIRMA
+   ---------------------------------------------------------- */
+
+.doc-signature{
+    padding:20px 54px 40px;
+    font-family:Georgia, "Times New Roman", serif;
+    color:#111827;
+    user-select:none;
+}
+
+.doc-signature-label{
+    margin-bottom:30px;
+    font-size:12.5px;
+}
+
+.doc-signature-block{
+    width:300px;
+    max-width:65%;
+    margin:0 auto;
+    text-align:center;
+}
+
+.doc-signature-line{
+    border-top:1px solid #111827;
+    margin-bottom:5px;
+}
+
+.doc-signature-name{
+    font-size:12.5px;
+    font-weight:700;
+}
+
+.doc-signature-role{
+    font-size:12px;
+    margin-top:2px;
+}
+
+.doc-document-footer{
+    margin:0 54px 22px;
+    padding-top:9px;
+    border-top:1px solid #123b72;
+    display:flex;
+    justify-content:space-between;
+    gap:20px;
+    font-family:Arial, Helvetica, sans-serif;
+    font-size:8.5px;
+    color:#667085;
+    user-select:none;
+}
+
+.doc-editor-shell{
+    overflow-x:auto;
+}
+
+@media(max-width:900px){
+    .doc-paper{
+        width:100%!important;
+        min-height:auto;
+    }
+
+    .doc-letterhead,
+    .doc-document-meta,
+    .doc-recipient,
+    .doc-editable-body,
+    .doc-signature{
+        padding-left:28px;
+        padding-right:28px;
+    }
+
+    .doc-title{
+        margin-left:28px;
+        margin-right:28px;
+    }
+
+    .doc-document-footer{
+        margin-left:28px;
+        margin-right:28px;
+    }
+}
+
+</style>
+
+<div class="app-page doc-shell">
+
+    <div class="topbar">
+        <div>
+            {% if documento %}
+                <div class="doc-badge">BORRADOR</div>
+                <h1 style="margin-top:10px;">{{ documento.numero }}</h1>
+                <p class="doc-subtitle">
+                    {{ documento.get_tipo_display }} ·
+                    {{ documento.fecha_desde|date:"d/m/Y" }} al
+                    {{ documento.fecha_hasta|date:"d/m/Y" }}
+                </p>
+            {% else %}
+                <h1>Nueva nota aclaratoria</h1>
+                <p class="doc-subtitle">
+                    SASTRE utilizará la información registrada en el ERP
+                    para preparar el primer borrador.
+                </p>
+            {% endif %}
+        </div>
+
+        <a href="{% url 'documentos_institucionales' %}" class="btn btn-light">
+            Historial de documentos
+        </a>
+    </div>
+
+    <form method="post" id="documentoForm">
+        {% csrf_token %}
+
+        {% if documento and documento.version > 1 %}
+        <div style="
+            margin-bottom:18px;
+            padding:12px 15px;
+            border:1px solid #bfdbfe;
+            border-radius:10px;
+            background:#eff6ff;
+            color:#1e3a8a;
+            font-size:13px;
+        ">
+            <strong>Versión documental V{{ documento.version }}</strong>
+            {% if documento.documento_base %}
+                · basada en {{ documento.documento_base.numero }}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <section class="card">
+            <div class="section-header">
+                <h3>Información del documento</h3>
+                <p>Datos básicos de la comunicación institucional.</p>
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <label>Fecha desde</label>
+                    <input type="date" name="fecha_desde"
+                        value="{% if documento and documento.fecha_desde %}{{ documento.fecha_desde|date:'Y-m-d' }}{% else %}{{ fecha_desde }}{% endif %}"
+                        {% if documento %}disabled{% else %}required{% endif %}>
+                </div>
+
+                <div>
+                    <label>Fecha hasta</label>
+                    <input type="date" name="fecha_hasta"
+                        value="{% if documento and documento.fecha_hasta %}{{ documento.fecha_hasta|date:'Y-m-d' }}{% else %}{{ fecha_hasta }}{% endif %}"
+                        {% if documento %}disabled{% else %}required{% endif %}>
+                </div>
+
+                <div>
+                    <label>Destinatario</label>
+                    <input type="text" name="destinatario"
+                        value="{% if documento %}{{ documento.destinatario }}{% else %}Instituto Nacional de Bienestar Estudiantil (INABIE){% endif %}">
+                </div>
+
+                <div>
+                    <label>Asunto</label>
+                    <input type="text" name="asunto"
+                        value="{% if documento %}{{ documento.asunto }}{% else %}Nota aclaratoria{% endif %}">
+                </div>
+
+                <div>
+                    <label>Firmante</label>
+                    <input type="text" name="firmante"
+                        value="{% if documento and documento.firmante %}{{ documento.firmante }}{% elif empresa.firmante_predeterminado %}{{ empresa.firmante_predeterminado }}{% endif %}"
+                        placeholder="Nombre del firmante">
+                </div>
+
+                <div>
+                    <label>Cargo</label>
+                    <input type="text" name="cargo_firmante"
+                        value="{% if documento and documento.cargo_firmante %}{{ documento.cargo_firmante }}{% elif empresa.cargo_firmante_predeterminado %}{{ empresa.cargo_firmante_predeterminado }}{% endif %}"
+                        placeholder="Ej.: Gerente">
+                </div>
+            </div>
+        </section>
+
+        {% if documento and dias_snapshot %}
+        <section class="card">
+            <div class="section-header">
+                <h3>Hechos utilizados por SASTRE</h3>
+                <p>Estos datos quedaron congelados con este documento.</p>
+            </div>
+
+            <div class="doc-facts">
+                {% for dia in dias_snapshot %}
+                <div class="doc-fact">
+                    <strong>{{ dia.fecha }}</strong>
+                    · {{ dia.motivo }}
+                    {% if dia.clasificacion_texto %}
+                        · {{ dia.clasificacion_texto }}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        
+{% if documento %}
+<section
+    class="card"
+    id="document-output-toolbar-04e"
+    style="margin-bottom:18px;"
+>
+    <div
+        style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:18px;
+            flex-wrap:wrap;
+        "
+    >
+        <div>
+            <h3 style="margin:0 0 5px;">
+                Acciones del documento
+            </h3>
+
+            <p style="margin:0;color:#667085;">
+                Revise la comunicación y seleccione los elementos
+                que desea incorporar a la versión emitida.
+            </p>
+        </div>
+
+        <div
+            style="
+                display:flex;
+                gap:8px;
+                flex-wrap:wrap;
+                align-items:center;
+            "
+        >
+            {% if documento.id %}
+
+            <a
+                href="{% url 'ver_pdf_documento_institucional' documento.id %}"
+                target="_blank"
+                class="btn"
+            >
+                Ver PDF
+            </a>
+
+            <a
+                href="{% url 'descargar_pdf_documento_institucional' documento.id %}"
+                class="btn btn-secondary"
+            >
+                Descargar PDF
+            </a>
+
+            <button
+                type="button"
+                class="btn btn-light"
+                onclick="
+                    window.open(
+                        '{% url 'ver_pdf_documento_institucional' documento.id %}',
+                        '_blank'
+                    )
+                "
+            >
+                Imprimir
+            </button>
+
+            {% endif %}
+        </div>
+    </div>
+
+    <div
+        style="
+            margin-top:16px;
+            padding-top:15px;
+            border-top:1px solid #e5eaf1;
+            display:flex;
+            gap:28px;
+            flex-wrap:wrap;
+            align-items:center;
+        "
+    >
+
+        <label
+            style="
+                display:flex;
+                align-items:center;
+                gap:8px;
+                cursor:pointer;
+                font-weight:600;
+            "
+        >
+            <input type="checkbox" id="ui-incluir-firma" name="incluir_firma" value="on"
+                {% if documento.incluir_firma %}checked{% endif %}
+            >
+            Incluir firma
+        </label>
+
+        <label
+            style="
+                display:flex;
+                align-items:center;
+                gap:8px;
+                cursor:pointer;
+                font-weight:600;
+            "
+        >
+            <input type="checkbox" id="ui-incluir-sello" name="incluir_sello" value="on"
+                {% if documento.incluir_sello %}checked{% endif %}
+            >
+            Incluir sello
+        </label>
+
+        <span style="font-size:12px;color:#667085;">
+            La firma y el sello solo se incorporarán cuando estén
+            seleccionados.
+        </span>
+
+    </div>
+</section>
+{% endif %}
+
+<section class="card doc-editor-card">
+            <div style="padding:20px 22px 12px;">
+                <div class="section-header">
+                    <h3>Redacción del documento</h3>
+                    {% if documento %}
+                    <p>Edita el borrador antes de finalizarlo.</p>
+                    {% else %}
+                    <p>
+                        Déjalo vacío para que SASTRE redacte automáticamente
+                        el primer borrador usando los hechos del ERP.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="doc-toolbar" id="docToolbar">
+                <button type="button" class="doc-tool" data-cmd="undo" title="Deshacer">↶</button>
+                <button type="button" class="doc-tool" data-cmd="redo" title="Rehacer">↷</button>
+
+                <span class="doc-separator"></span>
+
+                <select class="doc-tool-select" id="blockFormat" title="Formato">
+                    <option value="p">Normal</option>
+                    <option value="h1">Título 1</option>
+                    <option value="h2">Título 2</option>
+                    <option value="h3">Título 3</option>
+                </select>
+
+                <select class="doc-tool-select" id="fontSize" title="Tamaño">
+                    <option value="13">13</option>
+                    <option value="15" selected>15</option>
+                    <option value="17">17</option>
+                    <option value="20">20</option>
+                    <option value="24">24</option>
+                </select>
+
+                <span class="doc-separator"></span>
+
+                <button type="button" class="doc-tool" data-cmd="bold" title="Negrita">B</button>
+                <button type="button" class="doc-tool" data-cmd="italic" title="Cursiva"><em>I</em></button>
+                <button type="button" class="doc-tool" data-cmd="underline" title="Subrayado"><u>U</u></button>
+
+                <span class="doc-separator"></span>
+
+                <button type="button" class="doc-tool" data-cmd="justifyLeft" title="Izquierda">≡</button>
+                <button type="button" class="doc-tool" data-cmd="justifyCenter" title="Centrar">≣</button>
+                <button type="button" class="doc-tool" data-cmd="justifyRight" title="Derecha">≡</button>
+                <button type="button" class="doc-tool" data-cmd="justifyFull" title="Justificar">☰</button>
+
+                <span class="doc-separator"></span>
+
+                <button type="button" class="doc-tool" data-cmd="insertUnorderedList" title="Viñetas">• Lista</button>
+                <button type="button" class="doc-tool" data-cmd="insertOrderedList" title="Numeración">1. Lista</button>
+                <button type="button" class="doc-tool" data-cmd="outdent" title="Reducir sangría">←</button>
+                <button type="button" class="doc-tool" data-cmd="indent" title="Aumentar sangría">→</button>
+            </div>
+
+            <div class="doc-editor-wrap">
+                <div  class="doc-editor-shell " spellcheck="true" >
+<div class="doc-paper">
+
+    <div class="doc-letterhead" contenteditable="false">
+
+        {% if empresa.logo %}
+            <img
+                src="{{ empresa.logo.url }}"
+                alt="{{ empresa.nombre }}"
+                class="doc-letterhead-logo"
+            >
+        {% endif %}
+
+        <div class="doc-letterhead-company">
+            {{ empresa.nombre }}
+        </div>
+
+        <div class="doc-letterhead-details">
+
+            {% if empresa.direccion %}
+                <div>{{ empresa.direccion }}</div>
+            {% endif %}
+
+            <div>
+                {% if empresa.telefono %}
+                    Teléfono.: {{ empresa.telefono }}
+                {% endif %}
+
+                {% if empresa.telefono and empresa.rnc %}
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                {% endif %}
+
+                {% if empresa.rnc %}
+                    RNC.: {{ empresa.rnc }}
+                {% endif %}
+            </div>
+
+            {% if empresa.correo %}
+                <div>{{ empresa.correo }}</div>
+            {% endif %}
+
+        </div>
+
+        <div class="doc-letterhead-line"></div>
+
+    </div>
+
+    {% if documento %}
+    <div class="doc-document-meta" contenteditable="false">
+
+        <div class="doc-number">
+            {{ documento.numero }}
+        </div>
+
+        <div class="doc-place-date">
+            {% if empresa.ciudad %}
+                {{ empresa.ciudad }}
+            {% endif %}
+            {% if empresa.ciudad %}<br>{% endif %}
+            {{ documento.fecha_documento|date:"d \d\e F \d\e Y" }}
+        </div>
+
+    </div>
+
+    <div class="doc-title" contenteditable="false">
+        <span>Nota Aclaratoria</span>
+    </div>
+
+    <div class="doc-recipient" contenteditable="false">
+        Señores<br>
+        <strong>{{ documento.destinatario }}</strong><br>
+        Su despacho.-<br>
+        Distinguidos señores:
+    </div>
+
+    {% endif %}
+
+    <div
+        id="editorDocumento"
+        class="doc-editable-body"
+        contenteditable="true"
+        spellcheck="true"
+    >
+{% if documento %}{{ documento.contenido_html|safe }}{% endif %}
+    </div>
+
+    {% if documento %}
+    <div class="doc-signature" contenteditable="false">
+
+        <div class="doc-signature-label">
+            Atentamente,
+        </div>
+
+        <div class="doc-signature-block">
+
+
+            {% if documento.incluir_firma and empresa.firma_autorizada %}
+            <div
+                class="doc-preview-firma"
+                style="
+                    display:flex;
+                    justify-content:center;
+                    align-items:flex-end;
+                    height:72px;
+                    margin-bottom:-10px;
+                "
+            >
+                <img
+                    src="{{ empresa.firma_autorizada.url }}"
+                    alt="Firma autorizada"
+                    style="
+                        display:block;
+                        max-width:180px;
+                        max-height:70px;
+                        object-fit:contain;
+                    "
+                >
+            </div>
+            {% endif %}
+
+            <div class="doc-signature-line"></div>
+
+
+            {% if documento.firmante %}
+                <div class="doc-signature-name">
+                    {{ documento.firmante }}
+                </div>
+            {% endif %}
+
+            {% if documento.cargo_firmante %}
+                <div class="doc-signature-role">
+                    {{ documento.cargo_firmante }}
+                </div>
+            {% endif %}
+
+
+            {% if documento.incluir_sello and empresa.sello_institucional %}
+            <div
+                class="doc-preview-sello"
+                style="
+                    display:flex;
+                    justify-content:center;
+                    margin-top:-28px;
+                    margin-left:175px;
+                    pointer-events:none;
+                "
+            >
+                <img
+                    src="{{ empresa.sello_institucional.url }}"
+                    alt="Sello institucional"
+                    style="
+                        display:block;
+                        width:92px;
+                        height:92px;
+                        object-fit:contain;
+                        opacity:.94;
+                    "
+                >
+            </div>
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    
+    {% endif %}
+
+</div>
+</div>
+            </div>
+
+            <textarea name="contenido_html" id="contenidoHtml" hidden></textarea>
+        </section>
+
+        <section class="card">
+            <div class="doc-actions-bar">
+                <div class="doc-actions-left">
+                    {% if documento %}
+                    <button
+                        type="submit"
+                        name="accion"
+                        value="restaurar_sastre"
+                        class="btn btn-light"
+                        onclick="return confirm('¿Reemplazar la redacción actual por la sugerencia de SASTRE?');"
+                    >
+                        Restaurar sugerencia SASTRE
+                    </button>
+                    {% endif %}
+                </div>
+
+                <div class="doc-actions-right">
+                    <a href="{% url 'documentos_institucionales' %}" class="btn btn-secondary">
+                        Cancelar
+                    </a>
+
+                    <button type="submit" name="accion" value="guardar" class="btn">
+                        {% if documento %}
+                            Guardar borrador
+                        {% else %}
+                            Crear borrador
+                        {% endif %}
+                    </button>
+
+                    {% if documento %}
+                    <button
+                        type="submit"
+                        name="accion"
+                        value="finalizar"
+                        class="btn"
+                        onclick="return confirm('¿Finalizar este documento? Después de finalizar no podrá editarse.');"
+                    >
+                        Finalizar documento
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+    </form>
+</div>
+
+<script>
+(function () {
+    const editor = document.getElementById("editorDocumento");
+    const hidden = document.getElementById("contenidoHtml");
+    const form = document.getElementById("documentoForm");
+
+    if (!editor || !hidden || !form) return;
+
+    document.querySelectorAll("[data-cmd]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            editor.focus();
+            document.execCommand(button.dataset.cmd, false, null);
+        });
+    });
+
+    const blockFormat = document.getElementById("blockFormat");
+    if (blockFormat) {
+        blockFormat.addEventListener("change", function () {
+            editor.focus();
+            document.execCommand("formatBlock", false, this.value);
+        });
+    }
+
+    const fontSize = document.getElementById("fontSize");
+    if (fontSize) {
+        fontSize.addEventListener("change", function () {
+            editor.focus();
+
+            document.execCommand("fontSize", false, "7");
+
+            editor.querySelectorAll('font[size="7"]').forEach(function (node) {
+                const span = document.createElement("span");
+                span.style.fontSize = fontSize.value + "px";
+                span.innerHTML = node.innerHTML;
+                node.replaceWith(span);
+            });
+        });
+    }
+
+    form.addEventListener("submit", function () {
+        hidden.value = editor.innerHTML.trim();
+    });
+})();
+</script>
+
+{% endblock %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const editor = document.getElementById("editorDocumento");
+
+    if (!editor) return;
+
+    editor.querySelectorAll("p").forEach(function (p) {
+        if (!p.style.textAlign) {
+            p.style.textAlign = "justify";
+        }
+    });
+});
+</script>
+
+

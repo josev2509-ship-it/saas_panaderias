@@ -1,7 +1,90 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="app-page">
-  <header class="topbar"><div><h1>Planificación de menú escolar</h1><p>Calendarios revisables, ciclos versionados, centros y programación anual.</p></div><div class="form-actions"><a class="btn btn-secondary" href="{% url 'carga_menu' %}">Menú heredado</a><a class="btn btn-light" href="{% url 'inicio' %}">Inicio</a></div></header>
+
+<style id="menu-assignment-polish">
+.menu-assignment-form{
+  margin-top:16px;
+}
+.menu-assignment-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:18px;
+  margin-bottom:16px;
+}
+.menu-assignment-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+.menu-assignment-field > label,
+.menu-assignment-label{
+  font-weight:700;
+  color:#0f172a;
+}
+.menu-assignment-field select,
+.menu-assignment-field input[type="date"]{
+  min-height:44px;
+  height:44px;
+}
+.menu-assignment-field small,
+.menu-assignment-help{
+  color:#64748b;
+  font-size:12px;
+  line-height:1.45;
+  margin:0;
+}
+.menu-delivery-block{
+  margin:6px 0 18px;
+}
+.menu-delivery-days{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:10px;
+}
+.menu-delivery-days label{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:74px;
+  padding:9px 12px;
+  border:1px solid #dbe3ef;
+  border-radius:10px;
+  background:#f8fafc;
+  cursor:pointer;
+  font-weight:600;
+}
+.menu-delivery-days input{
+  margin:0;
+}
+.menu-assignment-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:4px;
+}
+.menu-assignment-actions .btn{
+  min-width:180px;
+}
+.assignment-list{
+  margin-top:14px;
+}
+@media (max-width: 760px){
+  .menu-assignment-row{
+    grid-template-columns:1fr;
+  }
+  .menu-delivery-days label{
+    min-width:68px;
+    flex:1 1 68px;
+  }
+  .menu-assignment-actions .btn{
+    width:100%;
+  }
+}
+</style>
+
+<header class="topbar"><div><h1>Planificación de menú escolar</h1><p>Calendarios revisables, ciclos versionados, centros y programación anual.</p></div><div class="form-actions"><a class="btn btn-secondary" href="{% url 'carga_menu' %}">Menú heredado</a><a class="btn btn-light" href="{% url 'inicio' %}">Inicio</a></div></header>
 
   {% if not puede_gestionar %}<div class="message warning">Puede consultar la planificación, pero no modificarla.</div>{% endif %}
   <section class="card"><div class="section-header"><h2>1. Calendario escolar</h2><p>La creación produce una previsualización editable; nunca activa fechas automáticamente.</p></div>
@@ -33,16 +116,561 @@
   <section class="card"><div class="section-header"><h2>2. Programas y versiones</h2><p>Los componentes no suministrados —como bebidas— se conservan como trazabilidad, pero no generan operación.</p></div>
     {% if puede_gestionar %}<form method="post" action="{% url 'crear_programa_menu' %}" class="toolbar-form">{% csrf_token %}<input name="codigo" required placeholder="PAE-URB-V2"><input name="nombre" required placeholder="PAE Urbano V2"><select name="modalidad">{% for valor,etiqueta in modalidades %}<option value="{{ valor }}">{{ etiqueta }}</option>{% endfor %}</select><button class="btn">Crear programa</button></form>{% endif %}
     {% for programa in programas %}<article class="card"><h3>{{ programa.nombre }} · {{ programa.get_modalidad_display }}</h3>
-      {% if puede_gestionar %}<details><summary>Nueva versión</summary><form method="post" enctype="multipart/form-data" action="{% url 'crear_version_programa_menu' programa.id %}" class="form-grid">{% csrf_token %}<input name="nombre" required placeholder="2026-2027 / V1"><input type="date" name="vigente_desde" required><input type="date" name="vigente_hasta"><input type="number" min="1" name="semanas_ciclo" value="5"><input type="date" name="fecha_ancla_ciclo" required><select name="modo_inicio_ciclo"><option value="REINICIAR">Reiniciar</option><option value="CONTINUAR">Continuar</option><option value="ESPECIFICA">Semana específica</option></select><input type="number" min="1" name="semana_inicial" value="1"><input type="file" name="documento_fuente" accept=".pdf,.xlsx"><button class="btn">Guardar versión</button></form></details>{% endif %}
-      {% for version in programa.versiones.all %}<div class="card"><strong>{{ version.nombre }} · {{ version.get_estado_display }} · {{ version.semanas_ciclo }} semanas</strong>{% if puede_gestionar and version.estado == 'BORRADOR' %}<form method="post" action="{% url 'guardar_item_ciclo_menu' version.id %}" class="toolbar-form">{% csrf_token %}<input type="number" name="semana" min="1" max="{{ version.semanas_ciclo }}" placeholder="Semana" required><select name="dia_semana"><option value="0">Lunes</option><option value="1">Martes</option><option value="2">Miércoles</option><option value="3">Jueves</option><option value="4">Viernes</option><option value="5">Sábado</option><option value="6">Domingo</option></select><input name="producto" placeholder="Producto"><label><input type="checkbox" name="es_suministrado" checked> Suministrado</label><input name="observacion" placeholder="Observación"><button class="btn btn-small">Guardar item</button></form><form method="post" action="{% url 'activar_version_programa_menu' version.id %}">{% csrf_token %}<button class="btn btn-secondary btn-small">Activar versión</button></form>{% endif %}<p>{% for item in version.items.all %}S{{ item.semana }}/{{ item.dia_semana }}: {{ item.producto|default:"No suministrado" }}{% if not forloop.last %} · {% endif %}{% empty %}Sin items{% endfor %}</p></div>{% endfor %}
+      {% if puede_gestionar %}
+      <details class="menu-version-create">
+        <summary>Nueva versión del menú</summary>
+
+        <form method="post"
+              enctype="multipart/form-data"
+              action="{% url 'crear_version_programa_menu' programa.id %}"
+              class="form-grid">
+          {% csrf_token %}
+
+          <div>
+            <label for="version_nombre_{{ programa.id }}">Nombre / versión</label>
+            <input
+              id="version_nombre_{{ programa.id }}"
+              name="nombre"
+              required
+              placeholder="Ej. 2026-2028 / V2">
+          </div>
+
+          <div>
+            <label for="version_desde_{{ programa.id }}">Vigencia desde</label>
+            <input
+              id="version_desde_{{ programa.id }}"
+              type="date"
+              name="vigente_desde"
+              required>
+          </div>
+
+          <div>
+            <label for="version_hasta_{{ programa.id }}">Vigencia hasta</label>
+            <input
+              id="version_hasta_{{ programa.id }}"
+              type="date"
+              name="vigente_hasta">
+          </div>
+
+          <div>
+            <label for="version_semanas_{{ programa.id }}">Semanas del ciclo</label>
+            <input
+              id="version_semanas_{{ programa.id }}"
+              type="number"
+              min="1"
+              name="semanas_ciclo"
+              value="5"
+              required>
+          </div>
+
+          <div>
+            <label for="version_ancla_{{ programa.id }}">Fecha de inicio del ciclo</label>
+            <input
+              id="version_ancla_{{ programa.id }}"
+              type="date"
+              name="fecha_ancla_ciclo"
+              required>
+          </div>
+
+          <div>
+            <label for="version_modo_{{ programa.id }}">Comportamiento al iniciar</label>
+            <select
+              id="version_modo_{{ programa.id }}"
+              name="modo_inicio_ciclo">
+              <option value="REINICIAR">Reiniciar desde la semana inicial</option>
+              <option value="CONTINUAR">Continuar ciclo existente</option>
+              <option value="ESPECIFICA">Iniciar en una semana específica</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="version_semana_{{ programa.id }}">Semana inicial</label>
+            <input
+              id="version_semana_{{ programa.id }}"
+              type="number"
+              min="1"
+              name="semana_inicial"
+              value="1"
+              required>
+          </div>
+
+          <div>
+            <label for="version_documento_{{ programa.id }}">Documento oficial del menú</label>
+            <input
+              id="version_documento_{{ programa.id }}"
+              type="file"
+              name="documento_fuente"
+              accept=".pdf,.xlsx">
+
+            <small>
+              PDF o Excel oficial. SASTRE utilizará este documento para
+              proponer la versión, vigencia y estructura del ciclo cuando
+              esté habilitada la lectura automática.
+            </small>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn" type="submit">Guardar versión</button>
+          </div>
+        </form>
+      </details>
+      {% endif %}
+      {% for version in programa.versiones.all %}<div class="card"><strong>
+  {{ version.nombre }} · {{ version.get_estado_display }} · {{ version.semanas_ciclo }} semanas
+</strong>
+{% if version.documento_fuente %}
+  <p><a class="btn btn-secondary btn-small" href="{% url 'analizar_version_programa_menu' version.id %}">Analizar documento oficial</a></p>
+{% endif %}
+
+{% if version.total_posiciones_requeridas %}
+  <p>
+    <strong>
+      {{ version.total_posiciones_configuradas }}
+      de
+      {{ version.total_posiciones_requeridas }}
+      posiciones configuradas
+    </strong>
+
+    {% if version.ciclo_completo %}
+      · Ciclo completo
+    {% else %}
+      · Faltan {{ version.posiciones_faltantes }}
+    {% endif %}
+  </p>
+{% else %}
+  <p>
+    {{ version.total_posiciones_configuradas }} posiciones configuradas
+  </p>
+{% endif %}{% if puede_gestionar and version.estado == 'BORRADOR' %}<details class="menu-manual-edit"><summary>Agregar o corregir posición manualmente</summary><form method="post" action="{% url 'guardar_item_ciclo_menu' version.id %}" class="toolbar-form">{% csrf_token %}<input type="number" name="semana" min="1" max="{{ version.semanas_ciclo }}" placeholder="Semana" required><select name="dia_semana"><option value="0">Lunes</option><option value="1">Martes</option><option value="2">Miércoles</option><option value="3">Jueves</option><option value="4">Viernes</option><option value="5">Sábado</option><option value="6">Domingo</option></select><input name="producto" placeholder="Producto"><label><input type="checkbox" name="es_suministrado" checked> Suministrado</label><input name="observacion" placeholder="Observación"><button class="btn btn-small">Guardar posición</button></form></details><form method="post" action="{% url 'activar_version_programa_menu' version.id %}">
+  {% csrf_token %}
+
+  {% if version.ciclo_completo %}
+    <button class="btn btn-secondary btn-small">
+      Activar versión
+    </button>
+  {% else %}
+    <button
+      class="btn btn-secondary btn-small"
+      type="button"
+      disabled
+      title="Complete todas las posiciones requeridas antes de activar">
+      Activación pendiente
+    </button>
+  {% endif %}
+</form>
+<form method="post" action="{% url 'eliminar_version_programa_menu' version.id %}" style="display:inline-block; margin-left:8px;" onsubmit="return confirm('¿Seguro que deseas eliminar esta versión en borrador? Esta acción no se puede deshacer.');">
+  {% csrf_token %}
+  <button type="submit" style="display:inline-flex !important; align-items:center !important; justify-content:center !important; width:auto !important; min-width:130px !important; height:36px !important; padding:8px 14px !important; background:#fff5f4 !important; color:#b42318 !important; border:1px solid #f04438 !important; border-radius:8px !important; font-size:13px !important; font-weight:600 !important; line-height:1 !important; opacity:1 !important; visibility:visible !important; text-indent:0 !important; cursor:pointer !important;">Eliminar versión</button>
+</form>
+{% endif %}{% if version.matriz_ciclo %}
+<div class="table-responsive" style="margin-top:14px;">
+  {% if version.tiene_importacion_automatica %}<p><small>Los productos mostrados fueron importados desde el documento oficial.</small></p>{% endif %}
+  <table class="menu-cycle-table" data-enterprise-controls="off">
+    <thead>
+      <tr>
+        <th>Semana</th>
+        {% for numero_dia, nombre_dia in version.matriz_dias %}<th>{{ nombre_dia }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for fila in version.matriz_ciclo %}
+      <tr>
+        <th>Semana {{ fila.semana }}</th>
+        {% for dia in fila.dias %}
+        <td>
+          {% if dia.item %}
+            <strong>{{ dia.item.producto|default:"No suministrado" }}</strong>
+            {% if not dia.item.es_suministrado %}
+              <div><small>No suministrado</small></div>
+            {% endif %}
+            {% if dia.item.observacion and dia.item.observacion != "Importado automáticamente desde documento oficial." %}
+              <div><small>{{ dia.item.observacion }}</small></div>
+            {% endif %}
+          {% else %}
+            <span>Sin configurar</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>
+  {% for item in version.items.all %}
+    Semana {{ item.semana }} · {{ item.nombre_dia }}:
+    {{ item.producto|default:"No suministrado" }}
+    {% if not forloop.last %} · {% endif %}
+  {% empty %}
+    Sin items
+  {% endfor %}
+</p>
+{% endif %}</div>{% endfor %}
     </article>{% empty %}<p>No hay programas configurados.</p>{% endfor %}
   </section>
 
-  <section class="card"><div class="section-header"><h2>3. Programación de entregas por centro</h2><p>Las vigencias se conservan como historial; los días son configurables.</p></div>
-    {% if puede_gestionar %}<form method="post" action="{% url 'asignar_programa_centro' %}" class="form-grid">{% csrf_token %}<select name="centro_id" required><option value="">Centro</option>{% for centro in centros %}<option value="{{ centro.id }}">{{ centro }}</option>{% endfor %}</select><select name="programa_id" required><option value="">Programa</option>{% for programa in programas %}<option value="{{ programa.id }}">{{ programa }}</option>{% endfor %}</select><div><label><input type="checkbox" name="dias_entrega" value="0">L</label><label><input type="checkbox" name="dias_entrega" value="1">M</label><label><input type="checkbox" name="dias_entrega" value="2">X</label><label><input type="checkbox" name="dias_entrega" value="3">J</label><label><input type="checkbox" name="dias_entrega" value="4">V</label><label><input type="checkbox" name="dias_entrega" value="5">S</label><label><input type="checkbox" name="dias_entrega" value="6">D</label></div><input type="date" name="vigente_desde" required><input type="date" name="vigente_hasta"><button class="btn">Asignar</button></form>{% endif %}
-    {% for asignacion in asignaciones %}<div class="card"><strong>{{ asignacion.centro }} · {{ asignacion.programa }}</strong><p>Días: {{ asignacion.dias_entrega }} · desde {{ asignacion.vigente_desde }}</p>{% if puede_gestionar %}{% for calendario in calendarios %}{% if calendario.estado == 'ACTIVO' %}<form method="post" action="{% url 'generar_programacion_menu' asignacion.id calendario.id %}" class="toolbar-form">{% csrf_token %}<input type="date" name="fecha_inicio"><input type="date" name="fecha_fin"><button class="btn btn-small">Generar con {{ calendario.nombre }}</button></form>{% endif %}{% endfor %}{% endif %}</div>{% empty %}<p>No hay asignaciones de centros.</p>{% endfor %}
-  </section>
+  <section class="card menu-assignment-section">
+  <div class="section-header">
+    <div>
+      <h2>3. Programación de entregas por centro</h2>
+      <p>Defina el programa asignado, los días de entrega y el período durante el cual aplica a cada centro.</p>
+    </div>
+  </div>
 
-  <section class="table-card"><div class="section-header"><h2>4. Programación materializada</h2><div class="form-actions"><a class="btn btn-secondary" href="{% url 'exportar_programacion_excel' %}">Excel</a><a class="btn btn-secondary" href="{% url 'exportar_programacion_pdf' %}">PDF</a></div></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Centro</th><th>Semana</th><th>Producto</th><th>Programa</th><th>Versión</th><th>Modalidad</th><th>Estado</th></tr></thead><tbody>{% for fila in programaciones %}<tr><td>{{ fila.fecha|date:"d/m/Y" }}</td><td>{{ fila.centro }}</td><td>{{ fila.semana_ciclo|default:"-" }}</td><td>{{ fila.producto|default:"-" }}</td><td>{{ fila.programa_snapshot }}</td><td>{{ fila.version_snapshot }}</td><td>{{ fila.modalidad_snapshot }}</td><td>{{ fila.get_estado_display }}</td></tr>{% empty %}<tr><td colspan="8">Todavía no existe programación confirmada.</td></tr>{% endfor %}</tbody></table></div></section>
+  {% if puede_gestionar %}
+  <form method="post" action="{% url 'asignar_programa_centro' %}" class="menu-assignment-form">
+    {% csrf_token %}
+
+    <div class="menu-assignment-row">
+      <div class="menu-assignment-field">
+        <label for="centro_id">Centro educativo</label>
+        <select id="centro_id" name="centro_id" required>
+          <option value="">Seleccione un centro</option>
+          {% for centro in centros %}
+            <option value="{{ centro.id }}">{{ centro }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="menu-assignment-field">
+        <label for="programa_id">Programa de menú</label>
+        <select id="programa_id" name="programa_id" required>
+          <option value="">Seleccione un programa</option>
+          {% for programa in programas_asignables %}
+            <option value="{{ programa.id }}">{{ programa }}</option>
+          {% empty %}
+            <option value="" disabled>No hay programas con versiones activas</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="menu-delivery-block">
+      <label class="menu-assignment-label">Días de entrega</label>
+      <p class="menu-assignment-help">Seleccione los días de la semana en que este centro recibe productos.</p>
+
+      <div class="menu-delivery-days">
+        <label><input type="checkbox" name="dias_entrega" value="0"><span>Lun</span></label>
+        <label><input type="checkbox" name="dias_entrega" value="1"><span>Mar</span></label>
+        <label><input type="checkbox" name="dias_entrega" value="2"><span>Mié</span></label>
+        <label><input type="checkbox" name="dias_entrega" value="3"><span>Jue</span></label>
+        <label><input type="checkbox" name="dias_entrega" value="4"><span>Vie</span></label>
+        <label><input type="checkbox" name="dias_entrega" value="5"><span>Sáb</span></label>
+        <label><input type="checkbox" name="dias_entrega" value="6"><span>Dom</span></label>
+      </div>
+    </div>
+
+    <div class="menu-assignment-row menu-assignment-dates">
+      <div class="menu-assignment-field">
+        <label for="vigente_desde">Inicio de vigencia</label>
+        <input id="vigente_desde" type="date" name="vigente_desde" required>
+        <small>Fecha desde la cual este centro comienza a recibir el programa seleccionado.</small>
+      </div>
+
+      <div class="menu-assignment-field">
+        <label for="vigente_hasta">Fin de vigencia</label>
+        <input id="vigente_hasta" type="date" name="vigente_hasta">
+        <small>Último día de vigencia de esta asignación. Déjelo vacío si continúa vigente.</small>
+      </div>
+    </div>
+
+    <div class="menu-assignment-actions">
+      <button class="btn" type="submit">Guardar asignación</button>
+    </div>
+  </form>
+  {% endif %}
+
+  <div class="assignment-list">
+    {% for asignacion in asignaciones %}
+      <div class="card assignment-card">
+        <strong>{{ asignacion.centro }} · {{ asignacion.programa }}</strong>
+
+        <p>
+          Días: {{ asignacion.dias_entrega_nombres }}
+          · Desde {{ asignacion.vigente_desde|date:"d/m/Y" }}
+          {% if asignacion.vigente_hasta %}
+            · Hasta {{ asignacion.vigente_hasta|date:"d/m/Y" }}
+          {% endif %}
+        </p>
+
+        {% if asignacion.total_fechas_programadas %}
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;">
+            <span style="display:inline-flex;align-items:center;padding:6px 11px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;">
+              ✓ Programado
+            </span>
+
+            <span style="color:#475569;font-size:13px;">
+              {{ asignacion.programada_desde|date:"d/m/Y" }}
+              –
+              {{ asignacion.programada_hasta|date:"d/m/Y" }}
+              · {{ asignacion.total_fechas_programadas }} fechas materializadas
+            </span>
+          </div>
+        {% endif %}
+
+        {% if puede_gestionar %}
+          <div class="sastre-programacion-actions">
+
+            <a
+              href="{% url 'editar_asignacion_programa_centro' asignacion.id %}"
+              class="sastre-programacion-btn sastre-programacion-editar">
+              Editar
+            </a>
+
+            {% if asignacion.total_fechas_programadas and asignacion.calendario_programado %}
+              <button
+                type="submit"
+                form="actualizar-programacion-{{ asignacion.id }}"
+                class="sastre-programacion-btn sastre-programacion-actualizar">
+                Actualizar programación
+              </button>
+            {% endif %}
+
+            <button
+              type="submit"
+              form="eliminar-programacion-{{ asignacion.id }}"
+              class="sastre-programacion-btn sastre-programacion-eliminar">
+              Eliminar
+            </button>
+
+          </div>
+
+          {% if asignacion.total_fechas_programadas and asignacion.calendario_programado %}
+            <form
+              id="actualizar-programacion-{{ asignacion.id }}"
+              method="post"
+              action="{% url 'generar_programacion_menu' asignacion.id asignacion.calendario_programado.id %}"
+              class="sastre-programacion-form-oculto">
+              {% csrf_token %}
+              <input
+                type="hidden"
+                name="actualizar_programacion"
+                value="1">
+            </form>
+          {% endif %}
+
+          <form
+            id="eliminar-programacion-{{ asignacion.id }}"
+            method="post"
+            action="{% url 'eliminar_asignacion_programa_centro' asignacion.id %}"
+            class="sastre-programacion-form-oculto"
+            onsubmit="return confirm('¿Seguro que deseas eliminar esta asignación?');">
+            {% csrf_token %}
+          </form>
+
+          {% if not asignacion.total_fechas_programadas %}
+            {% for calendario in calendarios %}
+              {% if calendario.estado == 'ACTIVO' %}
+                <form method="post"
+                      action="{% url 'generar_programacion_menu' asignacion.id calendario.id %}"
+                      class="toolbar-form"
+                      style="margin-top:12px;">
+                  {% csrf_token %}
+
+                  <label>
+                    Desde
+                    <input type="date"
+                           name="fecha_inicio"
+                           title="Fecha inicial de la programación a generar">
+                  </label>
+
+                  <label>
+                    Hasta
+                    <input type="date"
+                           name="fecha_fin"
+                           title="Fecha final de la programación a generar">
+                  </label>
+
+                  <button class="btn btn-small">
+                    Generar con {{ calendario.nombre }}
+                  </button>
+                </form>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        {% endif %}
+      </div>
+    {% empty %}
+      <p>No hay asignaciones de centros.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="table-card"><div class="section-header"><h2>4. Programación materializada</h2><div class="form-actions"><a class="btn btn-secondary" href="{% url 'exportar_programacion_excel' %}">Excel</a><a class="btn btn-secondary" href="{% url 'exportar_programacion_pdf' %}">PDF</a></div></div><div class="table-responsive"><table><thead><tr><th>Fecha</th><th>Centro</th><th>Semana</th><th>Producto</th><th>Programa</th><th>Versión</th><th>Modalidad</th><th>Estado</th></tr></thead><tbody>{% for fila in programaciones %}<tr><td>{{ fila.fecha|date:"d/m/Y" }}</td><td>{{ fila.centro }}</td><td>{{ fila.semana_ciclo|default:"-" }}</td><td>{{ fila.producto|default:"-" }}</td><td>{{ fila.programa_snapshot }}</td><td>{{ fila.version_snapshot }}</td><td>{{ fila.modalidad_snapshot }}</td><td>{{ fila.get_estado_display }}</td></tr>{% empty %}<tr><td colspan="8">Todavía no existe programación confirmada.</td></tr>{% endfor %}</tbody></table></div></section>
 </div>
+
+
+<style id="sastre-programacion-actions-css">
+
+.sastre-programacion-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+
+    width: 100% !important;
+    margin: 12px 0 0 0 !important;
+    padding: 0 !important;
+
+    position: static !important;
+    float: none !important;
+    clear: both !important;
+
+    box-sizing: border-box !important;
+}
+
+.sastre-programacion-btn {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    position: static !important;
+    float: none !important;
+    inset: auto !important;
+
+    flex: 0 0 auto !important;
+
+    width: auto !important;
+    max-width: none !important;
+    min-height: 40px !important;
+
+    margin: 0 !important;
+    padding: 9px 15px !important;
+
+    box-sizing: border-box !important;
+
+    border-radius: 8px !important;
+
+    font-family: inherit !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    line-height: 20px !important;
+
+    text-decoration: none !important;
+    white-space: nowrap !important;
+
+    cursor: pointer !important;
+
+    transform: none !important;
+}
+
+.sastre-programacion-editar {
+    min-width: 72px !important;
+    background: #ffffff !important;
+    color: #10233f !important;
+    border: 1px solid #cbd5e1 !important;
+}
+
+.sastre-programacion-actualizar {
+    min-width: 180px !important;
+    background: #2454d6 !important;
+    color: #ffffff !important;
+    border: 1px solid #2454d6 !important;
+}
+
+.sastre-programacion-eliminar {
+    min-width: 88px !important;
+    background: #cf2f25 !important;
+    color: #ffffff !important;
+    border: 1px solid #cf2f25 !important;
+}
+
+/*
+Los formularios existen únicamente para POST.
+components.js puede agregar ds-enterprise-form,
+pero esta regla sigue dejándolos fuera del layout.
+*/
+.sastre-programacion-form-oculto,
+.sastre-programacion-form-oculto.ds-enterprise-form {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: absolute !important;
+    overflow: hidden !important;
+}
+
+@media (max-width: 600px) {
+    .sastre-programacion-actions {
+        gap: 8px !important;
+    }
+}
+
+</style>
+
 {% endblock %}
+
+
+<style id="sastre-fix-programacion-actions">
+  /*
+   * Ajuste aislado para las acciones de una asignación programada.
+   * Grid obliga a que cada acción reserve su propio espacio.
+   */
+  .programacion-actions {
+      display: grid !important;
+      grid-template-columns: max-content max-content max-content !important;
+      align-items: center !important;
+      justify-content: start !important;
+      column-gap: 12px !important;
+      row-gap: 10px !important;
+      width: 100% !important;
+      margin-top: 12px !important;
+      position: relative !important;
+  }
+
+  /*
+   * Neutralizamos estilos globales del FORM únicamente aquí.
+   */
+  .programacion-actions > form {
+      all: unset !important;
+      display: block !important;
+      position: static !important;
+      width: max-content !important;
+      min-width: max-content !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      inset: auto !important;
+      transform: none !important;
+      float: none !important;
+  }
+
+  .programacion-actions > a,
+  .programacion-actions > form > button {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+      width: auto !important;
+      min-width: max-content !important;
+      max-width: none !important;
+      white-space: nowrap !important;
+      position: static !important;
+      float: none !important;
+      margin: 0 !important;
+      transform: none !important;
+  }
+
+  /*
+   * En pantallas estrechas permitimos que Grid reorganice
+   * las acciones sin superposición.
+   */
+  @media (max-width: 700px) {
+      .programacion-actions {
+          grid-template-columns: max-content max-content !important;
+      }
+  }
+
+  @media (max-width: 480px) {
+      .programacion-actions {
+          grid-template-columns: max-content !important;
+      }
+  }
+</style>

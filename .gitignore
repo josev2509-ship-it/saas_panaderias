@@ -8,3 +8,6 @@ db.sqlite3
 media/documentos/
 media/rrhh/
 staticfiles/
+media/
+*.bak
+*.bak_*

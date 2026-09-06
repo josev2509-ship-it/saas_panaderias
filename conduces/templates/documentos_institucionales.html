@@ -1,0 +1,1221 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+.doc-table{width:100%;border-collapse:collapse}
+.doc-table th{padding:13px 12px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:#667085;border-bottom:1px solid #e4e9f1}
+.doc-table td{padding:14px 12px;border-bottom:1px solid #edf1f5;vertical-align:middle}
+.doc-number{font-weight:800;color:#172b4d}
+.doc-status{display:inline-flex;padding:5px 9px;border-radius:999px;background:#fff4df;color:#8a5700;font-size:12px;font-weight:700}
+.doc-period{white-space:nowrap}
+.doc-row-actions{display:flex;justify-content:flex-end;gap:7px}
+
+
+    /* =======================================================
+       MOTOR DOCUMENTAL - HISTORIAL / VERSIONES / MODALES
+       ======================================================= */
+
+    .doc-number-value {
+        font-weight: 800;
+        color: #172033;
+        letter-spacing: -.01em;
+        white-space: nowrap;
+    }
+
+    .doc-version-line {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin-top: 5px;
+    }
+
+    .doc-version-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: #eef4ff;
+        border: 1px solid #cbdcff;
+        color: #2457a7;
+        font-size: 11px;
+        font-weight: 800;
+    }
+
+    .doc-version-origin {
+        color: #7a8497;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .doc-inline-form {
+        display: inline-flex;
+        margin: 0;
+    }
+
+    .doc-btn-danger {
+        border: 1px solid #f0b7b7 !important;
+        background: #fff7f7 !important;
+        color: #b42318 !important;
+    }
+
+    .doc-btn-danger:hover {
+        background: #feecec !important;
+        border-color: #e89b9b !important;
+    }
+
+    .doc-btn-danger-solid {
+        border: 1px solid #b42318 !important;
+        background: #b42318 !important;
+        color: #ffffff !important;
+    }
+
+    .doc-btn-danger-solid:hover {
+        background: #941b13 !important;
+        border-color: #941b13 !important;
+    }
+
+    .doc-annulled-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 130px;
+    }
+
+    .doc-annulled-label {
+        color: #b42318;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .doc-annulled-reason {
+        max-width: 230px;
+        color: #7a5660;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .doc-modal {
+        width: min(540px, calc(100vw - 32px));
+        max-width: 540px;
+        padding: 0;
+        border: 0;
+        border-radius: 18px;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .doc-modal::backdrop {
+        background: rgba(15, 23, 42, .58);
+        backdrop-filter: blur(3px);
+    }
+
+    .doc-modal-card {
+        overflow: hidden;
+        border: 1px solid rgba(226, 232, 240, .95);
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow:
+            0 24px 60px rgba(15, 23, 42, .22),
+            0 4px 12px rgba(15, 23, 42, .08);
+    }
+
+    .doc-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 22px 24px 18px;
+        border-bottom: 1px solid #edf1f6;
+    }
+
+    .doc-modal-kicker {
+        margin-bottom: 3px;
+        color: #7c8799;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+    }
+
+    .doc-modal-header h3 {
+        margin: 0;
+        color: #172033;
+        font-size: 21px;
+        line-height: 1.2;
+    }
+
+    .doc-modal-close {
+        width: 34px;
+        height: 34px;
+        border: 1px solid #e3e8ef;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #687386;
+        font-size: 24px;
+        line-height: 28px;
+        cursor: pointer;
+    }
+
+    .doc-modal-close:hover {
+        background: #f6f8fb;
+        color: #172033;
+    }
+
+    .doc-modal-body {
+        padding: 22px 24px 24px;
+    }
+
+    .doc-modal-document {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        color: #687386;
+        font-size: 13px;
+    }
+
+    .doc-modal-document strong {
+        color: #172033;
+    }
+
+    .doc-modal-version {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border: 1px solid #cbdcff;
+        border-radius: 999px;
+        background: #eef4ff;
+        color: #2457a7;
+        font-size: 11px;
+        font-weight: 800;
+    }
+
+    .doc-modal-warning {
+        margin-bottom: 18px;
+        padding: 14px 16px;
+        border: 1px solid #fed7aa;
+        border-radius: 12px;
+        background: #fffaf3;
+        color: #7c4a03;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .doc-modal-warning strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #8a4b08;
+    }
+
+    .doc-modal-warning p {
+        margin: 0;
+    }
+
+    .doc-modal-form label {
+        display: block;
+        margin-bottom: 7px;
+        color: #344054;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .doc-modal-form label span {
+        color: #b42318;
+    }
+
+    .doc-modal-form textarea {
+        width: 100%;
+        min-height: 118px;
+        padding: 12px 14px;
+        box-sizing: border-box;
+        resize: vertical;
+        border: 1px solid #d8dee8;
+        border-radius: 11px;
+        outline: none;
+        background: #ffffff;
+        color: #172033;
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 1.45;
+        transition:
+            border-color .15s ease,
+            box-shadow .15s ease;
+    }
+
+    .doc-modal-form textarea:focus {
+        border-color: #7398d7;
+        box-shadow: 0 0 0 3px rgba(66, 114, 191, .12);
+    }
+
+    .doc-modal-help {
+        margin-top: 6px;
+        color: #8a94a5;
+        font-size: 11px;
+    }
+
+    .doc-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 9px;
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid #edf1f6;
+    }
+
+    @media (max-width: 640px) {
+        .doc-modal-header,
+        .doc-modal-body {
+            padding-left: 18px;
+            padding-right: 18px;
+        }
+
+        .doc-modal-actions {
+            flex-direction: column-reverse;
+        }
+
+        .doc-modal-actions .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
+
+
+
+
+
+    /* =======================================================
+       MENU COMPACTO DE ACCIONES DOCUMENTALES
+       ======================================================= */
+
+    .app-page table {
+        min-width: 1080px;
+    }
+
+    .app-page table th:last-child,
+    .app-page table td:last-child {
+        width: 250px;
+        min-width: 250px;
+    }
+
+    .doc-actions-cell {
+        position: relative;
+        vertical-align: middle !important;
+        text-align: right;
+        white-space: normal !important;
+    }
+
+    .doc-actions-shell {
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .doc-primary-action {
+        min-width: 82px;
+        min-height: 40px;
+        white-space: nowrap;
+    }
+
+    .doc-actions-menu {
+        position: relative;
+        margin: 0;
+    }
+
+    .doc-actions-menu > summary {
+        list-style: none;
+    }
+
+    .doc-actions-menu > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .doc-more-summary {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-width: 125px;
+        min-height: 40px;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+
+    .doc-more-chevron {
+        display: inline-block;
+        font-size: 14px;
+        line-height: 1;
+        transition: transform .18s ease;
+    }
+
+    .doc-actions-menu[open] .doc-more-chevron {
+        transform: rotate(180deg);
+    }
+
+    /*
+     * El menú ocupa una línea nueva cuando está abierto.
+     * De esta forma nunca se monta sobre otra fila.
+     */
+    .doc-actions-menu[open] {
+        flex-basis: 100%;
+        width: 100%;
+    }
+
+    .doc-actions-menu[open] > .doc-more-summary {
+        display: flex !important;
+        width: max-content;
+        margin-left: auto;
+    }
+
+    .doc-actions-dropdown {
+        width: 270px;
+        max-width: 100%;
+        margin: 8px 0 2px auto;
+        padding: 7px;
+        box-sizing: border-box;
+
+        border: 1px solid #e1e7ef;
+        border-radius: 13px;
+
+        background: #ffffff;
+
+        box-shadow:
+            0 12px 28px rgba(15, 23, 42, .10),
+            0 2px 7px rgba(15, 23, 42, .05);
+
+        text-align: left;
+    }
+
+    .doc-menu-item {
+        display: flex !important;
+        align-items: flex-start;
+        gap: 11px;
+
+        width: 100%;
+        padding: 10px 11px;
+        box-sizing: border-box;
+
+        border: 0;
+        border-radius: 9px;
+
+        background: transparent;
+
+        color: #27364c;
+        text-decoration: none;
+
+        font: inherit;
+        text-align: left;
+
+        cursor: pointer;
+    }
+
+    .doc-menu-item:hover {
+        background: #f4f7fb;
+        color: #173f81;
+    }
+
+    .doc-menu-item > span:last-child {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .doc-menu-item strong {
+        color: inherit;
+        font-size: 12.5px;
+        font-weight: 800;
+        line-height: 1.3;
+    }
+
+    .doc-menu-item small {
+        color: #8993a3;
+        font-size: 10.5px;
+        line-height: 1.35;
+        font-weight: 500;
+    }
+
+    .doc-menu-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        flex: 0 0 29px;
+
+        width: 29px;
+        height: 29px;
+
+        border-radius: 8px;
+
+        background: #eef4ff;
+
+        color: #2457a7;
+
+        font-size: 13px;
+        font-weight: 900;
+    }
+
+    .doc-menu-form {
+        width: 100%;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .doc-menu-button {
+        appearance: none;
+        -webkit-appearance: none;
+    }
+
+    .doc-menu-divider {
+        height: 1px;
+        margin: 6px 5px;
+        background: #edf1f6;
+    }
+
+    .doc-menu-danger {
+        color: #b42318;
+    }
+
+    .doc-menu-danger:hover {
+        background: #fff2f1;
+        color: #9f1c13;
+    }
+
+    .doc-menu-danger .doc-menu-icon {
+        background: #fff0ef;
+        color: #b42318;
+    }
+
+    .doc-menu-reason {
+        margin: 5px;
+        padding: 11px 12px;
+
+        border: 1px solid #f0d7d4;
+        border-radius: 9px;
+
+        background: #fff9f8;
+
+        text-align: left;
+    }
+
+    .doc-menu-reason-title {
+        display: block;
+        margin-bottom: 4px;
+
+        color: #a52920;
+
+        font-size: 10.5px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .doc-menu-reason p {
+        margin: 0;
+
+        color: #725852;
+
+        font-size: 11px;
+        line-height: 1.4;
+
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 900px) {
+
+        .app-page table th:last-child,
+        .app-page table td:last-child {
+            min-width: 225px;
+            width: 225px;
+        }
+
+        .doc-primary-action {
+            min-width: 74px;
+        }
+
+        .doc-more-summary {
+            min-width: 116px;
+        }
+
+        .doc-actions-dropdown {
+            width: 245px;
+        }
+    }
+
+
+
+
+    /* =======================================================
+       PALETA SUAVE MENU DOCUMENTAL
+       ======================================================= */
+
+    /*
+     * Acciones generales
+     */
+    .doc-actions-dropdown .doc-menu-item,
+    .doc-actions-dropdown button.doc-menu-item {
+        background: transparent !important;
+        color: #34445b !important;
+        border: 1px solid transparent !important;
+        box-shadow: none !important;
+    }
+
+    .doc-actions-dropdown .doc-menu-item:hover,
+    .doc-actions-dropdown button.doc-menu-item:hover {
+        background: #f4f7fb !important;
+        color: #284d82 !important;
+        border-color: #e7edf5 !important;
+        box-shadow: none !important;
+    }
+
+
+    /*
+     * Iconos suaves
+     */
+    .doc-actions-dropdown .doc-menu-icon {
+        background: #eef4fb !important;
+        color: #4f6f99 !important;
+        border: 1px solid #e0e9f4;
+    }
+
+
+    /*
+     * Nueva versión:
+     * azul muy tenue, sin bloque azul intenso.
+     */
+    .doc-actions-dropdown form[action*="nueva-version"]
+    .doc-menu-item {
+        background: #f3f7fd !important;
+        color: #315a8c !important;
+        border: 1px solid #e0e9f5 !important;
+    }
+
+    .doc-actions-dropdown form[action*="nueva-version"]
+    .doc-menu-item:hover {
+        background: #eaf2fb !important;
+        color: #264f81 !important;
+        border-color: #d5e3f3 !important;
+    }
+
+    .doc-actions-dropdown form[action*="nueva-version"]
+    .doc-menu-icon {
+        background: #e7f0fb !important;
+        color: #456b9b !important;
+        border-color: #d8e5f4 !important;
+    }
+
+
+    /*
+     * Anular:
+     * rojo institucional muy suave.
+     */
+    .doc-actions-dropdown .doc-menu-danger {
+        background: #fff7f6 !important;
+        color: #9f3f38 !important;
+        border: 1px solid #f3dddd !important;
+    }
+
+    .doc-actions-dropdown .doc-menu-danger:hover {
+        background: #fdefed !important;
+        color: #8d3029 !important;
+        border-color: #eccfcb !important;
+    }
+
+    .doc-actions-dropdown .doc-menu-danger .doc-menu-icon {
+        background: #fbe9e7 !important;
+        color: #a8453d !important;
+        border-color: #f1d7d4 !important;
+    }
+
+
+    /*
+     * Textos secundarios.
+     */
+    .doc-actions-dropdown .doc-menu-item small {
+        color: #8793a4 !important;
+    }
+
+    .doc-actions-dropdown .doc-menu-danger small {
+        color: #a67d79 !important;
+    }
+
+
+    /*
+     * Botón Más acciones también más discreto.
+     */
+    .doc-more-summary {
+        background: #f4f7fb !important;
+        color: #335b91 !important;
+        border: 1px solid #e4ebf4 !important;
+        box-shadow: none !important;
+    }
+
+    .doc-more-summary:hover {
+        background: #edf3fa !important;
+        color: #294f82 !important;
+        border-color: #d9e4f1 !important;
+    }
+
+
+</style>
+
+<div class="app-page">
+
+    <div class="topbar">
+        <div>
+            <h1>Documentos institucionales</h1>
+            <p>
+                Historial de notas, cartas y comunicaciones generadas desde SASTRE.
+            </p>
+        </div>
+
+        <a href="{% url 'nuevo_documento_institucional' %}" class="btn">
+            + Nuevo documento
+        </a>
+    </div>
+
+    <section class="card">
+
+        {% if documentos %}
+        <div style="overflow-x:auto;">
+            <table class="doc-table">
+                <thead>
+                    <tr>
+                        <th>Número</th>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Período</th>
+                        <th>Destinatario</th>
+                        <th>Estado</th>
+                        <th style="text-align:right;">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for documento in documentos %}
+                    <tr>
+                        <td class="doc-number">
+                            <div class="doc-number-value">
+                                {{ documento.numero }}
+                            </div>
+
+                            <div class="doc-version-line">
+                                <span class="doc-version-badge">
+                                    V{{ documento.version|default:1 }}
+                                </span>
+
+                                {% if documento.documento_base %}
+                                    <span class="doc-version-origin">
+                                        Origen:
+                                        {{ documento.documento_base.numero }}
+                                    </span>
+                                {% else %}
+                                    <span class="doc-version-origin">
+                                        Original
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <td>{{ documento.fecha_documento|date:"d/m/Y" }}</td>
+
+                        <td>{{ documento.get_tipo_display }}</td>
+
+                        <td class="doc-period">
+                            {% if documento.fecha_desde %}
+                                {{ documento.fecha_desde|date:"d/m/Y" }}
+                            {% endif %}
+                            {% if documento.fecha_hasta %}
+                                – {{ documento.fecha_hasta|date:"d/m/Y" }}
+                            {% endif %}
+                        </td>
+
+                        <td>{{ documento.destinatario|default:"-" }}</td>
+
+                        <td>
+                            <span class="doc-status">
+                                {{ documento.get_estado_display }}
+                            </span>
+                        </td>
+
+                        <td class="doc-actions-cell">
+
+                            <div class="doc-actions-shell">
+
+                                {% if documento.estado == "BORRADOR" %}
+
+                                    <!-- Acción principal -->
+                                    <a
+                                        href="{% url 'editar_documento_institucional' documento.id %}"
+                                        class="btn btn-secondary doc-primary-action"
+                                    >
+                                        Editar
+                                    </a>
+
+                                    <details class="doc-actions-menu">
+
+                                        <summary class="btn btn-light doc-more-summary">
+                                            <span>Más acciones</span>
+                                            <span class="doc-more-chevron">⌄</span>
+                                        </summary>
+
+                                        <div class="doc-actions-dropdown">
+
+                                            <a
+                                                href="{% url 'ver_pdf_documento_institucional' documento.id %}"
+                                                target="_blank"
+                                                class="doc-menu-item"
+                                            >
+                                                <span class="doc-menu-icon">▣</span>
+
+                                                <span>
+                                                    <strong>Ver PDF</strong>
+                                                    <small>Abrir vista del documento</small>
+                                                </span>
+                                            </a>
+
+                                            <a
+                                                href="{% url 'descargar_pdf_documento_institucional' documento.id %}"
+                                                class="doc-menu-item"
+                                            >
+                                                <span class="doc-menu-icon">↓</span>
+
+                                                <span>
+                                                    <strong>Descargar PDF</strong>
+                                                    <small>Archivo listo para imprimir</small>
+                                                </span>
+                                            </a>
+
+                                            <a
+                                                href="{% url 'descargar_word_documento_institucional' documento.id %}"
+                                                class="doc-menu-item"
+                                            >
+                                                <span class="doc-menu-icon">W</span>
+
+                                                <span>
+                                                    <strong>Descargar Word</strong>
+                                                    <small>Archivo editable .docx</small>
+                                                </span>
+                                            </a>
+
+                                            <div class="doc-menu-divider"></div>
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'finalizar_documento_institucional' documento.id %}"
+                                                onsubmit="return confirm('¿Finalizar este documento? Después de finalizar no podrá editarse.');"
+                                                class="doc-menu-form"
+                                            >
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="doc-menu-item doc-menu-button"
+                                                >
+                                                    <span class="doc-menu-icon">✓</span>
+
+                                                    <span>
+                                                        <strong>Finalizar documento</strong>
+                                                        <small>Congelar emisión e historial</small>
+                                                    </span>
+                                                </button>
+                                            </form>
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'eliminar_documento_institucional' documento.id %}"
+                                                onsubmit="return confirm('¿Eliminar este borrador?');"
+                                                class="doc-menu-form"
+                                            >
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="doc-menu-item doc-menu-button doc-menu-danger"
+                                                >
+                                                    <span class="doc-menu-icon">×</span>
+
+                                                    <span>
+                                                        <strong>Eliminar borrador</strong>
+                                                        <small>Quitar este documento</small>
+                                                    </span>
+                                                </button>
+                                            </form>
+
+                                        </div>
+                                    </details>
+
+
+                                {% elif documento.estado == "FINALIZADO" %}
+
+                                    <!-- Acción principal -->
+                                    <a
+                                        href="{% url 'ver_pdf_documento_institucional' documento.id %}"
+                                        target="_blank"
+                                        class="btn btn-secondary doc-primary-action"
+                                    >
+                                        Ver PDF
+                                    </a>
+
+                                    <details class="doc-actions-menu">
+
+                                        <summary class="btn btn-light doc-more-summary">
+                                            <span>Más acciones</span>
+                                            <span class="doc-more-chevron">⌄</span>
+                                        </summary>
+
+                                        <div class="doc-actions-dropdown">
+
+                                            <a
+                                                href="{% url 'descargar_pdf_documento_institucional' documento.id %}"
+                                                class="doc-menu-item"
+                                            >
+                                                <span class="doc-menu-icon">↓</span>
+
+                                                <span>
+                                                    <strong>Descargar PDF</strong>
+                                                    <small>Documento histórico emitido</small>
+                                                </span>
+                                            </a>
+
+                                            <a
+                                                href="{% url 'descargar_word_documento_institucional' documento.id %}"
+                                                class="doc-menu-item"
+                                            >
+                                                <span class="doc-menu-icon">W</span>
+
+                                                <span>
+                                                    <strong>Descargar Word</strong>
+                                                    <small>Documento histórico .docx</small>
+                                                </span>
+                                            </a>
+
+                                            <div class="doc-menu-divider"></div>
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'duplicar_documento_institucional' documento.id %}"
+                                                onsubmit="return confirm('¿Crear una nueva versión editable de este documento?');"
+                                                class="doc-menu-form"
+                                            >
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="doc-menu-item doc-menu-button"
+                                                >
+                                                    <span class="doc-menu-icon">＋</span>
+
+                                                    <span>
+                                                        <strong>Nueva versión</strong>
+                                                        <small>Crear siguiente versión editable</small>
+                                                    </span>
+                                                </button>
+                                            </form>
+
+                                            <button
+                                                type="button"
+                                                class="doc-menu-item doc-menu-button doc-menu-danger"
+                                                onclick="document.getElementById('modal-anular-{{ documento.id }}').showModal();"
+                                            >
+                                                <span class="doc-menu-icon">!</span>
+
+                                                <span>
+                                                    <strong>Anular documento</strong>
+                                                    <small>Conservarlo en el historial como anulado</small>
+                                                </span>
+                                            </button>
+
+                                        </div>
+                                    </details>
+
+
+                                    <!-- Modal de anulación -->
+                                    <dialog
+                                        id="modal-anular-{{ documento.id }}"
+                                        class="doc-modal"
+                                    >
+                                        <div class="doc-modal-card">
+
+                                            <div class="doc-modal-header">
+
+                                                <div>
+                                                    <div class="doc-modal-kicker">
+                                                        Gestión documental
+                                                    </div>
+
+                                                    <h3>
+                                                        Anular documento
+                                                    </h3>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    class="doc-modal-close"
+                                                    aria-label="Cerrar"
+                                                    onclick="this.closest('dialog').close();"
+                                                >
+                                                    &times;
+                                                </button>
+
+                                            </div>
+
+                                            <div class="doc-modal-body">
+
+                                                <div class="doc-modal-document">
+
+                                                    <span>Documento</span>
+
+                                                    <strong>
+                                                        {{ documento.numero }}
+                                                    </strong>
+
+                                                    <span class="doc-modal-version">
+                                                        V{{ documento.version|default:1 }}
+                                                    </span>
+
+                                                </div>
+
+                                                <div class="doc-modal-warning">
+
+                                                    <strong>
+                                                        Esta acción no elimina el documento.
+                                                    </strong>
+
+                                                    <p>
+                                                        El documento conservará su PDF
+                                                        y Word histórico, pero cambiará
+                                                        al estado
+                                                        <strong>Anulado</strong>.
+                                                    </p>
+
+                                                </div>
+
+                                                <form
+                                                    method="post"
+                                                    action="{% url 'anular_documento_institucional' documento.id %}"
+                                                    class="doc-modal-form"
+                                                >
+                                                    {% csrf_token %}
+
+                                                    <label
+                                                        for="motivo-anulacion-{{ documento.id }}"
+                                                    >
+                                                        Motivo de anulación
+                                                        <span>*</span>
+                                                    </label>
+
+                                                    <textarea
+                                                        id="motivo-anulacion-{{ documento.id }}"
+                                                        name="motivo_anulacion"
+                                                        rows="5"
+                                                        maxlength="1000"
+                                                        required
+                                                        placeholder="Explique brevemente por qué se anula este documento..."
+                                                    ></textarea>
+
+                                                    <div class="doc-modal-help">
+                                                        Este motivo formará parte
+                                                        del historial documental.
+                                                    </div>
+
+                                                    <div class="doc-modal-actions">
+
+                                                        <button
+                                                            type="button"
+                                                            class="btn btn-light"
+                                                            onclick="this.closest('dialog').close();"
+                                                        >
+                                                            Cancelar
+                                                        </button>
+
+                                                        <button
+                                                            type="submit"
+                                                            class="btn doc-btn-danger-solid"
+                                                        >
+                                                            Confirmar anulación
+                                                        </button>
+
+                                                    </div>
+
+                                                </form>
+
+                                            </div>
+                                        </div>
+                                    </dialog>
+
+
+                                {% elif documento.estado == "ANULADO" %}
+
+                                    <!-- Acción principal -->
+                                    <a
+                                        href="{% url 'ver_pdf_documento_institucional' documento.id %}"
+                                        target="_blank"
+                                        class="btn btn-secondary doc-primary-action"
+                                    >
+                                        Ver PDF
+                                    </a>
+
+                                    <details class="doc-actions-menu">
+
+                                        <summary class="btn btn-light doc-more-summary">
+                                            <span>Más acciones</span>
+                                            <span class="doc-more-chevron">⌄</span>
+                                        </summary>
+
+                                        <div class="doc-actions-dropdown">
+
+                                            <a
+                                                href="{% url 'descargar_pdf_documento_institucional' documento.id %}"
+                                                class="doc-menu-item"
+                                            >
+                                                <span class="doc-menu-icon">↓</span>
+
+                                                <span>
+                                                    <strong>Descargar PDF</strong>
+                                                    <small>Documento histórico</small>
+                                                </span>
+                                            </a>
+
+                                            <a
+                                                href="{% url 'descargar_word_documento_institucional' documento.id %}"
+                                                class="doc-menu-item"
+                                            >
+                                                <span class="doc-menu-icon">W</span>
+
+                                                <span>
+                                                    <strong>Descargar Word</strong>
+                                                    <small>Archivo histórico .docx</small>
+                                                </span>
+                                            </a>
+
+                                            <div class="doc-menu-divider"></div>
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'duplicar_documento_institucional' documento.id %}"
+                                                onsubmit="return confirm('¿Crear una nueva versión editable a partir de este documento anulado?');"
+                                                class="doc-menu-form"
+                                            >
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="doc-menu-item doc-menu-button"
+                                                >
+                                                    <span class="doc-menu-icon">＋</span>
+
+                                                    <span>
+                                                        <strong>Nueva versión</strong>
+                                                        <small>Crear nueva versión editable</small>
+                                                    </span>
+                                                </button>
+                                            </form>
+
+                                            {% if documento.motivo_anulacion %}
+
+                                                <div class="doc-menu-divider"></div>
+
+                                                <div class="doc-menu-reason">
+
+                                                    <span class="doc-menu-reason-title">
+                                                        Motivo de anulación
+                                                    </span>
+
+                                                    <p>
+                                                        {{ documento.motivo_anulacion }}
+                                                    </p>
+
+                                                </div>
+
+                                            {% endif %}
+
+                                        </div>
+                                    </details>
+
+                                {% endif %}
+
+                            </div>
+
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% else %}
+
+        <div style="padding:55px 20px;text-align:center;">
+            <h3>No hay documentos institucionales</h3>
+            <p>
+                Cuando generes una nota o comunicación aparecerá en este historial.
+            </p>
+
+            <a href="{% url 'nuevo_documento_institucional' %}" class="btn">
+                Crear primer documento
+            </a>
+        </div>
+
+        {% endif %}
+    </section>
+</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const menus = Array.from(
+        document.querySelectorAll(".doc-actions-menu")
+    );
+
+    menus.forEach(function (menu) {
+
+        menu.addEventListener("toggle", function () {
+
+            if (!menu.open) {
+                return;
+            }
+
+            menus.forEach(function (otro) {
+
+                if (otro !== menu) {
+                    otro.removeAttribute("open");
+                }
+
+            });
+
+        });
+
+    });
+
+
+    document.addEventListener("click", function (event) {
+
+        if (event.target.closest(".doc-actions-menu")) {
+            return;
+        }
+
+        menus.forEach(function (menu) {
+            menu.removeAttribute("open");
+        });
+
+    });
+
+});
+</script>
+
+{% endblock %}

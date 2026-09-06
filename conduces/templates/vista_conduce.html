@@ -164,7 +164,15 @@
     <div class="acciones">
         <button onclick="window.print()" class="btn verde">Imprimir</button>
         <a href="/conduce/{{ conduce.id }}/editar/" class="btn azul">Editar</a>
-        <a href="/conduce/{{ conduce.id }}/anular/" class="btn rojo">Anular</a>
+        {% if conduce.estado != "anulado" %}
+        <button
+            type="button"
+            class="btn rojo"
+            onclick="document.getElementById('modal-anular-conduce').style.display='flex';"
+        >
+            Anular
+        </button>
+        {% endif %}
         <a href="/buscar-conduces/" class="btn gris">Volver a búsqueda</a>
         <a href="/admin/conduces/conduce/" class="btn gris">Volver a conduces</a>
     </div>
@@ -256,6 +264,92 @@
         </div>
 
     </div>
+
+
+{% if conduce.estado != "anulado" %}
+<div
+    id="modal-anular-conduce"
+    style="
+        display:none;
+        position:fixed;
+        inset:0;
+        z-index:9999;
+        background:rgba(15,23,42,.48);
+        align-items:center;
+        justify-content:center;
+        padding:20px;
+    "
+>
+    <div
+        style="
+            width:min(520px,100%);
+            background:#fff;
+            border-radius:14px;
+            box-shadow:0 20px 60px rgba(15,23,42,.25);
+            padding:24px;
+            text-align:left;
+        "
+    >
+        <h3 style="margin:0 0 8px;">
+            Anular conduce {{ conduce.numero }}
+        </h3>
+
+        <p style="margin:0 0 18px;color:#667085;">
+            Indique la razón de la anulación. Esta información
+            podrá utilizarse posteriormente en la Nota Aclaratoria.
+        </p>
+
+        <form
+            method="post"
+            action="{% url 'anular_conduce' conduce.id %}"
+        >
+            {% csrf_token %}
+
+            <label
+                for="motivo-anulacion-individual"
+                style="display:block;font-weight:700;margin-bottom:7px;"
+            >
+                Motivo de anulación
+            </label>
+
+            <textarea
+                id="motivo-anulacion-individual"
+                name="motivo_anulacion"
+                rows="4"
+                maxlength="500"
+                required
+                placeholder="Ej.: El centro educativo informó que no impartiría docencia por una situación particular."
+                style="
+                    width:100%;
+                    box-sizing:border-box;
+                    resize:vertical;
+                    margin-bottom:18px;
+                "
+            ></textarea>
+
+            <div
+                style="
+                    display:flex;
+                    justify-content:flex-end;
+                    gap:8px;
+                "
+            >
+                <button
+                    type="button"
+                    class="btn gris"
+                    onclick="document.getElementById('modal-anular-conduce').style.display='none';"
+                >
+                    Cancelar
+                </button>
+
+                <button type="submit" class="btn rojo">
+                    Confirmar anulación
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 
 </body>
 </html>

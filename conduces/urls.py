@@ -56,9 +56,14 @@ urlpatterns = [
     path('menu/planificacion/dias/<int:dia_id>/clasificar/', obtener_vista('clasificar_dia_calendario'), name='clasificar_dia_calendario'),
     path('menu/planificacion/programas/crear/', obtener_vista('crear_programa_menu'), name='crear_programa_menu'),
     path('menu/planificacion/programas/<int:programa_id>/versiones/crear/', obtener_vista('crear_version_programa_menu'), name='crear_version_programa_menu'),
+    path('menu/planificacion/versiones/<int:version_id>/analizar/', obtener_vista('analizar_version_programa_menu'), name='analizar_version_programa_menu'),
+    path('menu/planificacion/versiones/<int:version_id>/aplicar-documento/', obtener_vista('aplicar_documento_programa_menu'), name='aplicar_documento_programa_menu'),
     path('menu/planificacion/versiones/<int:version_id>/items/', obtener_vista('guardar_item_ciclo_menu'), name='guardar_item_ciclo_menu'),
     path('menu/planificacion/versiones/<int:version_id>/activar/', obtener_vista('activar_version_programa_menu'), name='activar_version_programa_menu'),
+    path('menu/planificacion/versiones/<int:version_id>/eliminar/', obtener_vista('eliminar_version_programa_menu'), name='eliminar_version_programa_menu'),
     path('menu/planificacion/asignaciones/crear/', obtener_vista('asignar_programa_centro'), name='asignar_programa_centro'),
+    path('menu/planificacion/asignaciones/<int:asignacion_id>/editar/', obtener_vista('editar_asignacion_programa_centro'), name='editar_asignacion_programa_centro'),
+    path('menu/planificacion/asignaciones/<int:asignacion_id>/eliminar/', obtener_vista('eliminar_asignacion_programa_centro'), name='eliminar_asignacion_programa_centro'),
     path('menu/planificacion/asignaciones/<int:asignacion_id>/calendarios/<int:calendario_id>/generar/', obtener_vista('generar_programacion_menu'), name='generar_programacion_menu'),
     path('menu/planificacion/exportar.xlsx', obtener_vista('exportar_programacion_excel'), name='exportar_programacion_excel'),
     path('menu/planificacion/exportar.pdf', obtener_vista('exportar_programacion_pdf'), name='exportar_programacion_pdf'),
@@ -138,3 +143,68 @@ path(
     path('login/', obtener_vista('login_usuario'), name='login_usuario'),
     path('logout/', obtener_vista('logout_usuario'), name='logout_usuario'),
 ]
+
+
+# ===== MOTOR DOCUMENTAL SASTRE 02 =====
+
+urlpatterns += [
+    path(
+        "documentos-institucionales/",
+        views.documentos_institucionales,
+        name="documentos_institucionales",
+    ),
+    path(
+        "documentos-institucionales/nuevo/",
+        views.nuevo_documento_institucional,
+        name="nuevo_documento_institucional",
+    ),
+    path(
+        "documentos-institucionales/<int:documento_id>/editar/",
+        views.editar_documento_institucional,
+        name="editar_documento_institucional",
+    ),
+    path(
+        "documentos-institucionales/<int:documento_id>/eliminar/",
+        views.eliminar_documento_institucional,
+        name="eliminar_documento_institucional",
+    ),
+
+    path(
+        "documentos-institucionales/<int:documento_id>/finalizar/",
+        views.finalizar_documento_institucional,
+        name="finalizar_documento_institucional",
+    ),
+
+    path(
+        "documentos-institucionales/<int:documento_id>/nueva-version/",
+        views.duplicar_documento_institucional,
+        name="duplicar_documento_institucional",
+    ),
+
+    path(
+        "documentos-institucionales/<int:documento_id>/anular/",
+        views.anular_documento_institucional,
+        name="anular_documento_institucional",
+    ),
+
+    path(
+        "documentos-institucionales/<int:documento_id>/word/descargar/",
+        views.descargar_word_documento_institucional,
+        name="descargar_word_documento_institucional",
+    ),
+
+    path(
+        "documentos-institucionales/<int:documento_id>/pdf/",
+        views.ver_pdf_documento_institucional,
+        name="ver_pdf_documento_institucional",
+    ),
+
+    path(
+        "documentos-institucionales/<int:documento_id>/pdf/descargar/",
+        views.descargar_pdf_documento_institucional,
+        name="descargar_pdf_documento_institucional",
+    ),
+
+]
+
+# ===== FIN MOTOR DOCUMENTAL SASTRE 02 =====

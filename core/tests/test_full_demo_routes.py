@@ -8,7 +8,7 @@ from conduces.models import Empresa
 
 
 UNSAFE_SEGMENTS = {
-    "accion", "acciones", "actualizar", "anular", "aprobar", "cancelar",
+    "accion", "acciones", "actualizar", "analizar", "anular", "aprobar", "cancelar",
     "cargar", "cerrar", "completar", "crear", "descargar", "desactivar", "desembolsar",
     "duplicar", "eliminar", "emitir", "enviar", "estado", "exportacion",
     "exportar", "facturar", "generar", "integrar", "logout", "pdf", "plantilla",

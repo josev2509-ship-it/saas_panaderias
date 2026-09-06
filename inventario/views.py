@@ -878,7 +878,15 @@ def generar_pdf_orden_compra_response(request, orden_id, descargar=False):
 
         if empresa and empresa.logo:
             try:
-                logo = ImageReader(empresa.logo.path)
+                with empresa.logo.storage.open(
+                    empresa.logo.name,
+                    "rb",
+                ) as archivo_logo:
+                    logo = ImageReader(
+                        __import__("io").BytesIO(
+                            archivo_logo.read()
+                        )
+                    )
                 pdf.drawImage(
                     logo,
                     width / 2 - 45,

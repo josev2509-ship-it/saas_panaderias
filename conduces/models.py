@@ -48,6 +48,32 @@ class Empresa(models.Model):
     null=True
 )
 
+    # Recursos graficos para documentos institucionales
+    firma_autorizada = models.ImageField(
+        upload_to="empresas/firmas/",
+        blank=True,
+        null=True
+    )
+
+    sello_institucional = models.ImageField(
+        upload_to="empresas/sellos/",
+        blank=True,
+        null=True
+    )
+
+
+    # Identidad predeterminada para documentos institucionales
+    firmante_predeterminado = models.CharField(
+        max_length=180,
+        blank=True,
+    )
+
+    cargo_firmante_predeterminado = models.CharField(
+        max_length=180,
+        blank=True,
+    )
+
+
     def __str__(self):
         return self.nombre
 
@@ -729,6 +755,7 @@ class VersionProgramaMenu(models.Model):
     nombre = models.CharField(max_length=80)
     vigente_desde = models.DateField()
     vigente_hasta = models.DateField(null=True, blank=True)
+    fecha_uso_desde = models.DateField(null=True, blank=True, help_text="Fecha desde la cual esta versión comienza a utilizarse operativamente en SASTRE.")
     semanas_ciclo = models.PositiveSmallIntegerField(default=5)
     fecha_ancla_ciclo = models.DateField()
     modo_inicio_ciclo = models.CharField(max_length=15, choices=InicioCiclo.choices, default=InicioCiclo.REINICIAR)
@@ -745,6 +772,10 @@ class VersionProgramaMenu(models.Model):
     def clean(self):
         if self.vigente_hasta and self.vigente_hasta < self.vigente_desde:
             raise ValidationError({"vigente_hasta": "La vigencia final no puede preceder a la inicial."})
+        if self.fecha_uso_desde and self.fecha_uso_desde < self.vigente_desde:
+            raise ValidationError({"fecha_uso_desde": "La fecha de uso en SASTRE no puede ser anterior a la vigencia oficial del menú."})
+        if self.fecha_uso_desde and self.vigente_hasta and self.fecha_uso_desde > self.vigente_hasta:
+            raise ValidationError({"fecha_uso_desde": "La fecha de uso en SASTRE no puede ser posterior al fin de vigencia."})
         if not 1 <= self.semana_inicial <= self.semanas_ciclo:
             raise ValidationError({"semana_inicial": "La semana inicial debe pertenecer al ciclo."})
 
@@ -771,6 +802,19 @@ class ItemCicloMenu(models.Model):
             raise ValidationError({"dia_semana": "El dia debe estar entre lunes (0) y domingo (6)."})
         if self.es_suministrado and not self.producto.strip():
             raise ValidationError({"producto": "Indique el producto suministrado."})
+
+    @property
+    def nombre_dia(self):
+        dias = {
+            0: "Lunes",
+            1: "Martes",
+            2: "Miércoles",
+            3: "Jueves",
+            4: "Viernes",
+            5: "Sábado",
+            6: "Domingo",
+        }
+        return dias.get(self.dia_semana, "Día no definido")
 
 
 class AsignacionProgramaCentro(models.Model):
@@ -845,3 +889,255 @@ class ExcepcionProgramacionMenu(models.Model):
 
     class Meta:
         ordering = ("-creado_en",)
+
+
+# =====================================================
+# DOCUMENTOS INSTITUCIONALES
+# =====================================================
+
+class DocumentoInstitucional(models.Model):
+    """
+    Repositorio transversal de cartas y documentos formales de SASTRE ERP.
+
+    Guarda una copia historica del contenido y de los datos utilizados
+    para que un documento emitido no cambie retroactivamente cuando
+    cambien los datos maestros de la empresa o del calendario.
+    """
+
+    class Tipo(models.TextChoices):
+        NOTA_ACLARATORIA = "NOTA_ACLARATORIA", "Nota aclaratoria"
+        CARTA_REMISION = "CARTA_REMISION", "Carta de remision"
+        CERTIFICACION = "CERTIFICACION", "Certificacion"
+        COMUNICACION_INABIE = "COMUNICACION_INABIE", "Comunicacion INABIE"
+        COMUNICACION_PROVEEDOR = (
+            "COMUNICACION_PROVEEDOR",
+            "Comunicacion a proveedor",
+        )
+        OTRO = "OTRO", "Otro"
+
+    class Estado(models.TextChoices):
+        BORRADOR = "BORRADOR", "Borrador"
+        FINALIZADO = "FINALIZADO", "Finalizado"
+        ANULADO = "ANULADO", "Anulado"
+
+    class Origen(models.TextChoices):
+        AUTOMATICO = "AUTOMATICO", "Generado por SASTRE"
+        MANUAL = "MANUAL", "Redaccion manual"
+        ASISTIDO = "ASISTIDO", "Redaccion asistida"
+
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name="documentos_institucionales",
+    )
+
+    numero = models.CharField(
+        max_length=30,
+        db_index=True,
+    )
+
+    tipo = models.CharField(
+        max_length=40,
+        choices=Tipo.choices,
+        default=Tipo.NOTA_ACLARATORIA,
+        db_index=True,
+    )
+
+    estado = models.CharField(
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.BORRADOR,
+        db_index=True,
+    )
+
+    origen = models.CharField(
+        max_length=20,
+        choices=Origen.choices,
+        default=Origen.AUTOMATICO,
+    )
+
+    fecha_documento = models.DateField(default=timezone.localdate)
+
+    fecha_desde = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    fecha_hasta = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    destinatario = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    asunto = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    # El contenido enriquecido se almacenara aqui.
+    # Mas adelante el editor comun de SASTRE generara este HTML.
+    contenido_html = models.TextField(blank=True)
+
+    firmante = models.CharField(
+        max_length=180,
+        blank=True,
+    )
+
+    cargo_firmante = models.CharField(
+        max_length=180,
+        blank=True,
+    )
+
+    incluir_firma = models.BooleanField(default=False)
+    incluir_sello = models.BooleanField(default=False)
+
+    # Snapshot de hechos del calendario utilizados para redactar
+    # la comunicacion. No depende posteriormente de que cambie
+    # el calendario maestro.
+    dias_no_laborables_snapshot = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    # Snapshot de datos relevantes de empresa/documento.
+    datos_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    # Trazabilidad de versiones documentales.
+    #
+    # La primera emisión tiene version=1 y documento_base=None.
+    # Las versiones posteriores apuntan siempre al documento
+    # original de la serie.
+    documento_base = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="versiones_derivadas",
+    )
+
+    version = models.PositiveIntegerField(
+        default=1,
+    )
+
+    creado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="documentos_institucionales_creados",
+    )
+
+    modificado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documentos_institucionales_modificados",
+    )
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    modificado_en = models.DateTimeField(auto_now=True)
+
+    finalizado_en = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    finalizado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documentos_institucionales_finalizados",
+    )
+
+    pdf_final = models.FileField(
+        upload_to="documentos_institucionales/finalizados/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+
+    docx_final = models.FileField(
+        upload_to="documentos_institucionales/finalizados/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+
+    anulado_en = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    anulado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documentos_institucionales_anulados",
+    )
+
+    motivo_anulacion = models.TextField(
+        blank=True,
+    )
+
+    eliminado_en = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    eliminado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documentos_institucionales_eliminados",
+    )
+
+    class Meta:
+        ordering = ("-fecha_documento", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("empresa", "numero"),
+                name="documento_empresa_numero_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=("empresa", "tipo", "estado"),
+                name="doc_empresa_tipo_estado_idx",
+            ),
+        ]
+
+    @property
+    def eliminado(self):
+        return self.eliminado_en is not None
+
+    def eliminar_logicamente(self, usuario=None):
+        if self.eliminado_en is not None:
+            return False
+
+        self.eliminado_en = timezone.now()
+
+        if getattr(usuario, "is_authenticated", False):
+            self.eliminado_por = usuario
+
+        self.save(
+            update_fields=(
+                "eliminado_en",
+                "eliminado_por",
+                "modificado_en",
+            )
+        )
+        return True
+
+    def __str__(self):
+        return f"{self.numero} - {self.get_tipo_display()}"
+
