@@ -266,30 +266,33 @@ def obtener_empresa_request(
     permitir_soporte=False,
 ):
     """
-    Resolvedor central para una petición.
-
-    Por seguridad, permitir_soporte=False durante esta primera fase.
-
-    Cuando terminemos de migrar todos los módulos, cambiaremos
-    los puntos controlados a permitir_soporte=True.
+    Resolvedor central para una peticion.
+    Cachea el tenant efectivo durante el mismo request.
     """
-    if (
-        permitir_soporte
-        and contexto_soporte_activo(request)
-    ):
-        contexto = obtener_contexto_soporte(
-            request
-        )
+    cache_attr = "_sastre_empresa_request_cache"
+    cache = getattr(request, cache_attr, None)
 
+    if cache is None:
+        cache = {}
+        setattr(request, cache_attr, cache)
+
+    cache_key = bool(permitir_soporte)
+
+    if cache_key in cache:
+        return cache[cache_key]
+
+    empresa = None
+
+    if permitir_soporte and contexto_soporte_activo(request):
+        contexto = obtener_contexto_soporte(request)
         if contexto:
-            return contexto[
-                "empresa_operativa"
-            ]
+            empresa = contexto["empresa_operativa"]
 
-    return empresa_operativa_usuario(
-        request.user
-    )
+    if empresa is None:
+        empresa = empresa_operativa_usuario(request.user)
 
+    cache[cache_key] = empresa
+    return empresa
 
 def obtener_empresa_saas_request(
     request,

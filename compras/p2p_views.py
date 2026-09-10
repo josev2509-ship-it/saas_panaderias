@@ -26,13 +26,14 @@ def dashboard(request):
     fin={"compensaciones":CompensacionP2P.objects.filter(empresa=empresa,estado__in=["PROPUESTA","APROBADA"]).count(),"anticipos":AnticipoProveedor.objects.filter(empresa=empresa,saldo__gt=0).aggregate(v=Sum("saldo"))["v"] or 0}
     fin.update(RetencionProveedor.objects.filter(empresa=empresa).aggregate(retenciones=Sum("monto",filter=Q(fecha__gte=month,estado="APLICADA")),certificados=Count("certificado",filter=Q(certificado__emitido_en__date__gte=month),distinct=True)))
     wiz=WizardSession.objects.filter(empresa=empresa).aggregate(activos=Count("pk",filter=Q(estado="ACTIVO",expira_en__gt=timezone.now())),abandonados=Count("pk",filter=Q(estado__in=["EXPIRADO","FALLIDO"])))
+    cxp=CuentaPorPagarEnterprise.objects.filter(empresa=empresa).aggregate(total=Sum("saldo"),vencidas=Count("pk",filter=Q(vence_el__lt=today,saldo__gt=0)))
     kpis=[
         ("Compras del mes",OrdenCompraEnterprise.objects.filter(empresa=empresa,fecha__gte=month).aggregate(v=Sum("total"))["v"] or 0,"ordenes",""),
         ("Órdenes abiertas",OrdenCompraEnterprise.objects.filter(empresa=empresa).exclude(estado__in=["CERRADA","CANCELADA"]).count(),"ordenes",""),
         ("Recepciones pendientes",RecepcionCompra.objects.filter(empresa=empresa,estado__in=["BORRADOR","EN_PROCESO","PARCIAL","CON_DIFERENCIAS"]).count(),"recepciones","PARCIAL"),
         ("Facturas pendientes",FacturaProveedor.objects.filter(empresa=empresa).exclude(estado__in=["PAGADA","ANULADA"]).count(),"facturas","VALIDADA"),
-        ("CxP",CuentaPorPagarEnterprise.objects.filter(empresa=empresa).aggregate(v=Sum("saldo"))["v"] or 0,"cxp",""),
-        ("Aging vencido",CuentaPorPagarEnterprise.objects.filter(empresa=empresa,vence_el__lt=today,saldo__gt=0).count(),"cxp","VENCIDA"),
+        ("CxP",cxp["total"] or 0,"cxp",""),
+        ("Aging vencido",cxp["vencidas"] or 0,"cxp","VENCIDA"),
         ("Pagos programados",OrdenPago.objects.filter(empresa=empresa,estado="APROBADA").count(),"pagos","APROBADA"),
         ("Proveedores críticos",Proveedor.objects.filter(empresa=empresa,nivel_riesgo="CRITICO").count(),"proveedores","CRITICO"),
         ("Entregas tardías",OrdenCompraEnterprise.objects.filter(empresa=empresa,entrega_hasta__lt=today).exclude(estado__in=["RECIBIDA","FACTURADA","CERRADA","CANCELADA"]).count(),"ordenes","ACEPTADA"),

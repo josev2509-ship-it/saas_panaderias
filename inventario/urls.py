@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import produccion_views
+from . import produccion_inabie_views
 
 app_name = "inventario"
 
@@ -31,6 +32,14 @@ urlpatterns = [
     path("produccion/programacion/diaria/", produccion_views.produccion_programacion_diaria, name="produccion_programacion_diaria"),
     path("produccion/programacion/semanal/", produccion_views.produccion_programacion_semanal, name="produccion_programacion_semanal"),
     path("produccion/necesidades/", produccion_views.necesidades_materia_prima, name="necesidades_materia_prima"),
+    path("produccion/inabie/generar/", produccion_inabie_views.generar_orden, name="orden_inabie_generar"),
+    path("produccion/ordenes/<int:pk>/ajustar/", produccion_inabie_views.ajustar_orden, name="orden_inabie_ajustar"),
+    path("produccion/ordenes/<int:pk>/iniciar-inabie/", produccion_inabie_views.iniciar, name="orden_inabie_iniciar"),
+    path("produccion/ordenes/<int:pk>/cerrar/", produccion_inabie_views.cerrar, name="orden_inabie_cerrar"),
+    path("produccion/ordenes/<int:pk>/pdf/", produccion_inabie_views.orden_pdf, name="orden_pdf"),
+    path("produccion/ordenes/<int:pk>/cambio-producto/", produccion_inabie_views.cambio_producto, name="orden_cambio_producto"),
+    path("produccion/ordenes/<int:pk>/cambio-producto/<int:solicitud_pk>/decidir/", produccion_inabie_views.decidir_cambio, name="orden_cambio_producto_decidir"),
+    path("produccion/proyeccion-materia-prima/", produccion_inabie_views.proyeccion, name="proyeccion_materia_prima"),
 
     # =====================================================
     # DASHBOARD

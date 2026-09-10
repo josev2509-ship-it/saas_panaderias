@@ -5,7 +5,12 @@ def obtener_perfil_saas(user):
     if not getattr(user, "is_authenticated", False):
         return None
 
-    return (
+    cache_attr = "_sastre_perfil_saas_cache"
+
+    if hasattr(user, cache_attr):
+        return getattr(user, cache_attr)
+
+    perfil = (
         PerfilUsuario.objects
         .select_related(
             "empresa",
@@ -19,6 +24,8 @@ def obtener_perfil_saas(user):
         .first()
     )
 
+    setattr(user, cache_attr, perfil)
+    return perfil
 
 def obtener_empresa_saas(user):
     perfil = obtener_perfil_saas(user)
