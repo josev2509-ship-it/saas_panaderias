@@ -200,3 +200,304 @@ class DiaNoDocenciaAdmin(admin.ModelAdmin):
     )
 
     ordering = ("fecha",)
+
+
+# ===== ADMIN SUSCRIPCIONES SASTRE =====
+from .models import (
+    Plan,
+    EmpresaSaaS,
+    Suscripcion,
+    PagoSuscripcion,
+    EventoSuscripcion,
+    PerfilUsuario,
+)
+
+
+@admin.register(Plan)
+class PlanSaaSAdmin(admin.ModelAdmin):
+    list_display = (
+        "nombre",
+        "codigo",
+        "precio",
+        "moneda",
+        "periodicidad",
+        "activo",
+    )
+
+    list_editable = (
+        "precio",
+        "moneda",
+        "activo",
+    )
+
+    search_fields = (
+        "nombre",
+        "codigo",
+    )
+
+    list_filter = (
+        "activo",
+        "moneda",
+        "periodicidad",
+    )
+
+    ordering = (
+        "nombre",
+    )
+
+    fieldsets = (
+        (
+            "Información comercial",
+            {
+                "fields": (
+                    "nombre",
+                    "codigo",
+                    "descripcion",
+                    "precio",
+                    "moneda",
+                    "periodicidad",
+                    "activo",
+                )
+            },
+        ),
+        (
+            "Límites",
+            {
+                "fields": (
+                    "limite_conduces",
+                    "limite_usuarios",
+                    "almacenamiento_gb",
+                )
+            },
+        ),
+        (
+            "Módulos incluidos",
+            {
+                "fields": (
+                    "modulo_inabie",
+                    "modulo_conduces",
+                    "modulo_centros",
+                    "modulo_menu",
+                    "modulo_facturacion",
+                    "modulo_reportes",
+                    "modulo_inventario",
+                    "modulo_compras",
+                    "modulo_catalogos",
+                    "modulo_workflow",
+                    "modulo_rutas",
+                    "modulo_nomina",
+                )
+            },
+        ),
+        (
+            "Compatibilidad",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "incluye_contabilidad",
+                    "incluye_nomina",
+                    "incluye_rutas",
+                )
+            },
+        ),
+    )
+
+
+@admin.register(EmpresaSaaS)
+class EmpresaSaaSAdmin(admin.ModelAdmin):
+    list_display = (
+        "nombre",
+        "rnc",
+        "correo",
+        "activa",
+        "requiere_pago",
+        "suspendida_manualmente",
+        "trial_dias",
+        "creada_en",
+    )
+
+    list_editable = (
+        "activa",
+        "requiere_pago",
+        "suspendida_manualmente",
+    )
+
+    search_fields = (
+        "nombre",
+        "rnc",
+        "correo",
+    )
+
+    list_filter = (
+        "activa",
+        "requiere_pago",
+        "suspendida_manualmente",
+        "creada_en",
+    )
+
+    readonly_fields = (
+        "creada_en",
+        "fecha_suspension",
+    )
+
+    fieldsets = (
+        (
+            "Empresa",
+            {
+                "fields": (
+                    "nombre",
+                    "rnc",
+                    "correo",
+                    "activa",
+                )
+            },
+        ),
+        (
+            "Control comercial",
+            {
+                "fields": (
+                    "requiere_pago",
+                    "trial_dias",
+                    "suspendida_manualmente",
+                    "motivo_suspension",
+                    "fecha_suspension",
+                )
+            },
+        ),
+        (
+            "Auditoría",
+            {
+                "fields": (
+                    "creada_en",
+                )
+            },
+        ),
+    )
+
+
+@admin.register(Suscripcion)
+class SuscripcionAdmin(admin.ModelAdmin):
+    list_display = (
+        "empresa",
+        "plan",
+        "estado",
+        "proveedor",
+        "en_prueba",
+        "fecha_inicio",
+        "fecha_fin",
+        "fecha_proximo_cobro",
+        "gracia_hasta",
+    )
+
+    list_editable = (
+        "plan",
+        "estado",
+    )
+
+    search_fields = (
+        "empresa__nombre",
+        "empresa__correo",
+        "proveedor_subscription_id",
+    )
+
+    list_filter = (
+        "estado",
+        "proveedor",
+        "en_prueba",
+        "cancelar_al_final_periodo",
+    )
+
+    readonly_fields = (
+        "actualizada_en",
+        "ultimo_pago_en",
+        "cancelada_en",
+    )
+
+    fieldsets = (
+        (
+            "Suscripción",
+            {
+                "fields": (
+                    "empresa",
+                    "plan",
+                    "estado",
+                    "proveedor",
+                    "proveedor_subscription_id",
+                )
+            },
+        ),
+        (
+            "Prueba",
+            {
+                "fields": (
+                    "en_prueba",
+                    "fecha_inicio",
+                    "fecha_fin",
+                )
+            },
+        ),
+        (
+            "Periodo de facturación",
+            {
+                "fields": (
+                    "periodo_actual_desde",
+                    "periodo_actual_hasta",
+                    "fecha_proximo_cobro",
+                    "gracia_hasta",
+                    "ultimo_pago_en",
+                )
+            },
+        ),
+        (
+            "Cancelación",
+            {
+                "fields": (
+                    "cancelar_al_final_periodo",
+                    "cancelada_en",
+                )
+            },
+        ),
+        (
+            "Sistema",
+            {
+                "fields": (
+                    "actualizada_en",
+                )
+            },
+        ),
+    )
+
+
+@admin.register(PagoSuscripcion)
+class PagoSuscripcionAdmin(admin.ModelAdmin):
+    list_display = (
+        "empresa",
+        "monto",
+        "moneda",
+        "estado",
+        "proveedor",
+        "referencia_externa",
+        "fecha_pago",
+    )
+
+
+@admin.register(EventoSuscripcion)
+class EventoSuscripcionAdmin(admin.ModelAdmin):
+    list_display = (
+        "empresa",
+        "suscripcion",
+        "tipo",
+        "usuario",
+        "creado_en",
+    )
+
+
+@admin.register(PerfilUsuario)
+class PerfilUsuarioAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "empresa",
+        "rol",
+        "correo_validado",
+        "activo",
+    )

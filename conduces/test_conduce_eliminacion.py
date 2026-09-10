@@ -58,6 +58,7 @@ class ConduceEliminacionTests(TestCase):
             nombre=f"Cuenta SaaS {user.username}",
             rnc=f"RNC-{user.pk}",
             correo=f"{user.username}@example.com",
+            requiere_pago=False,
         )
         return PerfilUsuario.objects.create(
             user=user,

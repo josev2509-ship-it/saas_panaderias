@@ -1,13 +1,17 @@
 from .models import Empresa
 
 
+
 def obtener_empresa_usuario(request):
-    if not request.user.is_authenticated:
-        return None
+    """
+    Compatibilidad para los módulos que todavía utilizan
+    services.obtener_empresa_usuario(request).
 
-    empresa = getattr(request.user, "empresa_principal", None)
+    La resolución real vive en tenant_context.
+    """
+    from .tenant_context import obtener_empresa_request
 
-    if empresa:
-        return empresa
-
-    return Empresa.objects.filter(usuario=request.user).first()
+    return obtener_empresa_request(
+        request,
+        permitir_soporte=True,
+    )

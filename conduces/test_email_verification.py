@@ -63,9 +63,15 @@ class EmailVerificationFlowTests(TestCase):
         self.assertNotIn(user.email, output)
 
         page = self.client.get(reverse("verificar_correo"))
+        self.assertEqual(page.status_code, 200)
         self.assertContains(page, "smoke@example.com")
+        self.assertContains(page, 'name="codigo"')
         self.assertContains(page, f'action="{reverse("reenviar_codigo_correo")}"')
         self.assertContains(page, "csrfmiddlewaretoken")
+        self.assertNotContains(page, 'id="app-sidebar"')
+        self.assertNotContains(page, "Panel principal")
+        self.assertNotContains(page, "Configuración de empresas")
+        self.assertNotContains(page, reverse("inventario:productos"))
 
     def test_registration_failure_rolls_back_incomplete_account(self):
         self.delivery.side_effect = TransactionalEmailError(

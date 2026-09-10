@@ -1,3 +1,4 @@
+from . import support_views
 from django.urls import path
 from django.http import HttpResponse
 from . import views
@@ -21,6 +22,66 @@ def obtener_vista(nombre):
 
 
 urlpatterns = [
+
+    path(
+        "sastre-admin/empresas/<int:empresa_id>/entrar/",
+        support_views.soporte_entrar_empresa,
+        name="soporte_entrar_empresa",
+    ),
+    path(
+        "sastre-admin/salir-empresa/",
+        support_views.soporte_salir_empresa,
+        name="soporte_salir_empresa",
+    ),
+
+    path(
+        "sastre-admin/",
+        support_views.soporte_login,
+        name="soporte_login",
+    ),
+    path(
+        "sastre-admin/logout/",
+        support_views.soporte_logout,
+        name="soporte_logout",
+    ),
+
+    path(
+        "sastre-admin/empresas/<int:empresa_id>/modulos/",
+        support_views.soporte_empresa_modulos,
+        name="soporte_empresa_modulos",
+    ),
+    path(
+        "sastre-admin/empresas/<int:empresa_id>/plan/",
+        support_views.soporte_empresa_plan,
+        name="soporte_empresa_plan",
+    ),
+    path(
+        "sastre-admin/empresas/<int:empresa_id>/usuarios/<int:perfil_id>/",
+        support_views.soporte_usuario_detalle,
+        name="soporte_usuario_detalle",
+    ),
+
+    # Centro de Administración y Soporte SASTRE
+    path(
+        "sastre-admin/empresas/",
+        support_views.soporte_empresas,
+        name="soporte_empresas",
+    ),
+    path(
+        "sastre-admin/empresas/<int:empresa_id>/",
+        support_views.soporte_empresa_detalle,
+        name="soporte_empresa_detalle",
+    ),
+    path(
+        "sastre-admin/empresas/<int:empresa_id>/accion/",
+        support_views.soporte_empresa_accion,
+        name="soporte_empresa_accion",
+    ),
+    path(
+        "sastre-admin/empresas/<int:empresa_id>/usuarios/<int:perfil_id>/accion/",
+        support_views.soporte_usuario_accion,
+        name="soporte_usuario_accion",
+    ),
 
     # ================= DASHBOARD =================
     path('', obtener_vista('inicio'), name='inicio'),
@@ -142,6 +203,7 @@ path(
     path('reenviar-codigo/', obtener_vista('reenviar_codigo_correo'), name='reenviar_codigo_correo'),
     path('login/', obtener_vista('login_usuario'), name='login_usuario'),
     path('logout/', obtener_vista('logout_usuario'), name='logout_usuario'),
+    path('cuenta/estado/', obtener_vista('cuenta_estado'), name='cuenta_estado'),
 ]
 
 

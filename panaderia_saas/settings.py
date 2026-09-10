@@ -87,6 +87,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "conduces.support_middleware.SoporteSastreMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -112,6 +113,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                    "conduces.context_processors.contexto_soporte_sastre",
                 "conduces.context_processors.empresa_activa",
             ],
         },
@@ -429,3 +431,7 @@ THOUSAND_SEPARATOR = ","
 DECIMAL_SEPARATOR = "."
 
 NUMBER_GROUPING = 3
+
+
+# Duración máxima del modo soporte SASTRE
+SASTRE_SUPPORT_SESSION_MINUTES = 60

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ usuario.username }} | SASTRE Admin</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f3f6fa;font-family:Arial,sans-serif;color:#10233e}
+.wrap{max-width:900px;margin:35px auto;padding:0 20px}
+.card{background:#fff;border-radius:18px;padding:26px;box-shadow:0 10px 30px rgba(15,23,42,.06)}
+.back{display:inline-block;margin-bottom:17px;text-decoration:none;color:#143f68;font-weight:700}
+h1{margin:4px 0 7px}
+.sub{color:#667991;margin-bottom:25px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.field label{display:block;font-size:12px;color:#61758f;font-weight:700;margin-bottom:6px}
+.field input,.field select{width:100%;padding:12px;border:1px solid #d6dfe8;border-radius:9px}
+.check{display:flex;align-items:center;gap:9px;padding:12px;border:1px solid #e0e6ee;border-radius:10px}
+button{border:0;background:#102f4d;color:white;padding:12px 18px;border-radius:9px;font-weight:700;cursor:pointer;margin-top:20px}
+.info{background:#f4f7fb;border-radius:12px;padding:15px;margin-top:20px}
+.messages{padding:0}
+.messages li{list-style:none;background:#e7f2ff;padding:11px;border-radius:9px;margin-bottom:8px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<a class="back" href="{% url 'soporte_empresa_detalle' empresa.id %}">
+&larr; Volver a {{ empresa.nombre }}
+</a>
+
+{% if messages %}
+<ul class="messages">
+{% for message in messages %}
+<li>{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<div class="card">
+
+<div style="font-size:12px;color:#667991;font-weight:700;">
+USUARIO SASTRE
+</div>
+
+<h1>{{ usuario.username }}</h1>
+
+<div class="sub">
+Empresa: {{ empresa.nombre }}
+</div>
+
+<form method="post">
+{% csrf_token %}
+
+<div class="grid">
+
+<div class="field">
+<label>Nombre</label>
+<input name="first_name" value="{{ usuario.first_name }}">
+</div>
+
+<div class="field">
+<label>Apellidos</label>
+<input name="last_name" value="{{ usuario.last_name }}">
+</div>
+
+<div class="field">
+<label>Correo electr&oacute;nico</label>
+<input type="email" name="email" value="{{ usuario.email }}">
+</div>
+
+<div class="field">
+<label>Rol</label>
+<select name="rol">
+{% for valor, etiqueta in roles %}
+<option value="{{ valor }}" {% if perfil.rol == valor %}selected{% endif %}>
+{{ etiqueta }}
+</option>
+{% endfor %}
+</select>
+</div>
+
+<div class="field">
+<label>Nombre de usuario</label>
+<input value="{{ usuario.username }}" disabled>
+</div>
+
+<div class="field">
+<label>&Uacute;ltimo acceso</label>
+<input value="{{ usuario.last_login|date:'d/m/Y H:i'|default:'Nunca' }}" disabled>
+</div>
+
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px;">
+
+<label class="check">
+<input type="checkbox" name="activo" {% if perfil.activo and usuario.is_active %}checked{% endif %}>
+Usuario activo
+</label>
+
+<label class="check">
+<input type="checkbox" name="correo_validado" {% if perfil.correo_validado %}checked{% endif %}>
+Correo validado
+</label>
+
+</div>
+
+<div class="info">
+<strong>Estado de acceso</strong><br><br>
+Perfil SASTRE:
+{% if perfil.activo %}
+Activo
+{% else %}
+Inactivo
+{% endif %}
+<br>
+Login Django:
+{% if usuario.is_active %}
+Permitido
+{% else %}
+Bloqueado
+{% endif %}
+<br>
+Staff:
+{% if usuario.is_staff %}
+S&iacute;
+{% else %}
+No
+{% endif %}
+<br>
+Superusuario:
+{% if usuario.is_superuser %}
+S&iacute;
+{% else %}
+No
+{% endif %}
+</div>
+
+<button>
+Guardar usuario
+</button>
+
+</form>
+
+<div class="info">
+<strong>Recuperaci&oacute;n de contrase&ntilde;a</strong><br><br>
+El usuario debe utilizar el flujo normal de recuperaci&oacute;n de contrase&ntilde;a de SASTRE.
+En el siguiente pase conectaremos desde soporte el reenv&iacute;o seguro de recuperaci&oacute;n y verificaci&oacute;n, reutilizando el flujo existente.
+</div>
+
+</div>
+
+</div>
+</body>
+</html>

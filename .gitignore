@@ -11,3 +11,4 @@ staticfiles/
 media/
 *.bak
 *.bak_*
+.codex_backups/

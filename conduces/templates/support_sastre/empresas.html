@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Empresas SaaS | SASTRE Admin</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f3f6fa;font-family:Arial,sans-serif;color:#10233e}
+.wrap{max-width:1420px;margin:35px auto;padding:0 24px}
+.eyebrow{font-size:12px;color:#526784;font-weight:700;letter-spacing:.05em}
+h1{font-size:30px;margin:5px 0 22px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px}
+.stat{background:#fff;border:1px solid #e4eaf1;border-radius:16px;padding:18px;box-shadow:0 8px 25px rgba(15,23,42,.04)}
+.stat small{display:block;color:#697b94;margin-bottom:7px}
+.stat strong{font-size:28px}
+.search{display:flex;gap:10px;margin-bottom:18px}
+.search input{flex:1;padding:13px 15px;border:1px solid #d6dee8;border-radius:10px;background:white}
+button,.btn{border:0;border-radius:9px;padding:11px 16px;font-weight:700;text-decoration:none;cursor:pointer;display:inline-block}
+.dark{background:#102d4b;color:white}
+.card{background:white;border-radius:17px;box-shadow:0 10px 30px rgba(15,23,42,.06);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:15px;border-bottom:1px solid #edf1f5}
+th{font-size:12px;color:#5d708c;text-transform:uppercase}
+.badge{display:inline-block;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700}
+.ok{background:#d9f8e5;color:#156b3a}
+.bad{background:#fee2e2;color:#a51e1e}
+.warn{background:#fff1d6;color:#945500}
+.info{background:#e0efff;color:#1d5e9e}
+@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.card{overflow:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="eyebrow">SASTRE ADMIN</div>
+<h1>Empresas SaaS</h1>
+
+<div class="stats">
+<div class="stat"><small>Total empresas</small><strong>{{ indicadores.total }}</strong></div>
+<div class="stat"><small>Activas</small><strong>{{ indicadores.activas }}</strong></div>
+<div class="stat"><small>En prueba</small><strong>{{ indicadores.trial }}</strong></div>
+<div class="stat"><small>Cortes&iacute;a</small><strong>{{ indicadores.cortesia }}</strong></div>
+<div class="stat"><small>Suspendidas</small><strong>{{ indicadores.suspendidas }}</strong></div>
+</div>
+
+<form method="get" class="search">
+<input name="q" value="{{ q }}" placeholder="Buscar por empresa, RNC, correo o usuario...">
+<button class="dark">Buscar</button>
+</form>
+
+<div class="card">
+<table>
+<thead>
+<tr>
+<th>Empresa</th>
+<th>Estado</th>
+<th>Modalidad</th>
+<th>Plan</th>
+<th>Suscripci&oacute;n</th>
+<th>Usuarios</th>
+<th>Diagn&oacute;stico</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+{% for fila in filas %}
+<tr>
+<td>
+<strong>{{ fila.empresa.nombre }}</strong><br>
+<small>{{ fila.empresa.rnc|default:"—" }} &middot; {{ fila.empresa.correo }}</small>
+</td>
+
+<td>
+{% if fila.empresa.activa and not fila.empresa.suspendida_manualmente %}
+<span class="badge ok">Activa</span>
+{% else %}
+<span class="badge bad">Restringida</span>
+{% endif %}
+</td>
+
+<td>
+{% if fila.empresa.requiere_pago %}
+Pago requerido
+{% else %}
+<span class="badge ok">Cortes&iacute;a</span>
+{% endif %}
+</td>
+
+<td>
+{% if fila.suscripcion and fila.suscripcion.plan %}
+{{ fila.suscripcion.plan.nombre }}
+{% else %}
+Sin plan
+{% endif %}
+</td>
+
+<td>
+{% if fila.suscripcion %}
+{{ fila.suscripcion.get_estado_display }}
+{% else %}
+Sin suscripci&oacute;n
+{% endif %}
+</td>
+
+<td>
+{{ fila.usuarios_activos }} / {{ fila.total_usuarios }}
+</td>
+
+<td>
+<span class="badge {{ fila.diagnostico.clase }}">
+{{ fila.diagnostico.texto }}
+</span>
+</td>
+
+<td>
+<a class="btn dark" href="{% url 'soporte_empresa_detalle' fila.empresa.id %}">
+Gestionar
+</a>
+</td>
+</tr>
+{% empty %}
+<tr>
+<td colspan="8">No se encontraron empresas.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+</div>
+</body>
+</html>

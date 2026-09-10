@@ -439,57 +439,47 @@ def generar_pdf_relacion_diaria(conduces):
     c.save()
     buffer.seek(0)
     return buffer
+from functools import wraps
+
+from django.contrib import messages
+from django.contrib.auth.views import redirect_to_login
 from django.shortcuts import redirect
-from django.utils import timezone
+
+from .subscription_service import suscripcion_permite_acceso, suscripcion_permite_acceso_request
 
 
 def suscripcion_vigente(perfil):
-    if not perfil or not perfil.empresa:
+    if not perfil:
         return True
 
-    suscripcion = getattr(perfil.empresa, "suscripcion", None)
-
-    if not suscripcion:
-        return True
-
-    hoy = timezone.now().date()
-
-    if suscripcion.estado == "prueba" and suscripcion.fecha_fin >= hoy:
-        return True
-
-    if suscripcion.estado == "activa" and suscripcion.fecha_fin >= hoy:
-        return True
-
-    return False
+    return suscripcion_permite_acceso(
+        perfil.user
+    )
 
 
 def suscripcion_requerida(view_func):
+    @wraps(view_func)
     def wrapper(request, *args, **kwargs):
 
-        rutas_permitidas = [
-            "generar-conduces",
-            "conduces/generar",
-            "relacion-diaria/pdf",
-            "relacion-general/pdf",
-            "nota-aclaratoria",
-            "documentos-institucionales",
-            "facturacion/generar",
-            "factura",
-            "pdf",
-        ]
+        if not request.user.is_authenticated:
+            return redirect_to_login(
+                request.get_full_path()
+            )
 
-        if any(ruta in request.path for ruta in rutas_permitidas):
-            return view_func(request, *args, **kwargs)
+        if suscripcion_permite_acceso_request(
+            request
+        ):
+            return view_func(
+                request,
+                *args,
+                **kwargs
+            )
 
-        from .models import PerfilUsuario
+        messages.warning(
+            request,
+            "Tu suscripción no está activa. Revisa el estado de tu cuenta.",
+        )
 
-        perfil = PerfilUsuario.objects.filter(
-            user=request.user
-        ).first()
-
-        if suscripcion_vigente(perfil):
-            return view_func(request, *args, **kwargs)
-
-        return redirect("inicio")
+        return redirect("cuenta_estado")
 
     return wrapper

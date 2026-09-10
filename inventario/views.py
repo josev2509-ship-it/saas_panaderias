@@ -81,9 +81,16 @@ from .models import (
 
 
 def obtener_empresa_usuario(request):
-    if hasattr(request.user, "empresa_principal"):
-        return request.user.empresa_principal
-    return None
+    """
+    Resuelve la empresa operativa usando el contexto
+    multiempresa central de SASTRE.
+    """
+    from conduces.tenant_context import obtener_empresa_request
+
+    return obtener_empresa_request(
+        request,
+        permitir_soporte=True,
+    )
 
 
 def convertir_decimal(valor, defecto="0"):

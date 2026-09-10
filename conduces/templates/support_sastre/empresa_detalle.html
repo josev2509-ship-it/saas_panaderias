@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ empresa.nombre }} | SASTRE Admin</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f3f6fa;font-family:Arial,sans-serif;color:#10233e}
+.wrap{max-width:1380px;margin:30px auto;padding:0 22px}
+.back{display:inline-block;margin-bottom:17px;color:#123e68;text-decoration:none;font-weight:700}
+.hero,.card{background:#fff;border:1px solid #e8edf3;border-radius:18px;box-shadow:0 10px 30px rgba(15,23,42,.055)}
+.hero{padding:26px;margin-bottom:18px}
+h1{font-size:31px;margin:5px 0 20px}
+h2{font-size:23px;margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.metric{border:1px solid #dfe7ef;border-radius:13px;padding:15px;background:#fff}
+.metric span{font-size:12px;color:#657995;display:block;margin-bottom:6px}
+.card{padding:21px;margin-bottom:17px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+button,.btn{border:0;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+.dark{background:#102f4d;color:#fff}
+.green{background:#19733f;color:#fff}
+.red{background:#ad1f1f;color:#fff}
+.orange{background:#d45710;color:#fff}
+input,select{padding:10px 11px;border:1px solid #d6dfe8;border-radius:8px;background:white}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:13px;border-bottom:1px solid #edf1f5}
+th{font-size:12px;color:#60738e;text-transform:uppercase}
+.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700}
+.ok{background:#d9f8e5;color:#176b3a}
+.bad{background:#fee2e2;color:#a31d1d}
+.warn{background:#fff0d4;color:#985a00}
+.info{background:#e2efff;color:#225f9b}
+.module-switch{width:18px;height:18px}
+.messages{padding:0}
+.messages li{list-style:none;background:#e7f2ff;border-radius:9px;padding:11px 13px;margin-bottom:8px}
+.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<a class="back" href="{% url 'soporte_empresas' %}">
+&larr; Todas las empresas
+</a>
+
+{% if messages %}
+<ul class="messages">
+{% for message in messages %}
+<li>{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<div class="hero">
+<div style="font-size:12px;color:#657995;font-weight:700;">
+EMPRESA SaaS #{{ empresa.id }}
+</div>
+
+<h1>{{ empresa.nombre }}</h1>
+
+<div class="grid">
+
+<div class="metric">
+<span>RNC</span>
+<strong>{{ empresa.rnc|default:"—" }}</strong>
+</div>
+
+<div class="metric">
+<span>Correo</span>
+<strong>{{ empresa.correo }}</strong>
+</div>
+
+<div class="metric">
+<span>Estado de acceso</span>
+<strong>
+<span class="badge {{ diagnostico.clase }}">
+{{ diagnostico.texto }}
+</span>
+</strong>
+</div>
+
+<div class="metric">
+<span>Modalidad</span>
+<strong>
+{% if empresa.requiere_pago %}
+Pago requerido
+{% else %}
+Cortes&iacute;a / manual
+{% endif %}
+</strong>
+</div>
+
+<div class="metric">
+<span>Plan</span>
+<strong>
+{% if plan %}
+{{ plan.nombre }}
+{% else %}
+Sin plan
+{% endif %}
+</strong>
+</div>
+
+<div class="metric">
+<span>Precio</span>
+<strong>
+{% if plan %}
+{{ plan.precio }} {{ plan.moneda }}
+{% else %}
+—
+{% endif %}
+</strong>
+</div>
+
+<div class="metric">
+<span>Suscripci&oacute;n</span>
+<strong>
+{% if suscripcion %}
+{{ suscripcion.get_estado_display }}
+{% else %}
+Sin suscripci&oacute;n
+{% endif %}
+</strong>
+</div>
+
+<div class="metric">
+<span>&Uacute;ltimo acceso</span>
+<strong>
+{{ ultimo_login|date:"d/m/Y H:i"|default:"Sin acceso registrado" }}
+</strong>
+</div>
+
+</div>
+</div>
+
+
+<div class="card">
+
+<h2>Acceso operativo de soporte</h2>
+
+<p style="color:#657995;line-height:1.5;">
+Permite ingresar temporalmente al ERP usando el contexto
+de esta empresa. El acceso queda registrado.
+</p>
+
+{% if empresa_operativa %}
+
+<form
+    method="post"
+    action="{% url 'soporte_entrar_empresa' empresa.id %}"
+    class="actions"
+>
+
+{% csrf_token %}
+
+<input
+    name="motivo"
+    required
+    minlength="5"
+    style="min-width:360px;"
+    placeholder="Motivo del acceso: incidencia, capacitación, corrección..."
+>
+
+<button class="dark">
+Entrar como empresa
+</button>
+
+</form>
+
+{% else %}
+
+<p>
+No existe una empresa operativa vinculada.
+</p>
+
+{% endif %}
+
+</div>
+
+<div class="card">
+<h2>Acciones de soporte</h2>
+
+<div class="actions">
+
+<form method="post" action="{% url 'soporte_empresa_accion' empresa.id %}">
+{% csrf_token %}
+<input type="hidden" name="accion" value="activar">
+<button class="green">Activar / Reactivar</button>
+</form>
+
+<form method="post" action="{% url 'soporte_empresa_accion' empresa.id %}">
+{% csrf_token %}
+<input type="hidden" name="accion" value="cortesia">
+<button class="dark">Cortes&iacute;a / Sin pago</button>
+</form>
+
+<form method="post" action="{% url 'soporte_empresa_accion' empresa.id %}">
+{% csrf_token %}
+<input type="hidden" name="accion" value="exigir_pago">
+<button class="orange">Exigir pago</button>
+</form>
+
+<form method="post" action="{% url 'soporte_empresa_accion' empresa.id %}">
+{% csrf_token %}
+<input type="hidden" name="accion" value="suspender">
+<input name="motivo" placeholder="Motivo obligatorio de suspensi&oacute;n">
+<button class="red">Suspender</button>
+</form>
+
+<form method="post" action="{% url 'soporte_empresa_accion' empresa.id %}">
+{% csrf_token %}
+<input type="hidden" name="accion" value="extender_trial">
+<input name="dias" type="number" value="15" min="1" max="365" style="width:80px">
+<button class="dark">Extender prueba</button>
+</form>
+
+</div>
+</div>
+
+<div class="card">
+
+<div class="section-head">
+<h2>Plan comercial</h2>
+</div>
+
+{% if suscripcion %}
+
+<form method="post" action="{% url 'soporte_empresa_plan' empresa.id %}" class="actions">
+{% csrf_token %}
+
+<select name="plan_id">
+<option value="">Sin plan</option>
+
+{% for p in planes %}
+<option value="{{ p.id }}" {% if plan and p.id == plan.id %}selected{% endif %}>
+{{ p.nombre }} - {{ p.precio }} {{ p.moneda }}
+</option>
+{% endfor %}
+
+</select>
+
+<button class="dark">Guardar plan</button>
+</form>
+
+{% else %}
+
+<p>
+La empresa no tiene una suscripci&oacute;n registrada.
+Una cuenta de cortes&iacute;a puede operar sin suscripci&oacute;n.
+</p>
+
+{% endif %}
+
+</div>
+
+<div class="card">
+
+<div class="section-head">
+<h2>Usuarios de la empresa</h2>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Usuario</th>
+<th>Correo</th>
+<th>Rol</th>
+<th>Estado</th>
+<th>Verificado</th>
+<th>&Uacute;ltimo acceso</th>
+<th></th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for perfil in perfiles %}
+
+<tr>
+
+<td>
+<strong>{{ perfil.user.get_full_name|default:perfil.user.username }}</strong><br>
+<small>{{ perfil.user.username }}</small>
+</td>
+
+<td>
+{{ perfil.user.email|default:"—" }}
+</td>
+
+<td>
+{{ perfil.get_rol_display }}
+</td>
+
+<td>
+{% if perfil.activo and perfil.user.is_active %}
+<span class="badge ok">Activo</span>
+{% else %}
+<span class="badge bad">Bloqueado</span>
+{% endif %}
+</td>
+
+<td>
+{% if perfil.correo_validado %}
+<span class="badge ok">S&iacute;</span>
+{% else %}
+<span class="badge warn">No</span>
+{% endif %}
+</td>
+
+<td>
+{{ perfil.user.last_login|date:"d/m/Y H:i"|default:"Nunca" }}
+</td>
+
+<td>
+<a class="btn dark" href="{% url 'soporte_usuario_detalle' empresa.id perfil.id %}">
+Gestionar usuario
+</a>
+</td>
+
+</tr>
+
+{% empty %}
+
+<tr>
+<td colspan="7">
+No hay usuarios asociados.
+</td>
+</tr>
+
+{% endfor %}
+
+</tbody>
+</table>
+
+</div>
+
+<div class="card">
+
+<div class="section-head">
+<h2>M&oacute;dulos efectivos</h2>
+</div>
+
+{% if empresa_operativa %}
+
+<form method="post" action="{% url 'soporte_empresa_modulos' empresa.id %}">
+{% csrf_token %}
+
+<table>
+
+<thead>
+<tr>
+<th>M&oacute;dulo</th>
+<th>Plan</th>
+<th>Manual</th>
+<th>Acceso efectivo</th>
+<th>Fuente</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for modulo in modulos %}
+
+<tr>
+
+<td>
+<strong>{{ modulo.nombre }}</strong>
+</td>
+
+<td>
+{% if modulo.plan %}
+<span class="badge info">Incluido</span>
+{% else %}
+—
+{% endif %}
+</td>
+
+<td>
+<input
+class="module-switch"
+type="checkbox"
+name="{{ modulo.campo }}"
+{% if modulo.manual %}checked{% endif %}
+>
+</td>
+
+<td>
+{% if modulo.efectivo %}
+<span class="badge ok">Habilitado</span>
+{% else %}
+<span class="badge bad">No habilitado</span>
+{% endif %}
+</td>
+
+<td>
+{{ modulo.fuente }}
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+<button class="dark" style="margin-top:16px;">
+Guardar m&oacute;dulos manuales
+</button>
+
+</form>
+
+{% else %}
+
+<p>
+No se encontr&oacute; una empresa operativa vinculada.
+</p>
+
+{% endif %}
+
+</div>
+
+<div class="card">
+
+<h2>Suscripci&oacute;n</h2>
+
+{% if suscripcion %}
+
+<div class="grid">
+
+<div class="metric">
+<span>Estado</span>
+<strong>{{ suscripcion.get_estado_display }}</strong>
+</div>
+
+<div class="metric">
+<span>Inicio</span>
+<strong>{{ suscripcion.fecha_inicio|date:"d/m/Y" }}</strong>
+</div>
+
+<div class="metric">
+<span>Fin</span>
+<strong>{{ suscripcion.fecha_fin|date:"d/m/Y" }}</strong>
+</div>
+
+<div class="metric">
+<span>En prueba</span>
+<strong>
+{% if suscripcion.esta_en_prueba %}
+S&iacute;
+{% else %}
+No
+{% endif %}
+</strong>
+</div>
+
+<div class="metric">
+<span>Pr&oacute;ximo cobro</span>
+<strong>{{ suscripcion.fecha_proximo_cobro|date:"d/m/Y"|default:"—" }}</strong>
+</div>
+
+<div class="metric">
+<span>Gracia hasta</span>
+<strong>{{ suscripcion.gracia_hasta|date:"d/m/Y"|default:"—" }}</strong>
+</div>
+
+<div class="metric">
+<span>Proveedor</span>
+<strong>{{ suscripcion.get_proveedor_display }}</strong>
+</div>
+
+</div>
+
+{% else %}
+
+<p>Esta empresa no tiene suscripci&oacute;n registrada.</p>
+
+{% endif %}
+
+</div>
+
+<div class="card">
+
+<h2>&Uacute;ltimos pagos</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>Fecha</th>
+<th>Estado</th>
+<th>Monto</th>
+<th>Proveedor</th>
+<th>Referencia</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for pago in pagos %}
+
+<tr>
+<td>{{ pago.fecha_pago|date:"d/m/Y H:i"|default:pago.creado_en|date:"d/m/Y H:i" }}</td>
+<td>{{ pago.get_estado_display }}</td>
+<td>{{ pago.monto }} {{ pago.moneda }}</td>
+<td>{{ pago.proveedor }}</td>
+<td>{{ pago.referencia_externa|default:"—" }}</td>
+</tr>
+
+{% empty %}
+
+<tr>
+<td colspan="5">
+No hay pagos registrados.
+</td>
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h2>Historial de soporte y suscripci&oacute;n</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>Fecha</th>
+<th>Evento</th>
+<th>Descripci&oacute;n</th>
+<th>Usuario soporte</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for evento in eventos %}
+
+<tr>
+<td>{{ evento.creado_en|date:"d/m/Y H:i" }}</td>
+<td>{{ evento.tipo }}</td>
+<td>{{ evento.descripcion|default:"—" }}</td>
+<td>{{ evento.usuario|default:"Sistema" }}</td>
+</tr>
+
+{% empty %}
+
+<tr>
+<td colspan="4">
+No hay eventos registrados.
+</td>
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+</body>
+</html>

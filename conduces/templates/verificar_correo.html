@@ -1,6 +1,8 @@
-{% extends "base.html" %}
+{% extends "base_auth.html" %}
 
-{% block content %}
+{% block title %}Verificar correo | SASTRE ERP{% endblock %}
+
+{% block auth_content %}
 
 <div class="container py-5">
 
@@ -54,6 +56,9 @@
                                    name="codigo"
                                    class="form-control form-control-lg rounded-3"
                                    placeholder="Ejemplo: 123456"
+                                   inputmode="numeric"
+                                   autocomplete="one-time-code"
+                                   maxlength="6"
                                    required>
 
                         </div>

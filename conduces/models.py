@@ -419,8 +419,21 @@ class DetalleFactura(models.Model):
 # PLANES
 # ==========================
 class Plan(models.Model):
+    PERIODICIDADES = (
+        ("MONTHLY", "Mensual"),
+    )
+
     nombre = models.CharField(max_length=100)
+    codigo = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    descripcion = models.TextField(blank=True)
     precio = models.DecimalField(max_digits=10, decimal_places=2)
+    moneda = models.CharField(max_length=3, default="DOP")
+    periodicidad = models.CharField(
+        max_length=20,
+        choices=PERIODICIDADES,
+        default="MONTHLY",
+    )
+    activo = models.BooleanField(default=True)
 
     limite_conduces = models.IntegerField(default=500)
     limite_usuarios = models.IntegerField(default=3)
@@ -430,12 +443,25 @@ class Plan(models.Model):
     incluye_nomina = models.BooleanField(default=False)
     incluye_rutas = models.BooleanField(default=False)
 
+    modulo_conduces = models.BooleanField(default=False)
+    modulo_centros = models.BooleanField(default=False)
+    modulo_menu = models.BooleanField(default=False)
+    modulo_facturacion = models.BooleanField(default=False)
+    modulo_reportes = models.BooleanField(default=False)
+    modulo_rutas = models.BooleanField(default=False)
+    modulo_nomina = models.BooleanField(default=False)
+    modulo_inventario = models.BooleanField(default=False)
+    modulo_catalogos = models.BooleanField(default=False)
+    modulo_compras = models.BooleanField(default=False)
+    modulo_workflow = models.BooleanField(default=False)
+    modulo_inabie = models.BooleanField(default=False)
+
     def __str__(self):
         return self.nombre
 
 
 # ==========================
-# EMPRESA (CUENTA SaaS)
+# EMPRESA SaaS
 # ==========================
 class EmpresaSaaS(models.Model):
     nombre = models.CharField(max_length=255)
@@ -443,6 +469,11 @@ class EmpresaSaaS(models.Model):
     correo = models.EmailField(unique=True)
 
     activa = models.BooleanField(default=True)
+    requiere_pago = models.BooleanField(default=True)
+    suspendida_manualmente = models.BooleanField(default=False)
+    motivo_suspension = models.TextField(blank=True)
+    fecha_suspension = models.DateTimeField(null=True, blank=True)
+    trial_dias = models.PositiveSmallIntegerField(default=15)
 
     creada_en = models.DateTimeField(auto_now_add=True)
 
@@ -456,27 +487,209 @@ class EmpresaSaaS(models.Model):
 class Suscripcion(models.Model):
     ESTADOS = (
         ("prueba", "Prueba"),
+        ("pendiente_pago", "Pendiente de pago"),
         ("activa", "Activa"),
+        ("pago_fallido", "Pago fallido"),
+        ("suspendida", "Suspendida"),
+        ("cancelada", "Cancelada"),
         ("vencida", "Vencida"),
         ("bloqueada", "Bloqueada"),
     )
 
-    empresa = models.OneToOneField(EmpresaSaaS, on_delete=models.CASCADE)
-    plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True)
+    PROVEEDORES = (
+        ("MANUAL", "Manual"),
+        ("PAYPAL", "PayPal"),
+        ("TRANSFERENCIA", "Transferencia"),
+        ("CORTESIA", "Cortesía"),
+    )
 
-    estado = models.CharField(max_length=20, choices=ESTADOS, default="prueba")
+    empresa = models.OneToOneField(
+        EmpresaSaaS,
+        on_delete=models.CASCADE,
+        related_name="suscripcion",
+    )
+
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADOS,
+        default="prueba",
+    )
+
+    proveedor = models.CharField(
+        max_length=20,
+        choices=PROVEEDORES,
+        default="MANUAL",
+    )
+
+    proveedor_subscription_id = models.CharField(
+        max_length=150,
+        blank=True,
+    )
 
     fecha_inicio = models.DateField(default=timezone.now)
     fecha_fin = models.DateField()
-
     en_prueba = models.BooleanField(default=True)
 
+    fecha_proximo_cobro = models.DateField(null=True, blank=True)
+    ultimo_pago_en = models.DateTimeField(null=True, blank=True)
+    periodo_actual_desde = models.DateField(null=True, blank=True)
+    periodo_actual_hasta = models.DateField(null=True, blank=True)
+    gracia_hasta = models.DateField(null=True, blank=True)
+    cancelar_al_final_periodo = models.BooleanField(default=False)
+    cancelada_en = models.DateTimeField(null=True, blank=True)
+    actualizada_en = models.DateTimeField(auto_now=True)
+
+    def esta_en_prueba(self):
+        hoy = timezone.localdate()
+        return (
+            self.estado == "prueba"
+            and self.en_prueba
+            and self.fecha_fin
+            and self.fecha_fin >= hoy
+        )
+
+    def esta_en_gracia(self):
+        hoy = timezone.localdate()
+        return (
+            self.estado == "pago_fallido"
+            and self.gracia_hasta
+            and self.gracia_hasta >= hoy
+        )
+
+    def permite_acceso(self):
+        if self.empresa.suspendida_manualmente:
+            return False
+
+        if not self.empresa.activa:
+            return False
+
+        if not self.empresa.requiere_pago:
+            return True
+
+        if self.esta_en_prueba():
+            return True
+
+        hoy = timezone.localdate()
+
+        if self.estado == "activa":
+            vigente_hasta = self.periodo_actual_hasta or self.fecha_fin
+            return bool(vigente_hasta and vigente_hasta >= hoy)
+
+        if self.esta_en_gracia():
+            return True
+
+        return False
+
+    def dias_restantes_prueba(self):
+        if not self.esta_en_prueba():
+            return 0
+
+        return max(
+            (self.fecha_fin - timezone.localdate()).days,
+            0,
+        )
+
     def esta_activa(self):
-        return self.estado in ["activa", "prueba"]
+        return self.permite_acceso()
 
     def __str__(self):
         return f"{self.empresa.nombre} - {self.plan.nombre if self.plan else 'Sin plan'}"
-    
+
+
+class PagoSuscripcion(models.Model):
+    ESTADOS = (
+        ("pendiente", "Pendiente"),
+        ("confirmado", "Confirmado"),
+        ("fallido", "Fallido"),
+        ("reembolsado", "Reembolsado"),
+        ("anulado", "Anulado"),
+    )
+
+    empresa = models.ForeignKey(
+        EmpresaSaaS,
+        on_delete=models.CASCADE,
+        related_name="pagos_suscripcion",
+    )
+
+    suscripcion = models.ForeignKey(
+        Suscripcion,
+        on_delete=models.CASCADE,
+        related_name="pagos",
+    )
+
+    proveedor = models.CharField(max_length=20, default="MANUAL")
+    referencia_externa = models.CharField(
+        max_length=180,
+        blank=True,
+        null=True,
+    )
+
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    moneda = models.CharField(max_length=3, default="DOP")
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADOS,
+        default="pendiente",
+    )
+
+    fecha_pago = models.DateTimeField(null=True, blank=True)
+    periodo_desde = models.DateField(null=True, blank=True)
+    periodo_hasta = models.DateField(null=True, blank=True)
+
+    datos_referencia = models.JSONField(default=dict, blank=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-creado_en",)
+
+    def __str__(self):
+        return f"{self.empresa.nombre} - {self.monto} {self.moneda}"
+
+
+class EventoSuscripcion(models.Model):
+    empresa = models.ForeignKey(
+        EmpresaSaaS,
+        on_delete=models.CASCADE,
+        related_name="eventos_suscripcion",
+    )
+
+    suscripcion = models.ForeignKey(
+        Suscripcion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos",
+    )
+
+    tipo = models.CharField(max_length=80)
+    descripcion = models.TextField(blank=True)
+
+    usuario = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos_suscripcion",
+    )
+
+    datos = models.JSONField(default=dict, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-creado_en",)
+
+    def __str__(self):
+        return f"{self.empresa.nombre} - {self.tipo}"
 
 
 class PerfilUsuario(models.Model):

@@ -147,34 +147,21 @@ def convertir_fecha_excel(fecha):
     return None
 
 
+
 def obtener_empresa(request):
     """
-    Devuelve la empresa operativa asociada al usuario autenticado.
-    Esto evita que un usuario vea datos de otra empresa.
+    Resuelve la empresa operativa de la petición usando
+    la fuente central de contexto multiempresa de SASTRE.
+
+    El modo soporte continúa deshabilitado en esta fase.
     """
-    if not request.user.is_authenticated:
-        return None
+    from .tenant_context import obtener_empresa_request
 
-    empresa = getattr(request.user, "empresa_principal", None)
+    return obtener_empresa_request(
+        request,
+        permitir_soporte=True,
+    )
 
-    if empresa:
-        return empresa
-
-    perfil = PerfilUsuario.objects.filter(user=request.user).first()
-
-    if perfil and perfil.empresa:
-        empresa, creada = Empresa.objects.get_or_create(
-            usuario=request.user,
-            defaults={
-                "nombre": perfil.empresa.nombre,
-                "rnc": perfil.empresa.rnc,
-                "correo": perfil.empresa.correo,
-                "numero_inicial_conduce": "0001",
-            }
-        )
-        return empresa
-
-    return None
 
 
 def fecha_corta(fecha):
@@ -354,6 +341,7 @@ def clasificar_categoria_factura(producto):
 # =====================================================
 
 @login_required(login_url="login_usuario")
+@suscripcion_requerida
 def inicio(request):
     empresa = obtener_empresa(request)
     if not empresa:
@@ -9926,3 +9914,58 @@ def descargar_pdf_documento_institucional(
 
 
 # ===== FIN MOTOR DOCUMENTAL SASTRE 02 =====
+
+
+# =====================================================
+# ESTADO DE CUENTA / SUSCRIPCIÓN
+# =====================================================
+@login_required(login_url="login_usuario")
+def cuenta_estado(request):
+    from .subscription_service import (
+        suscripcion_permite_acceso_request,
+    )
+    from .tenant_context import (
+        contexto_soporte_activo,
+        obtener_empresa_saas_request,
+    )
+
+    empresa_saas = obtener_empresa_saas_request(
+        request,
+        permitir_soporte=True,
+    )
+
+    suscripcion = (
+        getattr(
+            empresa_saas,
+            "suscripcion",
+            None,
+        )
+        if empresa_saas
+        else None
+    )
+
+    contexto = {
+        "empresa_saas": empresa_saas,
+        "suscripcion": suscripcion,
+        "tiene_acceso": (
+            suscripcion_permite_acceso_request(
+                request
+            )
+        ),
+        "en_prueba": bool(
+            suscripcion
+            and suscripcion.esta_en_prueba()
+        ),
+        "dias_restantes": (
+            suscripcion.dias_restantes_prueba()
+            if suscripcion
+            else 0
+        ),
+        "modo_soporte": contexto_soporte_activo(request),
+    }
+
+    return render(
+        request,
+        "cuenta_estado.html",
+        contexto,
+    )
