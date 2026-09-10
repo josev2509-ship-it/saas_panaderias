@@ -14,6 +14,7 @@ from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
 from comercial.models import Pedido
 from comercial.pedidos_services import siguiente_numero
+from conduces.decorators import modulo_requerido
 from conduces.services import obtener_empresa_usuario
 from documentos.services import obtener_documentos
 
@@ -57,7 +58,10 @@ def produccion_dashboard(request):
 
 
 @login_required
-@permission_required("inventario.view_recetaproduccion",raise_exception=True)
+@modulo_requerido(
+    "modulo_inabie",
+    permiso_alternativo="inventario.view_recetaproduccion",
+)
 def recetas_lista(request):
     empresa,salida=_empresa(request)
     if salida:return salida

@@ -39,7 +39,11 @@ def permiso_eliminar_conduce_requerido(view_func):
     return wrapper
 
 
-def modulo_requerido(nombre_modulo, permiso=None):
+def modulo_requerido(
+    nombre_modulo,
+    permiso=None,
+    permiso_alternativo=None,
+):
 
     def decorator(view_func):
 
@@ -73,9 +77,21 @@ def modulo_requerido(nombre_modulo, permiso=None):
                     "La suscripción no está activa."
                 )
 
-            if not modulo_habilitado_request(
+            modulo_habilitado = modulo_habilitado_request(
                 request,
                 nombre_modulo,
+            )
+
+            tiene_permiso_alternativo = bool(
+                permiso_alternativo
+                and request.user.has_perm(
+                    permiso_alternativo
+                )
+            )
+
+            if not (
+                modulo_habilitado
+                or tiene_permiso_alternativo
             ):
                 raise PermissionDenied(
                     "El módulo no está disponible para esta empresa."
