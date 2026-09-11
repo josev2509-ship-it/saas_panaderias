@@ -109,16 +109,6 @@ def empresa_operativa_desde_saas(empresa_saas):
 
     for perfil in perfiles:
         user = perfil.user
-
-        empresa = getattr(
-            user,
-            "empresa_principal",
-            None,
-        )
-
-        if empresa:
-            return empresa
-
         empresa = (
             Empresa.objects
             .filter(usuario=user)
@@ -140,15 +130,6 @@ def empresa_operativa_usuario(user):
     """
     if not getattr(user, "is_authenticated", False):
         return None
-
-    empresa = getattr(
-        user,
-        "empresa_principal",
-        None,
-    )
-
-    if empresa:
-        return empresa
 
     empresa = (
         Empresa.objects
@@ -266,21 +247,12 @@ def obtener_empresa_request(
     permitir_soporte=False,
 ):
     """
-    Resolvedor central para una peticion.
-    Cachea el tenant efectivo durante el mismo request.
+    Resolvedor central para una petición.
+
+    La autorización se consulta en cada uso. No se cachea la instancia de
+    Empresa en el request porque sus banderas de acceso pueden cambiar dentro
+    de una operación administrativa o una prueba transaccional.
     """
-    cache_attr = "_sastre_empresa_request_cache"
-    cache = getattr(request, cache_attr, None)
-
-    if cache is None:
-        cache = {}
-        setattr(request, cache_attr, cache)
-
-    cache_key = bool(permitir_soporte)
-
-    if cache_key in cache:
-        return cache[cache_key]
-
     empresa = None
 
     if permitir_soporte and contexto_soporte_activo(request):
@@ -291,7 +263,6 @@ def obtener_empresa_request(
     if empresa is None:
         empresa = empresa_operativa_usuario(request.user)
 
-    cache[cache_key] = empresa
     return empresa
 
 def obtener_empresa_saas_request(

@@ -11,8 +11,7 @@ from .subscription_service import (
     empresa_operativa_usuario,
     modulo_habilitado,
     suscripcion_permite_acceso,
-    modulo_habilitado_request,
-    suscripcion_permite_acceso_request,
+    estado_acceso_modulo_request,
 )
 
 
@@ -70,17 +69,18 @@ def modulo_requerido(
                     "La empresa se encuentra inactiva."
                 )
 
-            if not suscripcion_permite_acceso_request(
-                request
-            ):
+            suscripcion_habilitada, modulo_habilitado = (
+                estado_acceso_modulo_request(
+                    request,
+                    empresa,
+                    nombre_modulo,
+                )
+            )
+
+            if not suscripcion_habilitada:
                 raise PermissionDenied(
                     "La suscripción no está activa."
                 )
-
-            modulo_habilitado = modulo_habilitado_request(
-                request,
-                nombre_modulo,
-            )
 
             tiene_permiso_alternativo = bool(
                 permiso_alternativo

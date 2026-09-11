@@ -5,12 +5,7 @@ def obtener_perfil_saas(user):
     if not getattr(user, "is_authenticated", False):
         return None
 
-    cache_attr = "_sastre_perfil_saas_cache"
-
-    if hasattr(user, cache_attr):
-        return getattr(user, cache_attr)
-
-    perfil = (
+    return (
         PerfilUsuario.objects
         .select_related(
             "empresa",
@@ -23,9 +18,6 @@ def obtener_perfil_saas(user):
         )
         .first()
     )
-
-    setattr(user, cache_attr, perfil)
-    return perfil
 
 def obtener_empresa_saas(user):
     perfil = obtener_perfil_saas(user)
@@ -243,3 +235,34 @@ def modulo_habilitado_request(
         request.user,
         nombre_modulo,
     )
+
+
+def estado_acceso_modulo_request(request, empresa_operativa, nombre_modulo):
+    """Evalúa suscripción y módulo con un único snapshot fresco por llamada."""
+    from .tenant_context import contexto_soporte_activo, obtener_contexto_soporte
+
+    if contexto_soporte_activo(request):
+        contexto = obtener_contexto_soporte(request)
+        if not contexto or contexto["empresa_operativa"].pk != empresa_operativa.pk:
+            return False, False
+        empresa_saas = contexto["empresa_saas"]
+        suscripcion = getattr(empresa_saas, "suscripcion", None)
+    else:
+        if getattr(request.user, "is_superuser", False):
+            return True, True
+        perfil = obtener_perfil_saas(request.user)
+        if perfil is None:
+            return True, bool(getattr(empresa_operativa, nombre_modulo, False))
+        empresa_saas = perfil.empresa
+        suscripcion = getattr(empresa_saas, "suscripcion", None)
+
+    permite = empresa_saas_permite_acceso(empresa_saas)
+    if not permite:
+        return False, False
+    if suscripcion and suscripcion.esta_en_prueba():
+        return True, True
+    manual = bool(getattr(empresa_operativa, nombre_modulo, False))
+    if not empresa_saas.requiere_pago:
+        return True, manual
+    plan = suscripcion.plan if suscripcion else None
+    return True, bool(manual or (plan and getattr(plan, nombre_modulo, False)))
