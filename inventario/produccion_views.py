@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponseNotAllowed
@@ -15,6 +15,7 @@ from auditoria.services import registrar_evento
 from comercial.models import Pedido
 from comercial.pedidos_services import siguiente_numero
 from conduces.decorators import modulo_requerido
+from conduces.models import PerfilUsuario
 from conduces.services import obtener_empresa_usuario
 from documentos.services import obtener_documentos
 
@@ -90,8 +91,15 @@ def _guardar_receta(request,empresa,receta=None):
 
 
 @login_required
-@permission_required("inventario.add_recetaproduccion",raise_exception=True)
+@modulo_requerido("modulo_inabie")
 def receta_crear(request):
+    puede_crear = request.user.has_perm("inventario.add_recetaproduccion") or PerfilUsuario.objects.filter(
+        user=request.user,
+        rol="admin_empresa",
+        activo=True,
+    ).exists()
+    if not puede_crear:
+        raise PermissionDenied
     empresa,salida=_empresa(request);return salida or _guardar_receta(request,empresa)
 
 
