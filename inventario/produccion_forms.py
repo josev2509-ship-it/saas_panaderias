@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from comercial.models import Pedido
+from .recipe_units import opciones_unidad
 
 from .models import (
     DetallePlanProduccion, DetalleRecetaProduccion, OrdenProduccion, PlanProduccion,
@@ -28,6 +29,7 @@ class RecetaProduccionForm(StyledForm, forms.ModelForm):
             "instrucciones","activa","fecha_vigencia_desde","fecha_vigencia_hasta",
         )
         widgets = {
+            "unidad_rendimiento": forms.Select(choices=opciones_unidad()),
             "fecha_vigencia_desde": forms.DateInput(attrs={"type":"date"}),
             "fecha_vigencia_hasta": forms.DateInput(attrs={"type":"date"}),
             "instrucciones": forms.Textarea(attrs={"rows":4}),
@@ -35,15 +37,48 @@ class RecetaProduccionForm(StyledForm, forms.ModelForm):
     def __init__(self,*args,empresa=None,**kwargs):
         super().__init__(*args,**kwargs); self.aplicar_estilo()
         self.fields["producto_terminado"].queryset = ProductoInventario.objects.filter(empresa=empresa, activo=True, tipo="producto_terminado")
+        actual = getattr(self.instance, "unidad_rendimiento", "")
+        if actual and actual not in dict(self.fields["unidad_rendimiento"].choices):
+            self.fields["unidad_rendimiento"].choices = [*self.fields["unidad_rendimiento"].choices, (actual, actual)]
 
 
 class IngredienteForm(StyledForm, forms.ModelForm):
     class Meta:
         model = DetalleRecetaProduccion
         fields = ("materia_prima","cantidad","unidad_medida","porcentaje_merma","es_opcional","observaciones","orden")
+        widgets = {"unidad_medida": forms.Select(choices=opciones_unidad())}
     def __init__(self,*args,empresa=None,**kwargs):
         super().__init__(*args,**kwargs); self.aplicar_estilo()
         self.fields["materia_prima"].queryset = ProductoInventario.objects.filter(empresa=empresa, activo=True).exclude(tipo="producto_terminado")
+        actual = getattr(self.instance, "unidad_medida", "")
+        if actual and actual not in dict(self.fields["unidad_medida"].choices):
+            self.fields["unidad_medida"].choices = [*self.fields["unidad_medida"].choices, (actual, actual)]
+
+
+class FormulaRecetaUploadForm(forms.Form):
+    MAX_BYTES = 10 * 1024 * 1024
+    archivo = forms.FileField(
+        label="Fórmula en PDF o imagen",
+        widget=forms.ClearableFileInput(attrs={"accept": ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png", "class": "form-control"}),
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data["archivo"]
+        if archivo.size > self.MAX_BYTES:
+            raise forms.ValidationError("El archivo no puede superar 10 MB.")
+        extension = "." + archivo.name.lower().rsplit(".", 1)[-1] if "." in archivo.name else ""
+        firmas = {".pdf": b"%PDF-", ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff", ".png": b"\x89PNG\r\n\x1a\n"}
+        mimes = {".pdf": {"application/pdf"}, ".jpg": {"image/jpeg"}, ".jpeg": {"image/jpeg"}, ".png": {"image/png"}}
+        if extension not in firmas:
+            raise forms.ValidationError("Solo se permiten archivos PDF, JPG, JPEG o PNG.")
+        if archivo.content_type and archivo.content_type not in mimes[extension]:
+            raise forms.ValidationError("El tipo MIME no corresponde a la extensión del archivo.")
+        cabecera = archivo.read(8)
+        archivo.seek(0)
+        if not cabecera.startswith(firmas[extension]):
+            formato = "PDF" if extension == ".pdf" else extension[1:].upper()
+            raise forms.ValidationError(f"El contenido del archivo no corresponde a un {formato} válido.")
+        return archivo
 
 
 IngredientesFormSet = inlineformset_factory(RecetaProduccion, DetalleRecetaProduccion, form=IngredienteForm, extra=1, can_delete=True)

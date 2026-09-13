@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "comercial/_styles.html" %}
+<style>
+.recipe-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.recipe-step{padding:12px;border-radius:12px;background:#f3f6fb;color:#526071}.recipe-step.active{background:#173b65;color:white}.upload-zone{border:2px dashed #9fb4cc;border-radius:16px;padding:28px;text-align:center;background:#f8fbff}.status{display:inline-flex;padding:4px 9px;border-radius:999px;font-size:.76rem;font-weight:700}.status-ok{background:#dcfce7;color:#166534}.status-review{background:#fef3c7;color:#92400e}.status-none{background:#fee2e2;color:#991b1b}.ingredient-row{display:grid;grid-template-columns:2fr 2fr 1fr 1fr 1fr 1fr 2fr auto;gap:8px;align-items:end;margin-bottom:10px}.additional summary{cursor:pointer;font-weight:700;padding:10px 0}@media(max-width:850px){.recipe-steps{grid-template-columns:1fr}.ingredient-row{grid-template-columns:1fr 1fr}.ingredient-row .wide{grid-column:1/-1}}
+</style>
+<div class="com-page">
+  <header class="com-hero"><div><h1>{{ titulo }}</h1><p>Carga una fórmula oficial o completa la receta manualmente. Nada se guarda antes de confirmar.</p></div></header>
+  <div class="recipe-steps"><div class="recipe-step {% if not vista_previa %}active{% endif %}">1 · Cargar documento</div><div class="recipe-step {% if vista_previa %}active{% endif %}">2 · Revisar y asociar</div><div class="recipe-step">3 · Aprobar receta base</div></div>
+
+  <section class="com-card">
+    <h2>Analizar fórmulas</h2>
+    <form method="post" enctype="multipart/form-data" class="upload-zone">
+      {% csrf_token %}<input type="hidden" name="accion" value="analizar">
+      <p><strong>Selecciona un PDF, JPG, JPEG o PNG</strong></p>
+      {{ upload_form.archivo }}{{ upload_form.archivo.errors }}
+      <p class="help">Máximo 10 MB. Los PDFs escaneados y las imágenes requieren un proveedor OCR configurado.</p>
+      <button class="com-btn" type="submit">Analizar documento</button>
+    </form>
+  </section>
+
+  {% if lote %}
+    {% for alerta in lote.advertencias %}<div class="alert alert-warning">{{ alerta }}</div>{% endfor %}
+    {% if formulas_detectadas %}<section class="com-card"><h2>Se detectaron {{ formulas_detectadas|length }} fórmulas</h2>
+      {% for item in formulas_detectadas %}<p><strong>{{ forloop.counter|stringformat:"02d" }} {{ item.resultado.nombre|default:"Sin nombre" }}</strong> · {{ item.resultado.ingredientes|length }} ingredientes · Rendimiento: {{ item.resultado.rendimiento_base|default:"—" }} {{ item.resultado.unidad_rendimiento }} · <span class="status {% if item.resultado.estado == 'LISTA' %}status-ok{% elif item.resultado.estado == 'REVISAR' %}status-review{% else %}status-none{% endif %}">{{ item.resultado.estado }}</span>{% if not preview_local and item.resultado.estado == 'LISTA' %} <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="accion" value="aprobar_formula"><input type="hidden" name="formula_index" value="{{ forloop.counter0 }}"><button class="com-btn" type="submit">Aprobar</button></form>{% endif %}</p>{% for aviso in item.resultado.advertencias %}<div class="alert alert-warning">{{ aviso }}</div>{% endfor %}{% endfor %}
+      {% if not preview_local %}<form method="post">{% csrf_token %}<input type="hidden" name="accion" value="aprobar_listas"><button class="com-btn" type="submit">Aprobar todas las listas</button></form>{% endif %}
+    </section>{% endif %}
+  {% endif %}
+
+  {% if resultado %}
+  {% if not preview_local %}<section class="com-card">
+    <h2>Resultado del análisis · {{ archivo_nombre }}</h2>
+    {% for alerta in resultado.advertencias %}<div class="alert alert-warning">{{ alerta }}</div>{% endfor %}
+    <div class="form-grid">
+      <div><strong>Producto</strong><p>{{ resultado.nombre|default:"—" }} <span class="status {% if resultado.nombre %}status-ok{% else %}status-none{% endif %}">{% if resultado.nombre %}DETECTADO{% else %}NO_DETECTADO{% endif %}</span></p></div>
+      <div><strong>Código</strong><p>{{ resultado.codigo|default:"—" }} <span class="status {% if resultado.codigo %}status-ok{% else %}status-none{% endif %}">{% if resultado.codigo %}DETECTADO{% else %}NO_DETECTADO{% endif %}</span></p></div>
+      <div><strong>Revisión</strong><p>{{ resultado.revision|default:"—" }}</p></div>
+      <div><strong>Fecha</strong><p>{{ resultado.fecha_actualizacion|default:"—" }}</p></div>
+    </div>
+    <div class="desktop-table"><table><thead><tr><th>Detectado</th><th>Inventario sugerido</th><th>Cantidad</th><th>Unidad</th><th>Estado</th></tr></thead><tbody>
+    {% for item in analisis_ingredientes %}<tr><td>{{ item.extraido.nombre }}</td><td>{{ item.match.producto_nombre|default:"Sin asociar" }}</td><td>{{ item.extraido.cantidad }}</td><td>{{ item.extraido.unidad|default:item.extraido.unidad_original }}</td><td><span class="status {% if item.match.estado == 'COINCIDENCIA' %}status-ok{% elif item.match.estado == 'REVISAR' %}status-review{% else %}status-none{% endif %}">{{ item.match.estado }}</span></td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>{% endif %}
+  {% endif %}
+
+  <section class="com-card">
+    <h2>{% if vista_previa %}Corregir y confirmar{% else %}Creación manual{% endif %}</h2>
+    <form method="post" novalidate>{% csrf_token %}<input type="hidden" name="accion" value="guardar">
+      {{ form.non_field_errors }}
+      <h3>Datos principales</h3><div class="form-grid">
+      {% for f in form %}{% if f.name != 'tiempo_preparacion_minutos' and f.name != 'tiempo_produccion_minutos' and f.name != 'instrucciones' %}<div class="field"><label>{{ f.label }}</label>{{ f }}{{ f.errors }}</div>{% endif %}{% endfor %}
+      </div>
+      <h3>Ingredientes</h3>{{ formset.management_form }}{{ formset.non_form_errors }}
+      <div id="ingredient-forms">{% for item in formset %}<div class="ingredient-row">{% for f in item.visible_fields %}<div class="field {% if f.name == 'materia_prima' or f.name == 'observaciones' %}wide{% endif %}"><label>{{ f.label }}</label>{{ f }}{{ f.errors }}</div>{% endfor %}{{ item.id }}</div>{% endfor %}</div>
+      <details class="additional"><summary>Procedimiento e información adicional</summary><div class="form-grid"><div class="field wide"><label>{{ form.instrucciones.label }}</label>{{ form.instrucciones }}{{ form.instrucciones.errors }}</div><div class="field"><label>{{ form.tiempo_preparacion_minutos.label }}</label>{{ form.tiempo_preparacion_minutos }}</div><div class="field"><label>{{ form.tiempo_produccion_minutos.label }}</label>{{ form.tiempo_produccion_minutos }}</div></div></details>
+      <button class="com-btn" type="submit">Guardar receta base</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

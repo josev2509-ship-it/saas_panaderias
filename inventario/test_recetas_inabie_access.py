@@ -1,10 +1,13 @@
 from datetime import timedelta
 from decimal import Decimal
+from io import BytesIO
 
 from django.contrib.auth.models import Group, Permission, User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from reportlab.pdfgen import canvas
 
 from conduces.models import Empresa, EmpresaSaaS, PerfilUsuario, Plan, Suscripcion
 from conduces.tenant_context import (
@@ -201,3 +204,90 @@ class RecetasInabieAccessTests(TestCase):
         session[SESSION_SOPORTE_ACTOR] = soporte.pk
         session.save()
         self.assertEqual(self.client.get(self.crear_url).status_code, 403)
+
+    def _pdf_formula(self):
+        salida = BytesIO()
+        pdf = canvas.Canvas(salida)
+        for y, texto in enumerate((
+            "PRODUCTO: Producto A", "CODIGO: PDF-01", "REVISION: 2",
+            "RENDIMIENTO BASE: 100 UNIDADES", "Harina 20 LIBRAS",
+        )):
+            pdf.drawString(40, 800 - y * 20, texto)
+        pdf.save()
+        return SimpleUploadedFile("formula.pdf", salida.getvalue(), content_type="application/pdf")
+
+    def test_pdf_valido_analiza_y_prellena_sin_guardar(self):
+        materia = ProductoInventario.objects.create(
+            empresa=self.empresa, codigo="HAR", nombre="Harina", tipo="materia_prima",
+            unidad_medida="lb", activo=True,
+        )
+        antes = RecetaProduccion.objects.count()
+        self.client.force_login(self.user)
+        respuesta = self.client.post(self.crear_url, {"accion": "analizar", "archivo": self._pdf_formula()})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, "PDF-01")
+        self.assertContains(respuesta, materia.nombre)
+        self.assertEqual(RecetaProduccion.objects.count(), antes)
+
+    def test_archivo_invalido_es_rechazado(self):
+        self.client.force_login(self.user)
+        archivo = SimpleUploadedFile("falso.pdf", b"no-es-pdf", content_type="application/pdf")
+        respuesta = self.client.post(self.crear_url, {"accion": "analizar", "archivo": archivo})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, "no corresponde a un PDF")
+
+    def test_formatos_de_imagen_validos_llegan_al_fallback_ocr(self):
+        self.client.force_login(self.user)
+        casos = (
+            ("formula.jpg", b"\xff\xd8\xff\xe0resto", "image/jpeg"),
+            ("formula.jpeg", b"\xff\xd8\xff\xe0resto", "image/jpeg"),
+            ("formula.png", b"\x89PNG\r\n\x1a\nresto", "image/png"),
+        )
+        for nombre, contenido, mime in casos:
+            with self.subTest(nombre=nombre):
+                respuesta = self.client.post(self.crear_url, {
+                    "accion": "analizar", "archivo": SimpleUploadedFile(nombre, contenido, content_type=mime),
+                })
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertContains(respuesta, "OCR local no instalado")
+
+    def test_aprobar_formula_lista_crea_detalles_en_orden_y_es_idempotente(self):
+        harina = ProductoInventario.objects.create(
+            empresa=self.empresa, codigo="HAR-ORD", nombre="Harina", tipo="materia_prima", activo=True,
+        )
+        sal = ProductoInventario.objects.create(
+            empresa=self.empresa, codigo="SAL-ORD", nombre="Sal", tipo="materia_prima", activo=True,
+        )
+        self.client.force_login(self.user)
+        self.client.post(self.crear_url, {"accion": "analizar", "archivo": self._pdf_formula()})
+        # El PDF auxiliar solo contiene Harina; prueba la aprobación e idempotencia del lote.
+        primera = self.client.post(self.crear_url, {"accion": "aprobar_formula", "formula_index": "0"})
+        segunda = self.client.post(self.crear_url, {"accion": "aprobar_formula", "formula_index": "0"})
+        self.assertEqual(primera.status_code, 302)
+        self.assertEqual(segunda.status_code, 302)
+        self.assertEqual(RecetaProduccion.objects.filter(empresa=self.empresa, codigo="PDF-01").count(), 1)
+        receta = RecetaProduccion.objects.get(empresa=self.empresa, codigo="PDF-01")
+        self.assertFalse(receta.activa)
+        self.assertEqual(list(receta.ingredientes.values_list("orden", flat=True)), [1])
+
+    def test_confirmar_crea_una_receta_y_reenvio_no_duplica(self):
+        materia = ProductoInventario.objects.create(
+            empresa=self.empresa, codigo="HAR2", nombre="Harina 2", tipo="materia_prima",
+            unidad_medida="lb", activo=True,
+        )
+        datos = {
+            "accion": "guardar", "codigo": "CONF-01", "nombre": "Confirmada",
+            "producto_terminado": self.producto.pk, "version": "2", "rendimiento_base": "100",
+            "unidad_rendimiento": "unidad", "porcentaje_merma_estimada": "0",
+            "fecha_vigencia_desde": timezone.localdate().isoformat(), "instrucciones": "Mezclar",
+            "ingredientes-TOTAL_FORMS": "1", "ingredientes-INITIAL_FORMS": "0",
+            "ingredientes-MIN_NUM_FORMS": "0", "ingredientes-MAX_NUM_FORMS": "1000",
+            "ingredientes-0-materia_prima": materia.pk, "ingredientes-0-cantidad": "20",
+            "ingredientes-0-unidad_medida": "lb", "ingredientes-0-porcentaje_merma": "0",
+            "ingredientes-0-observaciones": "", "ingredientes-0-orden": "1",
+        }
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.post(self.crear_url, datos).status_code, 302)
+        self.assertEqual(RecetaProduccion.objects.filter(codigo="CONF-01").count(), 1)
+        self.assertEqual(self.client.post(self.crear_url, datos).status_code, 200)
+        self.assertEqual(RecetaProduccion.objects.filter(codigo="CONF-01").count(), 1)

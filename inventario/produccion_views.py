@@ -20,13 +20,16 @@ from conduces.services import obtener_empresa_usuario
 from documentos.services import obtener_documentos
 
 from .models import (
-    DetallePlanProduccion, NecesidadMateriaPrima, OrdenProduccion, PlanProduccion,
-    RecetaProduccion,
+    DetallePlanProduccion, DetalleRecetaProduccion, NecesidadMateriaPrima, OrdenProduccion, PlanProduccion,
+    ProductoInventario, RecetaProduccion,
 )
 from .produccion_forms import (
     CompletarOrdenForm, DetallesPlanFormSet, GenerarPlanPedidosForm, IngredientesFormSet,
-    InicioOrdenForm, OrdenProduccionForm, PlanProduccionForm, RecetaProduccionForm,
+    FormulaRecetaUploadForm, InicioOrdenForm, OrdenProduccionForm, PlanProduccionForm,
+    RecetaProduccionForm,
 )
+from .recipe_document_parser import RecipeDocumentParser
+from .recipe_matching import encontrar_ingrediente, encontrar_producto_terminado
 from .produccion_services import (
     calcular_necesidades, duplicar_receta, generar_ordenes_desde_plan,
     generar_plan_desde_pedidos, recalcular_necesidades_plan, transicionar_orden,
@@ -73,21 +76,160 @@ def recetas_lista(request):
     return render(request,"inventario/recetas_produccion_lista.html",{"empresa":empresa,"recetas":qs,"q":q})
 
 
-def _guardar_receta(request,empresa,receta=None):
+def _guardar_receta(request,empresa,receta=None,template_name="inventario/produccion_form.html"):
     form=RecetaProduccionForm(request.POST or None,instance=receta,empresa=empresa)
     formset=IngredientesFormSet(request.POST or None,instance=receta or RecetaProduccion(),prefix="ingredientes",form_kwargs={"empresa":empresa})
     if request.method=="POST" and form.is_valid() and formset.is_valid():
-        with transaction.atomic():
-            obj=form.save(commit=False);obj.empresa=empresa;obj.actualizado_por=request.user
-            if not receta:obj.creado_por=request.user
-            obj.full_clean();obj.save();formset.instance=obj
-            ingredientes=formset.save(commit=False)
-            for eliminado in formset.deleted_objects:eliminado.delete()
-            for ing in ingredientes:
-                ing.receta=obj;ing.full_clean();ing.save()
-            registrar_evento(empresa=empresa,usuario=request.user,request=request,objeto=obj,modulo="produccion",accion=EventoAuditoria.Accion.CREAR if not receta else EventoAuditoria.Accion.EDITAR,descripcion=f"Se {'creó' if not receta else 'editó'} la receta {obj.codigo}.")
-        return redirect("inventario:receta_detalle",pk=obj.pk)
-    return render(request,"inventario/produccion_form.html",{"empresa":empresa,"form":form,"formset":formset,"titulo":"Receta de producción"})
+        duplicada = not receta and RecetaProduccion.objects.filter(
+            empresa=empresa,
+        ).filter(
+            Q(codigo=form.cleaned_data["codigo"])
+            | Q(producto_terminado=form.cleaned_data["producto_terminado"], version=form.cleaned_data["version"])
+        ).exists()
+        if duplicada:
+            form.add_error(None, "Ya existe una receta con el mismo código o producto y versión.")
+        else:
+            with transaction.atomic():
+                obj=form.save(commit=False);obj.empresa=empresa;obj.actualizado_por=request.user
+                if not receta:obj.creado_por=request.user
+                obj.full_clean();obj.save();formset.instance=obj
+                ingredientes=formset.save(commit=False)
+                for eliminado in formset.deleted_objects:eliminado.delete()
+                for ing in ingredientes:
+                    ing.receta=obj;ing.full_clean();ing.save()
+                registrar_evento(empresa=empresa,usuario=request.user,request=request,objeto=obj,modulo="produccion",accion=EventoAuditoria.Accion.CREAR if not receta else EventoAuditoria.Accion.EDITAR,descripcion=f"Se {'creó' if not receta else 'editó'} la receta {obj.codigo}.")
+            return redirect("inventario:receta_detalle",pk=obj.pk)
+    return render(request,template_name,{
+        "empresa":empresa,"form":form,"formset":formset,"titulo":"Receta de producción",
+        "upload_form": FormulaRecetaUploadForm(), "modo_manual": True,
+    })
+
+
+def _analizar_documento_receta(request, empresa):
+    upload_form = FormulaRecetaUploadForm(request.POST, request.FILES)
+    if not upload_form.is_valid():
+        return render(request, "inventario/receta_asistente.html", {
+            "empresa": empresa, "upload_form": upload_form, "titulo": "Nueva receta",
+        })
+    try:
+        lote = RecipeDocumentParser().parse_file(upload_form.cleaned_data["archivo"])
+    except Exception:
+        upload_form.add_error("archivo", "No fue posible leer el PDF. Verifica que no esté dañado o protegido.")
+        return render(request, "inventario/receta_asistente.html", {
+            "empresa": empresa, "upload_form": upload_form, "titulo": "Nueva receta",
+        })
+
+    if not lote.formulas:
+        return render(request, "inventario/receta_asistente.html", {
+            "empresa": empresa, "upload_form": FormulaRecetaUploadForm(), "titulo": "Nueva receta",
+            "lote": lote, "vista_previa": True,
+            "preview_local": getattr(request, "recipe_preview_local", False),
+        })
+    formulas = []
+    for resultado_lote in lote.formulas:
+        producto_lote = encontrar_producto_terminado(empresa=empresa, nombre=resultado_lote.nombre)
+        detalles_lote = []
+        for extraido in resultado_lote.ingredientes:
+            match = encontrar_ingrediente(empresa=empresa, nombre=extraido.nombre)
+            detalles_lote.append({"extraido": extraido, "match": match})
+            if match.estado != "COINCIDENCIA" and resultado_lote.estado == "LISTA":
+                resultado_lote.estado = "REVISAR"
+        if not producto_lote and resultado_lote.estado == "LISTA":
+            resultado_lote.estado = "REVISAR"
+        formulas.append({"resultado": resultado_lote, "producto": producto_lote, "analisis_ingredientes": detalles_lote})
+    request.session["recetas_importacion_lote"] = [{
+        "empresa_id": empresa.pk, "estado": item["resultado"].estado,
+        "codigo": item["resultado"].codigo, "nombre": item["resultado"].nombre,
+        "version": int(item["resultado"].revision) if item["resultado"].revision.isdigit() else 1,
+        "rendimiento_base": str(item["resultado"].rendimiento_base or ""),
+        "unidad_rendimiento": item["resultado"].unidad_rendimiento,
+        "producto_id": item["producto"].pk if item["producto"] else None,
+        "ingredientes": [{"producto_id": d["match"].producto_id, "cantidad": str(d["extraido"].cantidad),
+                           "unidad": d["extraido"].unidad, "orden": posicion}
+                          for posicion, d in enumerate(item["analisis_ingredientes"], 1)],
+    } for item in formulas]
+    resultado = lote.formulas[0]
+    producto = formulas[0]["producto"]
+    version = int(resultado.revision) if resultado.revision.isdigit() else 1
+    inicial = {
+        "codigo": resultado.codigo, "nombre": resultado.nombre,
+        "producto_terminado": producto.pk if producto else None,
+        "version": version, "rendimiento_base": resultado.rendimiento_base,
+        "unidad_rendimiento": resultado.unidad_rendimiento,
+        "instrucciones": resultado.instrucciones,
+        "fecha_vigencia_desde": resultado.fecha_actualizacion or timezone.localdate(),
+        "activa": False,
+    }
+    ingredientes, detalles = [], formulas[0]["analisis_ingredientes"]
+    for posicion, detalle in enumerate(detalles, start=1):
+        extraido, match = detalle["extraido"], detalle["match"]
+        ingredientes.append({
+            "materia_prima": match.producto_id, "cantidad": extraido.cantidad,
+            "unidad_medida": extraido.unidad, "orden": posicion,
+        })
+    receta = RecetaProduccion()
+    form = RecetaProduccionForm(initial=inicial, empresa=empresa)
+    formset = IngredientesFormSet(
+        instance=receta, initial=ingredientes, prefix="ingredientes",
+        form_kwargs={"empresa": empresa},
+    )
+    return render(request, "inventario/receta_asistente.html", {
+        "empresa": empresa, "titulo": "Revisar fórmula detectada", "upload_form": FormulaRecetaUploadForm(),
+        "form": form, "formset": formset, "resultado": resultado, "lote": lote,
+        "formulas_detectadas": formulas,
+        "analisis_ingredientes": detalles, "archivo_nombre": upload_form.cleaned_data["archivo"].name,
+        "vista_previa": True,
+    })
+
+
+def _aprobar_lote_recetas(request, empresa, todas=False):
+    lote = request.session.get("recetas_importacion_lote", [])
+    indices = range(len(lote)) if todas else [int(request.POST.get("formula_index", -1))]
+    creadas, errores = [], []
+    for indice in indices:
+        if indice < 0 or indice >= len(lote):
+            errores.append("Fórmula inexistente."); continue
+        datos = lote[indice]
+        if datos.get("empresa_id") != empresa.pk or datos.get("estado") != "LISTA":
+            errores.append(f"{datos.get('nombre') or indice + 1}: no está LISTA."); continue
+        producto = ProductoInventario.objects.filter(
+            pk=datos.get("producto_id"), empresa=empresa, activo=True, tipo="producto_terminado"
+        ).first()
+        ingredientes = list(ProductoInventario.objects.filter(
+            pk__in=[i["producto_id"] for i in datos["ingredientes"]], empresa=empresa, activo=True
+        ).exclude(tipo="producto_terminado"))
+        mapa = {p.pk: p for p in ingredientes}
+        if not producto or len(mapa) != len(datos["ingredientes"]):
+            errores.append(f"{datos.get('nombre')}: asociaciones inválidas."); continue
+        existente = RecetaProduccion.objects.filter(empresa=empresa).filter(
+            Q(codigo=datos["codigo"]) | Q(producto_terminado=producto, version=datos["version"])
+        ).first()
+        if existente:
+            creadas.append(existente); continue
+        try:
+            with transaction.atomic():
+                receta = RecetaProduccion(
+                    empresa=empresa, codigo=datos["codigo"], nombre=datos["nombre"], producto_terminado=producto,
+                    version=datos["version"], rendimiento_base=datos["rendimiento_base"],
+                    unidad_rendimiento=datos["unidad_rendimiento"], activa=False,
+                    fecha_vigencia_desde=timezone.localdate(), creado_por=request.user, actualizado_por=request.user,
+                )
+                receta.full_clean(); receta.save()
+                for detalle in datos["ingredientes"]:
+                    ingrediente = DetalleRecetaProduccion(
+                        receta=receta, materia_prima=mapa[detalle["producto_id"]], cantidad=detalle["cantidad"],
+                        unidad_medida=detalle["unidad"], orden=detalle["orden"],
+                    )
+                    ingrediente.full_clean(); ingrediente.save()
+                registrar_evento(empresa=empresa, usuario=request.user, request=request, objeto=receta,
+                    modulo="produccion", accion=EventoAuditoria.Accion.CREAR,
+                    descripcion=f"Se importó y aprobó la receta {receta.codigo}.")
+            creadas.append(receta)
+        except ValidationError as exc:
+            errores.append(f"{datos.get('nombre')}: {'; '.join(exc.messages)}")
+    for error in errores: messages.error(request, error)
+    if creadas: messages.success(request, f"Se aprobaron {len(creadas)} fórmula(s), sin activar automáticamente.")
+    return redirect("inventario:recetas_lista")
 
 
 @login_required
@@ -100,7 +242,21 @@ def receta_crear(request):
     ).exists()
     if not puede_crear:
         raise PermissionDenied
-    empresa,salida=_empresa(request);return salida or _guardar_receta(request,empresa)
+    empresa,salida=_empresa(request)
+    if salida:return salida
+    if request.method == "POST" and request.POST.get("accion") == "analizar":
+        return _analizar_documento_receta(request, empresa)
+    if request.method == "POST" and request.POST.get("accion") == "aprobar_formula":
+        return _aprobar_lote_recetas(request, empresa)
+    if request.method == "POST" and request.POST.get("accion") == "aprobar_listas":
+        return _aprobar_lote_recetas(request, empresa, todas=True)
+    if request.method == "POST" and request.POST.get("accion") == "guardar":
+        return _guardar_receta(request, empresa, template_name="inventario/receta_asistente.html")
+    return render(request,"inventario/receta_asistente.html",{
+        "empresa":empresa,"titulo":"Nueva receta","upload_form":FormulaRecetaUploadForm(),
+        "form":RecetaProduccionForm(empresa=empresa),
+        "formset":IngredientesFormSet(prefix="ingredientes",form_kwargs={"empresa":empresa}),
+    })
 
 
 @login_required
@@ -334,3 +490,29 @@ def necesidades_materia_prima(request):
     if salida:return salida
     qs=NecesidadMateriaPrima.objects.filter(empresa=empresa).select_related("materia_prima","producto_terminado","plan","orden")
     return render(request,"inventario/necesidades.html",{"empresa":empresa,"necesidades":qs})
+
+# Preview local del asistente de recetas. Solo disponible con DEBUG=True.
+def receta_preview_local(request):
+    from django.conf import settings
+    from django.http import Http404
+    from conduces.models import Empresa
+
+    if not settings.DEBUG:
+        raise Http404
+
+    empresa = Empresa.objects.filter(activa=True).first()
+    if empresa is None:
+        raise Http404("No existe una empresa activa para la previsualizacion local.")
+
+    if request.method == "POST" and request.POST.get("accion") == "analizar":
+        request.recipe_preview_local = True
+        return _analizar_documento_receta(request, empresa)
+
+    return render(request, "inventario/receta_asistente.html", {
+        "empresa": empresa,
+        "titulo": "Preview local - Nueva receta",
+        "upload_form": FormulaRecetaUploadForm(),
+        "form": RecetaProduccionForm(empresa=empresa),
+        "formset": IngredientesFormSet(prefix="ingredientes", form_kwargs={"empresa": empresa}),
+        "preview_local": True,
+    })

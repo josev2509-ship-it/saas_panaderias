@@ -9,6 +9,7 @@ urlpatterns = [
     path("produccion/dashboard/", produccion_views.produccion_dashboard, name="produccion_dashboard"),
     path("produccion/recetas/", produccion_views.recetas_lista, name="recetas_lista"),
     path("produccion/recetas/nueva/", produccion_views.receta_crear, name="receta_crear"),
+    path("produccion/recetas/preview/", produccion_views.receta_preview_local, name="receta_preview_local"),
     path("produccion/recetas/<int:pk>/", produccion_views.receta_detalle, name="receta_detalle"),
     path("produccion/recetas/<int:pk>/editar/", produccion_views.receta_editar, name="receta_editar"),
     path("produccion/recetas/<int:pk>/duplicar/", produccion_views.receta_duplicar, name="receta_duplicar"),
