@@ -4,7 +4,7 @@ from django.test import TestCase
 from conduces.models import Empresa
 
 from .models import ProductoInventario
-from .recipe_matching import encontrar_ingrediente, encontrar_producto_terminado
+from .recipe_matching import encontrar_ingrediente, encontrar_producto_terminado, encontrar_producto_terminado_match
 
 
 class RecipeMatchingTests(TestCase):
@@ -22,7 +22,7 @@ class RecipeMatchingTests(TestCase):
     def test_match_exacto_normalizado_misma_empresa(self):
         producto = self.producto("Azúcar refinada")
         resultado = encontrar_ingrediente(empresa=self.empresa, nombre="AZUCAR   REFINADA")
-        self.assertEqual(resultado.estado, "COINCIDENCIA")
+        self.assertEqual(resultado.estado, "EXACTA_NORMALIZADA")
         self.assertEqual(resultado.producto_id, producto.pk)
 
     def test_no_cruza_empresa_ni_usa_producto_terminado(self):
@@ -44,3 +44,20 @@ class RecipeMatchingTests(TestCase):
         esperado = self.producto("Muffin", tipo="producto_terminado")
         self.producto("Muffin", empresa=self.otra, tipo="producto_terminado")
         self.assertEqual(encontrar_producto_terminado(empresa=self.empresa, nombre="muffin"), esperado)
+
+    def test_orden_plural_y_palabras_funcionales_son_alta_confianza(self):
+        esperado = self.producto("Muffin de avena y guineo", tipo="producto_terminado")
+        resultado = encontrar_producto_terminado_match(empresa=self.empresa, nombre="Muffin de guineo y avena")
+        self.assertEqual(resultado.estado, "ALTA_CONFIANZA")
+        self.assertEqual(resultado.producto_id, esperado.pk)
+
+    def test_texto_pypdf_con_caracter_reemplazado_puede_relacionarse(self):
+        esperado = self.producto("Muffin de maíz", tipo="producto_terminado")
+        resultado = encontrar_producto_terminado_match(empresa=self.empresa, nombre="Muffin de Ma�z")
+        self.assertEqual(resultado.estado, "ALTA_CONFIANZA")
+        self.assertEqual(resultado.producto_id, esperado.pk)
+
+    def test_pan_con_harina_de_maiz_solo_requiere_revision_con_pan(self):
+        self.producto("Pan", tipo="producto_terminado")
+        resultado = encontrar_producto_terminado_match(empresa=self.empresa, nombre="Pan con harina de maíz")
+        self.assertEqual(resultado.estado, "REVISAR")

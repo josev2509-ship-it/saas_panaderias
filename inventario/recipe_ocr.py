@@ -54,6 +54,14 @@ class RecipeOCRProvider:
             return AzureDocumentIntelligenceProvider.from_environment().extract_text(archivo)
         raise OCRNoDisponible(f"Proveedor OCR no soportado: {proveedor}.")
 
+    def extract_pdf_page(self, archivo, page_number):
+        proveedor = os.getenv("RECIPE_OCR_PROVIDER", "local").strip().lower()
+        if proveedor in {"local", "tesseract"}:
+            return LocalTesseractRecipeOCRProvider.from_environment().extract_pdf_page(archivo, page_number)
+        if proveedor in {"azure", "azure_document_intelligence"}:
+            return AzureDocumentIntelligenceProvider.from_environment().extract_pdf_page(archivo, page_number)
+        raise OCRNoDisponible(f"Proveedor OCR no soportado: {proveedor}.")
+
 
 class LocalTesseractRecipeOCRProvider(RecipeOCRProvider):
     def __init__(self, *, lang="spa", dpi=300, tesseract_cmd=""):
@@ -68,6 +76,12 @@ class LocalTesseractRecipeOCRProvider(RecipeOCRProvider):
         )
 
     def extract_text(self, archivo):
+        return self._extract_text(archivo)
+
+    def extract_pdf_page(self, archivo, page_number):
+        return self._extract_text(archivo, page_number=page_number)
+
+    def _extract_text(self, archivo, page_number=None):
         try:
             import pytesseract
             from PIL import Image, ImageOps
@@ -83,7 +97,8 @@ class LocalTesseractRecipeOCRProvider(RecipeOCRProvider):
             if es_pdf:
                 try:
                     from pdf2image import convert_from_bytes
-                    imagenes = convert_from_bytes(contenido, dpi=self.dpi, fmt="png")
+                    opciones = {"first_page": page_number, "last_page": page_number} if page_number else {}
+                    imagenes = convert_from_bytes(contenido, dpi=self.dpi, fmt="png", **opciones)
                 except Exception as exc:
                     raise OCRFallo(f"No se pudo rasterizar el PDF para OCR local: {exc}") from exc
             else:
@@ -149,9 +164,17 @@ class AzureDocumentIntelligenceProvider(RecipeOCRProvider):
         return cls(endpoint, key)
 
     def extract_text(self, archivo):
+        return self._extract_text(archivo)
+
+    def extract_pdf_page(self, archivo, page_number):
+        return self._extract_text(archivo, page_number=page_number)
+
+    def _extract_text(self, archivo, page_number=None):
         archivo.seek(0); contenido = archivo.read(); archivo.seek(0)
         url = (f"{self.endpoint}/documentintelligence/documentModels/prebuilt-layout:analyze"
                f"?_overload=analyzeDocument&api-version={self.API_VERSION}")
+        if page_number:
+            url += f"&pages={int(page_number)}"
         cuerpo = json.dumps({"base64Source": base64.b64encode(contenido).decode("ascii")}).encode("utf-8")
         try:
             estado, cabeceras, _ = self.transport("POST", url, self._headers(), cuerpo)

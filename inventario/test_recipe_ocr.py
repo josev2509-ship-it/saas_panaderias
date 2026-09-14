@@ -18,11 +18,15 @@ from .recipe_ocr import (
 
 
 class FakeOCR(RecipeOCRProvider):
-    def __init__(self, texto="", error=None): self.texto = texto; self.error = error; self.llamadas = 0
+    def __init__(self, texto="", error=None): self.texto = texto; self.error = error; self.llamadas = 0; self.paginas = []
     def extract_text(self, archivo):
         self.llamadas += 1
         if self.error: raise self.error
         return self.texto
+    def extract_pdf_page(self, archivo, page_number):
+        self.llamadas += 1; self.paginas.append(page_number)
+        if self.error: raise self.error
+        return self.texto[page_number] if isinstance(self.texto, dict) else self.texto
 
 
 class RecipeOCRTests(SimpleTestCase):
@@ -67,6 +71,18 @@ class RecipeOCRTests(SimpleTestCase):
         ):
             texto = LocalTesseractRecipeOCRProvider().extract_text(SimpleUploadedFile("scan.pdf", b"%PDF-falso"))
         self.assertIn("Harina de trigo suave | 100 lb | 80 lb | 60 lb", texto)
+
+    def test_ocr_local_pagina_pdf_rasteriza_solo_pagina_solicitada(self):
+        falso_ocr = SimpleNamespace(Output=SimpleNamespace(DICT="DICT"), pytesseract=SimpleNamespace(tesseract_cmd=""),
+                                    image_to_data=lambda *a, **k: self._datos_tabla_local())
+        convertir = __import__("unittest.mock").mock.Mock(return_value=[Image.new("RGB", (100, 50), "white")])
+        falso_pdf = SimpleNamespace(convert_from_bytes=convertir)
+        with patch.dict(sys.modules, {"pytesseract": falso_ocr, "pdf2image": falso_pdf}), patch(
+            "inventario.recipe_ocr.verificar_ocr_local", return_value=EstadoOCRLocal(True, True, True, "tesseract")
+        ):
+            LocalTesseractRecipeOCRProvider().extract_pdf_page(SimpleUploadedFile("scan.pdf", b"%PDF-falso"), 5)
+        self.assertEqual(convertir.call_args.kwargs["first_page"], 5)
+        self.assertEqual(convertir.call_args.kwargs["last_page"], 5)
 
     @patch("inventario.recipe_ocr.subprocess.run")
     @patch("inventario.recipe_ocr.shutil.which")
@@ -145,6 +161,13 @@ class RecipeOCRTests(SimpleTestCase):
             with self.subTest(nombre=nombre):
                 ocr = FakeOCR("PRODUCTO: Pan"); RecipeDocumentParser(ocr).parse_file(SimpleUploadedFile(nombre, b"imagen"))
                 self.assertEqual(ocr.llamadas, 1)
+
+    def test_imagen_sin_formula_util_muestra_advertencia_y_no_crea_vacia(self):
+        resultado = RecipeDocumentParser(FakeOCR("PRODUCTO: Pan")).parse_file(
+            SimpleUploadedFile("formula.png", b"imagen")
+        )
+        self.assertEqual(resultado.formulas, [])
+        self.assertIn("No se pudieron interpretar", resultado.advertencias[0])
 
     def test_fallo_ocr_genera_advertencia_controlada(self):
         resultado = RecipeDocumentParser(FakeOCR(error=OCRFallo("Servicio OCR temporalmente no disponible"))).parse_file(

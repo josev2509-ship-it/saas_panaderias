@@ -2,7 +2,7 @@
 {% block content %}
 {% include "comercial/_styles.html" %}
 <style>
-.recipe-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.recipe-step{padding:12px;border-radius:12px;background:#f3f6fb;color:#526071}.recipe-step.active{background:#173b65;color:white}.upload-zone{border:2px dashed #9fb4cc;border-radius:16px;padding:28px;text-align:center;background:#f8fbff}.status{display:inline-flex;padding:4px 9px;border-radius:999px;font-size:.76rem;font-weight:700}.status-ok{background:#dcfce7;color:#166534}.status-review{background:#fef3c7;color:#92400e}.status-none{background:#fee2e2;color:#991b1b}.ingredient-row{display:grid;grid-template-columns:2fr 2fr 1fr 1fr 1fr 1fr 2fr auto;gap:8px;align-items:end;margin-bottom:10px}.additional summary{cursor:pointer;font-weight:700;padding:10px 0}@media(max-width:850px){.recipe-steps{grid-template-columns:1fr}.ingredient-row{grid-template-columns:1fr 1fr}.ingredient-row .wide{grid-column:1/-1}}
+.recipe-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.recipe-step{padding:12px;border-radius:12px;background:#f3f6fb;color:#526071}.recipe-step.active{background:#173b65;color:white}.upload-zone{border:2px dashed #9fb4cc;border-radius:16px;padding:28px;text-align:center;background:#f8fbff}.status{display:inline-flex;padding:4px 9px;border-radius:999px;font-size:.76rem;font-weight:700}.status-ok{background:#dcfce7;color:#166534}.status-review{background:#fef3c7;color:#92400e}.status-none{background:#fee2e2;color:#991b1b}.ingredient-row{display:grid;grid-template-columns:2fr 2fr 1fr 1fr 1fr 1fr 2fr auto;gap:8px;align-items:end;margin-bottom:10px}.recipe-table-wrap{overflow-x:auto}.recipe-table-wrap table{width:100%}.additional summary{cursor:pointer;font-weight:700;padding:10px 0}@media(max-width:850px){.recipe-steps{grid-template-columns:1fr}.ingredient-row{grid-template-columns:1fr 1fr}.ingredient-row .wide{grid-column:1/-1}}
 </style>
 <div class="com-page">
   <header class="com-hero"><div><h1>{{ titulo }}</h1><p>Carga una fórmula oficial o completa la receta manualmente. Nada se guarda antes de confirmar.</p></div></header>
@@ -12,9 +12,9 @@
     <h2>Analizar fórmulas</h2>
     <form method="post" enctype="multipart/form-data" class="upload-zone">
       {% csrf_token %}<input type="hidden" name="accion" value="analizar">
-      <p><strong>Selecciona un PDF, JPG, JPEG o PNG</strong></p>
+      <p><strong>PDF, JPG, JPEG o PNG · lectura automática incluida.</strong></p>
       {{ upload_form.archivo }}{{ upload_form.archivo.errors }}
-      <p class="help">Máximo 10 MB. Los PDFs escaneados y las imágenes requieren un proveedor OCR configurado.</p>
+      <p class="help">Máximo 10 MB. Si una página no contiene texto digital suficiente, se intenta completar mediante OCR local.</p>
       <button class="com-btn" type="submit">Analizar documento</button>
     </form>
   </section>
@@ -22,7 +22,7 @@
   {% if lote %}
     {% for alerta in lote.advertencias %}<div class="alert alert-warning">{{ alerta }}</div>{% endfor %}
     {% if formulas_detectadas %}<section class="com-card"><h2>Se detectaron {{ formulas_detectadas|length }} fórmulas</h2>
-      {% for item in formulas_detectadas %}<p><strong>{{ forloop.counter|stringformat:"02d" }} {{ item.resultado.nombre|default:"Sin nombre" }}</strong> · {{ item.resultado.ingredientes|length }} ingredientes · Rendimiento: {{ item.resultado.rendimiento_base|default:"—" }} {{ item.resultado.unidad_rendimiento }} · <span class="status {% if item.resultado.estado == 'LISTA' %}status-ok{% elif item.resultado.estado == 'REVISAR' %}status-review{% else %}status-none{% endif %}">{{ item.resultado.estado }}</span>{% if not preview_local and item.resultado.estado == 'LISTA' %} <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="accion" value="aprobar_formula"><input type="hidden" name="formula_index" value="{{ forloop.counter0 }}"><button class="com-btn" type="submit">Aprobar</button></form>{% endif %}</p>{% for aviso in item.resultado.advertencias %}<div class="alert alert-warning">{{ aviso }}</div>{% endfor %}{% endfor %}
+      {% for item in formulas_detectadas %}<div class="formula-summary"><p><strong>{{ forloop.counter|stringformat:"02d" }} {{ item.resultado.nombre|default:"Sin nombre" }}</strong> · {{ item.resultado.ingredientes|length }} ingredientes · Rendimiento: {{ item.resultado.rendimiento_base|default:"—" }} {{ item.resultado.unidad_rendimiento }} · <span class="status {% if item.resultado.estado == 'LISTA' %}status-ok{% elif item.resultado.estado == 'REVISAR' %}status-review{% else %}status-none{% endif %}">{{ item.resultado.estado }}</span>{% if not preview_local and item.resultado.estado == 'LISTA' %} <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="accion" value="aprobar_formula"><input type="hidden" name="formula_index" value="{{ forloop.counter0 }}"><button class="com-btn" type="submit">Aprobar</button></form>{% endif %}</p><p>Nombre detectado: {{ item.resultado.nombre|default:"—" }}<br>Producto sugerido: {{ item.producto_match.producto_nombre|default:"Nueva fórmula detectada" }}<br>Confianza: {{ item.producto_match.estado }}</p>{% if item.producto_match.candidatos %}<p>Candidatos: {% for candidato in item.producto_match.candidatos %}{{ candidato.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}{% for aviso in item.resultado.advertencias %}<div class="alert alert-warning">{{ aviso }}</div>{% endfor %}</div>{% endfor %}
       {% if not preview_local %}<form method="post">{% csrf_token %}<input type="hidden" name="accion" value="aprobar_listas"><button class="com-btn" type="submit">Aprobar todas las listas</button></form>{% endif %}
     </section>{% endif %}
   {% endif %}
@@ -37,8 +37,8 @@
       <div><strong>Revisión</strong><p>{{ resultado.revision|default:"—" }}</p></div>
       <div><strong>Fecha</strong><p>{{ resultado.fecha_actualizacion|default:"—" }}</p></div>
     </div>
-    <div class="desktop-table"><table><thead><tr><th>Detectado</th><th>Inventario sugerido</th><th>Cantidad</th><th>Unidad</th><th>Estado</th></tr></thead><tbody>
-    {% for item in analisis_ingredientes %}<tr><td>{{ item.extraido.nombre }}</td><td>{{ item.match.producto_nombre|default:"Sin asociar" }}</td><td>{{ item.extraido.cantidad }}</td><td>{{ item.extraido.unidad|default:item.extraido.unidad_original }}</td><td><span class="status {% if item.match.estado == 'COINCIDENCIA' %}status-ok{% elif item.match.estado == 'REVISAR' %}status-review{% else %}status-none{% endif %}">{{ item.match.estado }}</span></td></tr>{% endfor %}
+    <div class="recipe-table-wrap"><table><thead><tr><th>Detectado</th><th>Inventario sugerido</th><th>Cantidad</th><th>Unidad</th><th>Estado</th></tr></thead><tbody>
+    {% for item in analisis_ingredientes %}<tr><td>{{ item.extraido.nombre }}</td><td>{{ item.match.producto_nombre|default:"Sin asociar" }}</td><td>{{ item.extraido.cantidad }}</td><td>{{ item.extraido.unidad|default:item.extraido.unidad_original }}</td><td><span class="status {% if item.match.estado == 'EXACTA_NORMALIZADA' or item.match.estado == 'ALTA_CONFIANZA' %}status-ok{% elif item.match.estado == 'REVISAR' %}status-review{% else %}status-none{% endif %}">{{ item.match.estado }}</span></td></tr>{% endfor %}
     </tbody></table></div>
   </section>{% endif %}
   {% endif %}

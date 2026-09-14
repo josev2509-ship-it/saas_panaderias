@@ -29,7 +29,7 @@ from .produccion_forms import (
     RecetaProduccionForm,
 )
 from .recipe_document_parser import RecipeDocumentParser
-from .recipe_matching import encontrar_ingrediente, encontrar_producto_terminado
+from .recipe_matching import encontrar_ingrediente, encontrar_producto_terminado, encontrar_producto_terminado_match
 from .produccion_services import (
     calcular_necesidades, duplicar_receta, generar_ordenes_desde_plan,
     generar_plan_desde_pedidos, recalcular_necesidades_plan, transicionar_orden,
@@ -127,16 +127,20 @@ def _analizar_documento_receta(request, empresa):
         })
     formulas = []
     for resultado_lote in lote.formulas:
-        producto_lote = encontrar_producto_terminado(empresa=empresa, nombre=resultado_lote.nombre)
+        producto_match = encontrar_producto_terminado_match(empresa=empresa, nombre=resultado_lote.nombre)
+        producto_lote = ProductoInventario.objects.filter(
+            pk=producto_match.producto_id, empresa=empresa, activo=True, tipo="producto_terminado"
+        ).first() if producto_match.producto_id else None
         detalles_lote = []
         for extraido in resultado_lote.ingredientes:
             match = encontrar_ingrediente(empresa=empresa, nombre=extraido.nombre)
             detalles_lote.append({"extraido": extraido, "match": match})
-            if match.estado != "COINCIDENCIA" and resultado_lote.estado == "LISTA":
+            if match.estado not in {"EXACTA_NORMALIZADA", "ALTA_CONFIANZA"} and resultado_lote.estado == "LISTA":
                 resultado_lote.estado = "REVISAR"
         if not producto_lote and resultado_lote.estado == "LISTA":
             resultado_lote.estado = "REVISAR"
-        formulas.append({"resultado": resultado_lote, "producto": producto_lote, "analisis_ingredientes": detalles_lote})
+        formulas.append({"resultado": resultado_lote, "producto": producto_lote, "producto_match": producto_match,
+                         "analisis_ingredientes": detalles_lote})
     request.session["recetas_importacion_lote"] = [{
         "empresa_id": empresa.pk, "estado": item["resultado"].estado,
         "codigo": item["resultado"].codigo, "nombre": item["resultado"].nombre,
