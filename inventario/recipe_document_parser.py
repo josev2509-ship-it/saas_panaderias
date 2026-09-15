@@ -1,3 +1,4 @@
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -6,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 
 from pypdf import PdfReader
 
-from .recipe_ocr import OCRError, RecipeOCRProvider
+from .recipe_ocr import OCRError, RecipeOCRProvider, ocr_debug_logger
 from .recipe_units import normalizar_unidad
 
 
@@ -91,6 +92,12 @@ class RecipeDocumentParser:
                 continue
             formula = self._parse_formula(pagina)
             faltantes = self._campos_criticos_faltantes(formula)
+            if os.getenv("RECIPE_OCR_DEBUG", "") == "1":
+                ocr_debug_logger.warning(
+                    "RECIPE_OCR_DEBUG parser_page=%s nombre=%s ingredientes=%s columna_base=%s total=%s rendimiento=%s faltantes=%s",
+                    numero, bool(formula.nombre), len(formula.ingredientes), formula.columna_base,
+                    formula.total, formula.rendimiento_base, sorted(faltantes),
+                )
             if faltantes:
                 try:
                     archivo.seek(0)

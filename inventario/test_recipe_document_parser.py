@@ -1,7 +1,8 @@
 from io import BytesIO
+import os
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
@@ -45,6 +46,30 @@ class RecipeDocumentParserTests(SimpleTestCase):
     def test_texto_no_interpretable_no_crea_formula_vacia(self):
         resultado = self.parser.parse_text("Documento administrativo sin una tabla de formulación")
         self.assertEqual(resultado.formulas, [])
+
+    def test_debug_de_faltantes_solo_con_flag_y_sin_cambiar_resultado(self):
+        pagina = (
+            "Formulación de Pan\nIngredientes Libras Libras\nHarina 120 100\n"
+            "Total 120 100"
+        )
+        lector = SimpleNamespace(pages=[SimpleNamespace(extract_text=lambda: pagina)])
+        class OCRVacio:
+            def extract_pdf_page(self, archivo, numero): return ""
+        parser = RecipeDocumentParser(OCRVacio())
+        log = Mock()
+        with patch("inventario.recipe_document_parser.PdfReader", return_value=lector), patch(
+            "inventario.recipe_document_parser.ocr_debug_logger.warning", log
+        ):
+            with patch.dict(os.environ, {"RECIPE_OCR_DEBUG": "0"}):
+                apagado = parser.parse_pdf(SimpleUploadedFile("formula.pdf", b"%PDF-falso"))
+            log.assert_not_called()
+            with patch.dict(os.environ, {"RECIPE_OCR_DEBUG": "1"}):
+                encendido = parser.parse_pdf(SimpleUploadedFile("formula.pdf", b"%PDF-falso"))
+        self.assertEqual(apagado.formulas, encendido.formulas)
+        log.assert_called_once()
+        self.assertIn("parser_page=%s", log.call_args.args[0])
+        self.assertEqual(log.call_args.args[-1], ["rendimiento_base"])
+        self.assertEqual(log.call_args.args[2], 1)
 
     def test_unidad_desconocida_se_marca_para_revision(self):
         resultado = self.parser.parse_text("PRODUCTO: Pan\nAvena 2 SACOS")
