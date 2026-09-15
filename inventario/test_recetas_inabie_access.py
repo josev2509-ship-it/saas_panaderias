@@ -216,7 +216,7 @@ class RecetasInabieAccessTests(TestCase):
         pdf.save()
         return SimpleUploadedFile("formula.pdf", salida.getvalue(), content_type="application/pdf")
 
-    def test_pdf_valido_analiza_y_prellena_sin_guardar(self):
+    def test_pdf_valido_analiza_y_resume_sin_guardar(self):
         materia = ProductoInventario.objects.create(
             empresa=self.empresa, codigo="HAR", nombre="Harina", tipo="materia_prima",
             unidad_medida="lb", activo=True,
@@ -225,9 +225,21 @@ class RecetasInabieAccessTests(TestCase):
         self.client.force_login(self.user)
         respuesta = self.client.post(self.crear_url, {"accion": "analizar", "archivo": self._pdf_formula()})
         self.assertEqual(respuesta.status_code, 200)
-        self.assertContains(respuesta, "PDF-01")
+        self.assertContains(respuesta, "Producto A")
+        self.assertContains(respuesta, "Rendimiento: 100 unidad")
         self.assertContains(respuesta, materia.nombre)
         self.assertEqual(RecetaProduccion.objects.count(), antes)
+
+    def test_resultado_usa_acordeon_sin_formulario_detallado_automatico(self):
+        ProductoInventario.objects.create(
+            empresa=self.empresa, codigo="HAR-UI", nombre="Harina", tipo="materia_prima",
+            unidad_medida="lb", activo=True,
+        )
+        self.client.force_login(self.user)
+        respuesta = self.client.post(self.crear_url, {"accion": "analizar", "archivo": self._pdf_formula()})
+        self.assertContains(respuesta, 'class="recipe-card"', html=False)
+        self.assertContains(respuesta, 'data-enterprise-controls="off"', html=False)
+        self.assertNotContains(respuesta, "Corregir y confirmar")
 
     def test_archivo_invalido_es_rechazado(self):
         self.client.force_login(self.user)

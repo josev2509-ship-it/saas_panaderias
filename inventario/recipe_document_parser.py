@@ -90,11 +90,12 @@ class RecipeDocumentParser:
             if not self._es_pagina_formula(pagina):
                 continue
             formula = self._parse_formula(pagina)
-            if self._requiere_ocr(formula):
+            faltantes = self._campos_criticos_faltantes(formula)
+            if faltantes:
                 try:
                     archivo.seek(0)
                     texto_ocr = self.ocr_provider.extract_pdf_page(archivo, numero)
-                    formula = self._conciliar_formula(formula, self._parse_formula(texto_ocr), numero)
+                    formula = self._completar_desde_ocr(formula, texto_ocr, faltantes, numero)
                 except OCRError as exc:
                     formula.advertencias.append(f"Página {numero}: {exc}")
                     self._actualizar_estado(formula)
@@ -120,46 +121,53 @@ class RecipeDocumentParser:
         return ResultadoDocumentoRecetas(formulas=formulas)
 
     @staticmethod
-    def _requiere_ocr(formula):
-        return any(valor in (None, "", []) for valor in (
-            formula.nombre, formula.ingredientes, formula.columna_base,
-            formula.total, formula.rendimiento_base,
-        ))
+    def _campos_criticos_faltantes(formula):
+        campos = {
+            "nombre": formula.nombre, "ingredientes": formula.ingredientes,
+            "columna_base": formula.columna_base, "total": formula.total,
+            "rendimiento_base": formula.rendimiento_base,
+        }
+        return {campo for campo, valor in campos.items() if valor in (None, "", [])}
 
-    def _conciliar_formula(self, digital, ocr, pagina):
-        discrepancia = False
+    def _completar_desde_ocr(self, digital, texto_ocr, faltantes, pagina):
+        if faltantes == {"rendimiento_base"}:
+            rendimiento = self._extraer_rendimiento(texto_ocr, digital.columna_base)
+            if rendimiento is not None:
+                digital.rendimiento_base = rendimiento
+                digital.unidad_rendimiento = digital.unidad_rendimiento or "unidad"
+            else:
+                digital.advertencias.append(f"Página {pagina}: el OCR no pudo recuperar el rendimiento.")
+            self._actualizar_estado(digital)
+            return digital
+        return self._conciliar_formula(digital, self._parse_formula(texto_ocr), faltantes, pagina)
+
+    def _extraer_rendimiento(self, texto, columna_base):
+        lineas = self._unir_lineas_tabla([x.strip() for x in texto.splitlines() if x.strip()])
+        fila = next((valores for nombre, valores, _ in self._filas_tabla(lineas)
+                     if _normalizar(nombre).startswith("CANTIDAD EN UNIDADES")), None)
+        if fila and columna_base is not None and columna_base < len(fila):
+            return fila[columna_base]
+        patron = re.search(r"CANTIDAD\s+EN\s+UNIDADES(?:\s*\([^)]*\))?\D+([0-9][0-9.,]*)", texto, re.I | re.S)
+        return _decimal(patron.group(1)) if patron else None
+
+    def _conciliar_formula(self, digital, ocr, faltantes, pagina):
         campos = ("nombre", "codigo", "revision", "fecha_actualizacion", "rendimiento_base",
                   "unidad_rendimiento", "total", "columna_base")
         for campo in campos:
+            if campo not in faltantes:
+                continue
             original, reconocido = getattr(digital, campo), getattr(ocr, campo)
             if original in (None, "") and reconocido not in (None, ""):
                 setattr(digital, campo, reconocido)
-            elif original not in (None, "") and reconocido not in (None, ""):
-                iguales = _normalizar(str(original)) == _normalizar(str(reconocido))
-                if not iguales:
-                    discrepancia = True
-                    digital.advertencias.append(
-                        f"Página {pagina}: discrepancia entre texto digital y OCR en {campo}; se conservó el valor digital."
-                    )
-        if not digital.ingredientes and ocr.ingredientes:
+        if "ingredientes" in faltantes and not digital.ingredientes and ocr.ingredientes:
             digital.ingredientes = ocr.ingredientes
-        elif digital.ingredientes and ocr.ingredientes:
-            firma_digital = [( _normalizar(i.nombre), i.cantidad, i.unidad) for i in digital.ingredientes]
-            firma_ocr = [(_normalizar(i.nombre), i.cantidad, i.unidad) for i in ocr.ingredientes]
-            if firma_digital != firma_ocr:
-                discrepancia = True
-                digital.advertencias.append(
-                    f"Página {pagina}: el OCR discrepa de los ingredientes digitales; se conservaron los datos digitales."
-                )
-        digital.advertencias.extend(a for a in ocr.advertencias if a not in digital.advertencias)
         self._actualizar_estado(digital)
-        if discrepancia:
-            digital.estado = "REVISAR"
         return digital
 
     @staticmethod
     def _actualizar_estado(resultado):
-        faltantes = not resultado.nombre or not resultado.codigo or not resultado.rendimiento_base or not resultado.ingredientes
+        base_tabular_faltante = resultado.total is not None and resultado.columna_base is None
+        faltantes = not resultado.nombre or not resultado.rendimiento_base or not resultado.ingredientes or base_tabular_faltante
         ambiguo = bool(resultado.advertencias) or any(i.estado == "REVISAR" for i in resultado.ingredientes)
         resultado.estado = "INCOMPLETA" if faltantes else ("REVISAR" if ambiguo else "LISTA")
 

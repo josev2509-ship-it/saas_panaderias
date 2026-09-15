@@ -1,9 +1,10 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
 
-from conduces.models import Empresa
+from conduces.models import Empresa, MenuDiario
 
-from .models import ProductoInventario
+from .models import ProductoInventario, VinculoProductoMenu
 from .recipe_matching import encontrar_ingrediente, encontrar_producto_terminado, encontrar_producto_terminado_match
 
 
@@ -61,3 +62,33 @@ class RecipeMatchingTests(TestCase):
         self.producto("Pan", tipo="producto_terminado")
         resultado = encontrar_producto_terminado_match(empresa=self.empresa, nombre="Pan con harina de maíz")
         self.assertEqual(resultado.estado, "REVISAR")
+
+    def test_resuelve_concepto_menu_y_su_vinculo_de_inventario(self):
+        producto = self.producto("PT avena guineo", tipo="producto_terminado")
+        menu = MenuDiario.objects.create(
+            empresa=self.empresa, fecha=timezone.localdate(), producto="Muffin de avena y guineo"
+        )
+        VinculoProductoMenu.objects.create(empresa=self.empresa, menu=menu, producto=producto, revisado=True)
+        resultado = encontrar_producto_terminado_match(
+            empresa=self.empresa, nombre="Muffin de guineo y avena"
+        )
+        self.assertEqual(resultado.estado, "ALTA_CONFIANZA")
+        self.assertEqual(resultado.producto_id, producto.pk)
+        self.assertEqual(resultado.concepto_menu, "Muffin de avena y guineo")
+
+    def test_concepto_menu_sin_vinculo_sugiere_concepto_sin_inventar_producto(self):
+        MenuDiario.objects.create(
+            empresa=self.empresa, fecha=timezone.localdate(), producto="Galleta de avena"
+        )
+        resultado = encontrar_producto_terminado_match(
+            empresa=self.empresa, nombre="Galleta de avena con agua"
+        )
+        self.assertEqual(resultado.estado, "ALTA_CONFIANZA")
+        self.assertEqual(resultado.producto_nombre, "Galleta de avena")
+        self.assertIsNone(resultado.producto_id)
+
+    def test_modificadores_de_ingrediente_permiten_match_unico(self):
+        producto = self.producto("Leche en polvo")
+        resultado = encontrar_ingrediente(empresa=self.empresa, nombre="Leche entera en polvo")
+        self.assertEqual(resultado.estado, "ALTA_CONFIANZA")
+        self.assertEqual(resultado.producto_id, producto.pk)

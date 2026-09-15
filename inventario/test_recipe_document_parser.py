@@ -142,7 +142,7 @@ class RecipeDocumentParserTests(SimpleTestCase):
         self.assertEqual(lote.formulas[1].rendimiento_base, Decimal("2519"))
         self.assertEqual(lote.formulas[1].ingredientes[0].cantidad, Decimal("100"))
 
-    def test_conflicto_ocr_con_texto_digital_se_marca_revisar(self):
+    def test_ocr_de_rendimiento_no_sobrescribe_campos_digitales(self):
         digital = "Formulación de Muffin\nIngredientes Libras Libras\nHarina 100 80\nTotal 100 80"
         ocr_texto = "Formulación de Muffin\nIngredientes Libras Libras\nHarina 90 70\nTotal 90 70\nCantidad en\nunidades 2519 2015"
 
@@ -155,5 +155,5 @@ class RecipeDocumentParserTests(SimpleTestCase):
                 SimpleUploadedFile("formula.pdf", b"%PDF-falso")
             ).formulas[0]
         self.assertEqual(formula.ingredientes[0].cantidad, Decimal("100"))
-        self.assertEqual(formula.estado, "REVISAR")
-        self.assertTrue(any("discrepa" in aviso for aviso in formula.advertencias))
+        self.assertEqual(formula.rendimiento_base, Decimal("2519"))
+        self.assertFalse(any("harina" in aviso.lower() for aviso in formula.advertencias))

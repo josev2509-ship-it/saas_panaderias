@@ -152,36 +152,11 @@ def _analizar_documento_receta(request, empresa):
                            "unidad": d["extraido"].unidad, "orden": posicion}
                           for posicion, d in enumerate(item["analisis_ingredientes"], 1)],
     } for item in formulas]
-    resultado = lote.formulas[0]
-    producto = formulas[0]["producto"]
-    version = int(resultado.revision) if resultado.revision.isdigit() else 1
-    inicial = {
-        "codigo": resultado.codigo, "nombre": resultado.nombre,
-        "producto_terminado": producto.pk if producto else None,
-        "version": version, "rendimiento_base": resultado.rendimiento_base,
-        "unidad_rendimiento": resultado.unidad_rendimiento,
-        "instrucciones": resultado.instrucciones,
-        "fecha_vigencia_desde": resultado.fecha_actualizacion or timezone.localdate(),
-        "activa": False,
-    }
-    ingredientes, detalles = [], formulas[0]["analisis_ingredientes"]
-    for posicion, detalle in enumerate(detalles, start=1):
-        extraido, match = detalle["extraido"], detalle["match"]
-        ingredientes.append({
-            "materia_prima": match.producto_id, "cantidad": extraido.cantidad,
-            "unidad_medida": extraido.unidad, "orden": posicion,
-        })
-    receta = RecetaProduccion()
-    form = RecetaProduccionForm(initial=inicial, empresa=empresa)
-    formset = IngredientesFormSet(
-        instance=receta, initial=ingredientes, prefix="ingredientes",
-        form_kwargs={"empresa": empresa},
-    )
     return render(request, "inventario/receta_asistente.html", {
-        "empresa": empresa, "titulo": "Revisar fórmula detectada", "upload_form": FormulaRecetaUploadForm(),
-        "form": form, "formset": formset, "resultado": resultado, "lote": lote,
+        "empresa": empresa, "titulo": "Revisar fórmulas detectadas", "upload_form": FormulaRecetaUploadForm(),
+        "lote": lote,
         "formulas_detectadas": formulas,
-        "analisis_ingredientes": detalles, "archivo_nombre": upload_form.cleaned_data["archivo"].name,
+        "archivo_nombre": upload_form.cleaned_data["archivo"].name,
         "vista_previa": True,
     })
 
