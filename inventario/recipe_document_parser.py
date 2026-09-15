@@ -94,8 +94,23 @@ class RecipeDocumentParser:
             if faltantes:
                 try:
                     archivo.seek(0)
-                    texto_ocr = self.ocr_provider.extract_pdf_page(archivo, numero)
-                    formula = self._completar_desde_ocr(formula, texto_ocr, faltantes, numero)
+                    if faltantes == {"rendimiento_base"} and hasattr(self.ocr_provider, "extract_pdf_page_yield"):
+                        filas_digitales = self._filas_tabla(self._unir_lineas_tabla([
+                            x.strip() for x in pagina.splitlines() if x.strip()
+                        ]))
+                        columnas = max((len(valores) for _, valores, _ in filas_digitales), default=0)
+                        hallazgo = self.ocr_provider.extract_pdf_page_yield(
+                            archivo, numero, formula.columna_base, columnas
+                        )
+                        if hallazgo:
+                            formula.rendimiento_base = hallazgo["valor"]
+                            formula.unidad_rendimiento = formula.unidad_rendimiento or "unidad"
+                        else:
+                            formula.advertencias.append(f"Página {numero}: el OCR no pudo recuperar el rendimiento.")
+                        self._actualizar_estado(formula)
+                    else:
+                        texto_ocr = self.ocr_provider.extract_pdf_page(archivo, numero)
+                        formula = self._completar_desde_ocr(formula, texto_ocr, faltantes, numero)
                 except OCRError as exc:
                     formula.advertencias.append(f"Página {numero}: {exc}")
                     self._actualizar_estado(formula)

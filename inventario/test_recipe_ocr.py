@@ -1,4 +1,5 @@
 from io import BytesIO
+from decimal import Decimal
 import sys
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,7 +14,7 @@ from PIL import Image
 
 from .recipe_ocr import (
     AzureDocumentIntelligenceProvider, EstadoOCRLocal, LocalTesseractRecipeOCRProvider,
-    OCRFallo, RecipeOCRProvider, verificar_ocr_local,
+    OCRFallo, RecipeOCRProvider, extraer_rendimiento_desde_datos, verificar_ocr_local,
 )
 
 
@@ -83,6 +84,25 @@ class RecipeOCRTests(SimpleTestCase):
             LocalTesseractRecipeOCRProvider().extract_pdf_page(SimpleUploadedFile("scan.pdf", b"%PDF-falso"), 5)
         self.assertEqual(convertir.call_args.kwargs["first_page"], 5)
         self.assertEqual(convertir.call_args.kwargs["last_page"], 5)
+
+    def test_extrae_rendimiento_por_geometria_debajo_de_total(self):
+        textos = ["Total", "346.38", "277.10", "Cantidad", "en", "unidades", "2,519", "2,015", "1,511", "1,008", "504", "252"]
+        datos = {k: [] for k in ("text", "conf", "block_num", "par_num", "line_num", "left", "top")}
+        for i, texto in enumerate(textos):
+            fila = 1 if i < 3 else 2
+            datos["text"].append(texto); datos["conf"].append("92"); datos["block_num"].append(1)
+            datos["par_num"].append(1); datos["line_num"].append(fila)
+            datos["left"].append((i if fila == 1 else i - 3) * 100); datos["top"].append(500 if fila == 1 else 560)
+        resultado = extraer_rendimiento_desde_datos(datos, 0, 6)
+        self.assertEqual(resultado["numeros"], [Decimal("2519"), Decimal("2015"), Decimal("1511"), Decimal("1008"), Decimal("504"), Decimal("252")])
+        self.assertEqual(resultado["valor"], Decimal("2519"))
+
+    def test_extrae_fila_solo_numerica_en_recorte_inferior(self):
+        valores = ["1571", "1309", "1047", "785", "524", "262", "131"]
+        datos = {"text": valores, "conf": ["88"] * 7, "block_num": [1] * 7, "par_num": [1] * 7,
+                 "line_num": [1] * 7, "left": [i * 100 for i in range(7)], "top": [80] * 7}
+        resultado = extraer_rendimiento_desde_datos(datos, 0, 7, permitir_sin_total=True)
+        self.assertEqual(resultado["valor"], Decimal("1571"))
 
     @patch("inventario.recipe_ocr.subprocess.run")
     @patch("inventario.recipe_ocr.shutil.which")

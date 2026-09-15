@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+import re
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -62,6 +64,65 @@ class RecipeOCRProvider:
             return AzureDocumentIntelligenceProvider.from_environment().extract_pdf_page(archivo, page_number)
         raise OCRNoDisponible(f"Proveedor OCR no soportado: {proveedor}.")
 
+    def extract_pdf_page_yield(self, archivo, page_number, column_index, expected_columns):
+        proveedor = os.getenv("RECIPE_OCR_PROVIDER", "local").strip().lower()
+        if proveedor in {"local", "tesseract"}:
+            return LocalTesseractRecipeOCRProvider.from_environment().extract_pdf_page_yield(
+                archivo, page_number, column_index, expected_columns
+            )
+        return None
+
+
+def extraer_rendimiento_desde_datos(datos, column_index, expected_columns, *, permitir_sin_total=False):
+    """Extrae una fila geométrica de rendimientos sin reinterpretar la receta."""
+    lineas = {}
+    textos = datos.get("text", [])
+    for i, bruto in enumerate(textos):
+        texto = str(bruto or "").strip()
+        try: confianza = float(datos.get("conf", [])[i])
+        except (ValueError, TypeError, IndexError): confianza = -1
+        if not texto or confianza < 0: continue
+        clave = tuple(datos.get(c, [0] * len(textos))[i] for c in ("block_num", "par_num", "line_num"))
+        lineas.setdefault(clave, []).append({
+            "texto": texto, "x": int(datos.get("left", [0] * len(textos))[i]),
+            "y": int(datos.get("top", [0] * len(textos))[i]), "confianza": confianza,
+        })
+    ordenadas = []
+    for tokens in lineas.values():
+        tokens.sort(key=lambda t: t["x"])
+        ordenadas.append((min(t["y"] for t in tokens), tokens))
+    ordenadas.sort(key=lambda item: item[0])
+    total_y = next((y for y, ts in ordenadas if any("total" in t["texto"].casefold() for t in ts)), None)
+    candidatos = []
+    minimo = max(int(expected_columns or 0), column_index + 1, 3)
+    for y, tokens in ordenadas:
+        texto_linea = " ".join(t["texto"] for t in tokens)
+        numeros = []
+        for token in tokens:
+            limpio = re.sub(r"[^0-9.,]", "", token["texto"])
+            if not limpio: continue
+            try:
+                normal = re.sub(r"[,.]", "", limpio) if re.fullmatch(r"\d{1,3}(?:[,.]\d{3})+", limpio) else limpio.replace(",", ".")
+                valor = Decimal(normal)
+            except InvalidOperation:
+                continue
+            if valor > 0: numeros.append((token["x"], valor, token["confianza"]))
+        numeros.sort(key=lambda item: item[0])
+        valores = [n[1] for n in numeros]
+        debajo_total = total_y is not None and y > total_y
+        etiqueta = any(p in texto_linea.casefold() for p in ("cantidad", "unidad", "onza"))
+        proporcional = len(valores) >= minimo and sum(a >= b for a, b in zip(valores, valores[1:])) >= len(valores) - 2
+        if proporcional and (debajo_total or etiqueta or permitir_sin_total):
+            candidatos.append((0 if etiqueta else 1, y, valores, texto_linea, numeros))
+    if not candidatos: return None
+    # En un recorte inferior sin etiquetas fiables, la fila de rendimiento es la
+    # última banda proporcional de la tabla; el pie de página no tiene suficientes columnas.
+    _, _, valores, texto, tokens = sorted(
+        candidatos, key=lambda x: (x[0], -x[1] if permitir_sin_total else x[1])
+    )[0]
+    if column_index >= len(valores): return None
+    return {"valor": valores[column_index], "numeros": valores, "texto": texto, "tokens": tokens}
+
 
 class LocalTesseractRecipeOCRProvider(RecipeOCRProvider):
     def __init__(self, *, lang="spa", dpi=300, tesseract_cmd=""):
@@ -80,6 +141,36 @@ class LocalTesseractRecipeOCRProvider(RecipeOCRProvider):
 
     def extract_pdf_page(self, archivo, page_number):
         return self._extract_text(archivo, page_number=page_number)
+
+    def extract_pdf_page_yield(self, archivo, page_number, column_index, expected_columns):
+        try:
+            import pytesseract
+            from PIL import ImageOps
+            from pdf2image import convert_from_bytes
+            estado = verificar_ocr_local(lang=self.lang, tesseract_cmd=self.tesseract_cmd, requiere_poppler=True)
+            if not estado.disponible: raise OCRNoDisponible("OCR local no disponible para recuperar el rendimiento.")
+            if self.tesseract_cmd: pytesseract.pytesseract.tesseract_cmd = self.tesseract_cmd
+            archivo.seek(0); contenido = archivo.read(); archivo.seek(0)
+            imagen = convert_from_bytes(
+                contenido, dpi=self.dpi, fmt="png", first_page=page_number, last_page=page_number
+            )[0]
+            gris = ImageOps.autocontrast(ImageOps.grayscale(imagen))
+            zona = gris.crop((0, int(gris.height * .45), gris.width, int(gris.height * .92)))
+            variantes = [gris, zona, ImageOps.invert(zona), zona.point(lambda p: 255 if p > 145 else 0)]
+            variantes.extend([v.resize((v.width * 2, v.height * 2)) for v in variantes[1:]])
+            for indice, preparada in enumerate(variantes):
+                datos = pytesseract.image_to_data(
+                    preparada, lang=self.lang, config="--oem 3 --psm 6",
+                    output_type=pytesseract.Output.DICT,
+                )
+                resultado = extraer_rendimiento_desde_datos(
+                    datos, column_index, expected_columns, permitir_sin_total=indice > 0
+                )
+                if resultado: return resultado
+            return None
+        except OCRError: raise
+        except Exception as exc:
+            raise OCRFallo(f"OCR local no pudo recuperar el rendimiento: {exc}") from exc
 
     def _extract_text(self, archivo, page_number=None):
         try:

@@ -156,6 +156,7 @@ def _analizar_documento_receta(request, empresa):
         "empresa": empresa, "titulo": "Revisar fórmulas detectadas", "upload_form": FormulaRecetaUploadForm(),
         "lote": lote,
         "formulas_detectadas": formulas,
+        "hay_formulas_listas": any(item["resultado"].estado == "LISTA" for item in formulas),
         "archivo_nombre": upload_form.cleaned_data["archivo"].name,
         "vista_previa": True,
     })
