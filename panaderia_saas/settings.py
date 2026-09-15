@@ -421,6 +421,11 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "inventario.recipe_ocr": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
     },
 }
 

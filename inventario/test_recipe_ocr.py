@@ -1,8 +1,9 @@
 from io import BytesIO
 from decimal import Decimal
+import os
 import sys
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
@@ -103,6 +104,29 @@ class RecipeOCRTests(SimpleTestCase):
                  "line_num": [1] * 7, "left": [i * 100 for i in range(7)], "top": [80] * 7}
         resultado = extraer_rendimiento_desde_datos(datos, 0, 7, permitir_sin_total=True)
         self.assertEqual(resultado["valor"], Decimal("1571"))
+
+    def test_debug_flag_no_cambia_resultado_y_apagado_no_emite_logs(self):
+        datos = {"text": ["Total", "216", "180", "Cantidad", "1571", "1309", "1047", "785", "524", "262", "131"],
+                 "conf": ["90"] * 11, "block_num": [1] * 11, "par_num": [1] * 11,
+                 "line_num": [1] * 3 + [2] * 8, "left": [0, 100, 200, 0, 100, 200, 300, 400, 500, 600, 700],
+                 "top": [40] * 3 + [80] * 8}
+        falso_ocr = SimpleNamespace(Output=SimpleNamespace(DICT="DICT"), pytesseract=SimpleNamespace(tesseract_cmd=""),
+                                    image_to_data=lambda *a, **k: datos)
+        falso_pdf = SimpleNamespace(convert_from_bytes=lambda *a, **k: [Image.new("RGB", (900, 200), "white")])
+        proveedor = LocalTesseractRecipeOCRProvider()
+        log = Mock()
+        with patch.dict(sys.modules, {"pytesseract": falso_ocr, "pdf2image": falso_pdf}), patch(
+            "inventario.recipe_ocr.verificar_ocr_local", return_value=EstadoOCRLocal(True, True, True, "tesseract")
+        ), patch("inventario.recipe_ocr.ocr_debug_logger.warning", log):
+            with patch.dict(os.environ, {"RECIPE_OCR_DEBUG": "0"}):
+                apagado = proveedor.extract_pdf_page_yield(SimpleUploadedFile("scan.pdf", b"%PDF-falso"), 6, 0, 7)
+            log.assert_not_called()
+            with patch.dict(os.environ, {"RECIPE_OCR_DEBUG": "1"}):
+                encendido = proveedor.extract_pdf_page_yield(SimpleUploadedFile("scan.pdf", b"%PDF-falso"), 6, 0, 7)
+        self.assertEqual(apagado, encendido)
+        self.assertEqual(encendido["valor"], Decimal("1571"))
+        self.assertTrue(any("selected=%s" in llamada.args[0] for llamada in log.call_args_list))
+        self.assertTrue(any("line_y=" in llamada.args[0] for llamada in log.call_args_list))
 
     @patch("inventario.recipe_ocr.subprocess.run")
     @patch("inventario.recipe_ocr.shutil.which")

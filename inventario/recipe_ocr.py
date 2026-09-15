@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -9,6 +10,9 @@ from decimal import Decimal, InvalidOperation
 import re
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+
+ocr_debug_logger = logging.getLogger(__name__)
 
 
 class OCRError(RuntimeError): pass
@@ -73,7 +77,7 @@ class RecipeOCRProvider:
         return None
 
 
-def extraer_rendimiento_desde_datos(datos, column_index, expected_columns, *, permitir_sin_total=False):
+def extraer_rendimiento_desde_datos(datos, column_index, expected_columns, *, permitir_sin_total=False, diagnostico=None):
     """Extrae una fila geométrica de rendimientos sin reinterpretar la receta."""
     lineas = {}
     textos = datos.get("text", [])
@@ -112,15 +116,29 @@ def extraer_rendimiento_desde_datos(datos, column_index, expected_columns, *, pe
         debajo_total = total_y is not None and y > total_y
         etiqueta = any(p in texto_linea.casefold() for p in ("cantidad", "unidad", "onza"))
         proporcional = len(valores) >= minimo and sum(a >= b for a, b in zip(valores, valores[1:])) >= len(valores) - 2
+        if diagnostico is not None and (len(numeros) >= 3 or "total" in texto_linea.casefold() or etiqueta):
+            if len(valores) < minimo: razon = "too_few_columns"
+            elif not proporcional: razon = "not_descending"
+            elif not (debajo_total or etiqueta or permitir_sin_total): razon = "above_total"
+            else: razon = "candidate"
+            diagnostico({
+                "y": y, "text": texto_linea, "numbers": valores,
+                "x": [n[0] for n in numeros], "conf": [n[2] for n in numeros],
+                "accepted": razon == "candidate", "reason": razon,
+            })
         if proporcional and (debajo_total or etiqueta or permitir_sin_total):
             candidatos.append((0 if etiqueta else 1, y, valores, texto_linea, numeros))
-    if not candidatos: return None
+    if not candidatos:
+        if diagnostico is not None: diagnostico({"accepted": False, "reason": "no_numeric_band"})
+        return None
     # En un recorte inferior sin etiquetas fiables, la fila de rendimiento es la
     # última banda proporcional de la tabla; el pie de página no tiene suficientes columnas.
     _, _, valores, texto, tokens = sorted(
         candidatos, key=lambda x: (x[0], -x[1] if permitir_sin_total else x[1])
     )[0]
-    if column_index >= len(valores): return None
+    if column_index >= len(valores):
+        if diagnostico is not None: diagnostico({"accepted": False, "reason": "column_index_out_of_range"})
+        return None
     return {"valor": valores[column_index], "numeros": valores, "texto": texto, "tokens": tokens}
 
 
@@ -158,15 +176,34 @@ class LocalTesseractRecipeOCRProvider(RecipeOCRProvider):
             zona = gris.crop((0, int(gris.height * .45), gris.width, int(gris.height * .92)))
             variantes = [gris, zona, ImageOps.invert(zona), zona.point(lambda p: 255 if p > 145 else 0)]
             variantes.extend([v.resize((v.width * 2, v.height * 2)) for v in variantes[1:]])
+            debug = os.getenv("RECIPE_OCR_DEBUG", "") == "1"
             for indice, preparada in enumerate(variantes):
+                if debug:
+                    crop = "full" if indice == 0 else "lower_table"
+                    ocr_debug_logger.warning(
+                        "RECIPE_OCR_DEBUG page=%s variant=%s image_width=%s image_height=%s crop=%s psm=6",
+                        page_number, indice, preparada.width, preparada.height, crop,
+                    )
                 datos = pytesseract.image_to_data(
                     preparada, lang=self.lang, config="--oem 3 --psm 6",
                     output_type=pytesseract.Output.DICT,
                 )
                 resultado = extraer_rendimiento_desde_datos(
-                    datos, column_index, expected_columns, permitir_sin_total=indice > 0
+                    datos, column_index, expected_columns, permitir_sin_total=indice > 0,
+                    diagnostico=(lambda fila: ocr_debug_logger.warning(
+                        "RECIPE_OCR_DEBUG page=%s variant=%s line_y=%s text=%r numbers=%s x=%s conf=%s candidate=%s reason=%s",
+                        page_number, indice, fila.get("y"), fila.get("text", ""),
+                        fila.get("numbers", []), fila.get("x", []), fila.get("conf", []),
+                        "accepted" if fila["accepted"] else "rejected", fila["reason"],
+                    )) if debug else None,
                 )
-                if resultado: return resultado
+                if resultado:
+                    if debug:
+                        ocr_debug_logger.warning(
+                            "RECIPE_OCR_DEBUG page=%s variant=%s selected=%s", page_number, indice, resultado["valor"]
+                        )
+                    return resultado
+            if debug: ocr_debug_logger.warning("RECIPE_OCR_DEBUG page=%s selected=None", page_number)
             return None
         except OCRError: raise
         except Exception as exc:
