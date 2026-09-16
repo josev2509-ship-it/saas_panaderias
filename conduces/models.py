@@ -152,7 +152,7 @@ class Conduce(models.Model):
     )
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
-    numero = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    numero = models.CharField(max_length=20, blank=True, null=True)
     fecha = models.DateField()
     centro = models.ForeignKey(CentroEducativo, on_delete=models.CASCADE)
     producto = models.CharField(max_length=255)
@@ -178,6 +178,12 @@ class Conduce(models.Model):
 
     class Meta:
         ordering = ["-fecha", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("empresa", "numero"),
+                name="conduce_empresa_numero_uniq",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.numero:
