@@ -16,6 +16,7 @@ from PIL import Image
 from .recipe_ocr import (
     AzureDocumentIntelligenceProvider, EstadoOCRLocal, LocalTesseractRecipeOCRProvider,
     OCRFallo, RecipeOCRProvider, extraer_rendimiento_desde_datos, verificar_ocr_local,
+    extraer_total_desde_datos,
 )
 
 
@@ -104,6 +105,17 @@ class RecipeOCRTests(SimpleTestCase):
                  "line_num": [1] * 7, "left": [i * 100 for i in range(7)], "top": [80] * 7}
         resultado = extraer_rendimiento_desde_datos(datos, 0, 7, permitir_sin_total=True)
         self.assertEqual(resultado["valor"], Decimal("1571"))
+
+    def test_total_geometrico_sobre_rendimiento_con_siete_columnas(self):
+        textos = ["216", "180", "144", "108", "72", "36", "18", "Cantidad", "en", "unidades"]
+        datos = {"text": textos, "conf": ["90"] * len(textos), "block_num": [1] * len(textos),
+                 "par_num": [1] * len(textos), "line_num": [1] * 7 + [2] * 3,
+                 "left": [i * 100 for i in range(7)] + [0, 80, 120],
+                 "top": [400] * 7 + [450] * 3}
+        hallazgo = extraer_total_desde_datos(datos, 0, 7, Decimal("216"))
+        self.assertEqual(hallazgo["numeros"], [Decimal(x) for x in textos[:7]])
+        self.assertEqual(hallazgo["valor"], Decimal("216"))
+        self.assertIsNone(extraer_total_desde_datos(datos, 0, 7, Decimal("200")))
 
     def test_debug_flag_no_cambia_resultado_y_apagado_no_emite_logs(self):
         datos = {"text": ["Total", "216", "180", "Cantidad", "1571", "1309", "1047", "785", "524", "262", "131"],

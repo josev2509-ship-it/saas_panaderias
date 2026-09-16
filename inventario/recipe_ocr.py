@@ -76,6 +76,63 @@ class RecipeOCRProvider:
             )
         return None
 
+    def extract_pdf_page_total(self, archivo, page_number, column_index, expected_columns, expected_sum):
+        proveedor = os.getenv("RECIPE_OCR_PROVIDER", "local").strip().lower()
+        if proveedor in {"local", "tesseract"}:
+            return LocalTesseractRecipeOCRProvider.from_environment().extract_pdf_page_total(
+                archivo, page_number, column_index, expected_columns, expected_sum
+            )
+        return None
+
+
+def extraer_total_desde_datos(datos, column_index, expected_columns, expected_sum):
+    """Busca la fila oficial Total; la suma digital solo valida, nunca sustituye."""
+    lineas = {}
+    textos = datos.get("text", [])
+    for i, bruto in enumerate(textos):
+        texto = str(bruto or "").strip()
+        if not texto: continue
+        try: confianza = float(datos.get("conf", [])[i])
+        except (ValueError, TypeError, IndexError): confianza = -1
+        if confianza < 0: continue
+        clave = tuple(datos.get(c, [0] * len(textos))[i] for c in ("block_num", "par_num", "line_num"))
+        lineas.setdefault(clave, []).append((
+            int(datos.get("top", [0] * len(textos))[i]),
+            int(datos.get("left", [0] * len(textos))[i]), texto,
+        ))
+    bandas = []
+    for tokens in lineas.values():
+        tokens.sort(key=lambda item: item[1])
+        y = min(t[0] for t in tokens)
+        texto = " ".join(t[2] for t in tokens)
+        valores = []
+        for _, x, token in tokens:
+            limpio = re.sub(r"[^0-9.,]", "", token)
+            if not limpio: continue
+            try:
+                normal = re.sub(r"[,.]", "", limpio) if re.fullmatch(r"\d{1,3}(?:[,.]\d{3})+", limpio) else limpio.replace(",", ".")
+                valor = Decimal(normal)
+            except InvalidOperation: continue
+            if valor > 0: valores.append((x, valor))
+        bandas.append((y, texto, [v for _, v in sorted(valores)]))
+    bandas.sort(key=lambda item: item[0])
+    rendimiento_y = next((y for y, texto, _ in bandas if any(s in texto.casefold() for s in ("cantidad", "unidad", "onza"))), None)
+    candidatos = []
+    for y, texto, valores in bandas:
+        if len(valores) != expected_columns or column_index >= len(valores): continue
+        valor = valores[column_index]
+        tolerancia = max(Decimal("0.15"), valor * Decimal("0.015"))
+        if abs(valor - expected_sum) > tolerancia: continue
+        etiqueta = "total" in texto.casefold()
+        geometria = rendimiento_y is not None and y < rendimiento_y and (
+            rendimiento_y - y <= 100
+        )
+        if etiqueta or geometria:
+            candidatos.append((0 if etiqueta else 1, -y, valor, valores, texto))
+    if len(candidatos) != 1: return None
+    _, _, valor, valores, texto = candidatos[0]
+    return {"valor": valor, "numeros": valores, "texto": texto}
+
 
 def extraer_rendimiento_desde_datos(datos, column_index, expected_columns, *, permitir_sin_total=False, diagnostico=None):
     """Extrae una fila geométrica de rendimientos sin reinterpretar la receta."""
@@ -159,6 +216,40 @@ class LocalTesseractRecipeOCRProvider(RecipeOCRProvider):
 
     def extract_pdf_page(self, archivo, page_number):
         return self._extract_text(archivo, page_number=page_number)
+
+    def extract_pdf_page_total(self, archivo, page_number, column_index, expected_columns, expected_sum):
+        try:
+            import pytesseract
+            from PIL import ImageOps
+            from pdf2image import convert_from_bytes
+            estado = verificar_ocr_local(lang=self.lang, tesseract_cmd=self.tesseract_cmd, requiere_poppler=True)
+            if not estado.disponible: raise OCRNoDisponible("OCR local no disponible para recuperar la fila Total.")
+            if self.tesseract_cmd: pytesseract.pytesseract.tesseract_cmd = self.tesseract_cmd
+            archivo.seek(0); contenido = archivo.read(); archivo.seek(0)
+            imagen = convert_from_bytes(
+                contenido, dpi=self.dpi, fmt="png", first_page=page_number, last_page=page_number
+            )[0]
+            gris = ImageOps.autocontrast(ImageOps.grayscale(imagen))
+            zona = gris.crop((0, int(gris.height * .45), gris.width, int(gris.height * .92)))
+            variantes = [gris, zona, ImageOps.invert(zona), zona.point(lambda p: 255 if p > 145 else 0)]
+            variantes.extend([v.resize((v.width * 2, v.height * 2)) for v in variantes[1:]])
+            for indice, preparada in enumerate(variantes):
+                datos = pytesseract.image_to_data(
+                    preparada, lang=self.lang, config="--oem 3 --psm 6",
+                    output_type=pytesseract.Output.DICT,
+                )
+                resultado = extraer_total_desde_datos(datos, column_index, expected_columns, expected_sum)
+                if resultado:
+                    if os.getenv("RECIPE_OCR_DEBUG", "") == "1":
+                        ocr_debug_logger.warning(
+                            "RECIPE_OCR_DEBUG page=%s total_variant=%s total_row=%s total_selected=%s",
+                            page_number, indice, resultado["numeros"], resultado["valor"],
+                        )
+                    return resultado
+            return None
+        except OCRError: raise
+        except Exception as exc:
+            raise OCRFallo(f"OCR local no pudo recuperar la fila Total: {exc}") from exc
 
     def extract_pdf_page_yield(self, archivo, page_number, column_index, expected_columns):
         try:

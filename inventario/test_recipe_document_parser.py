@@ -182,3 +182,97 @@ class RecipeDocumentParserTests(SimpleTestCase):
         self.assertEqual(formula.ingredientes[0].cantidad, Decimal("100"))
         self.assertEqual(formula.rendimiento_base, Decimal("2519"))
         self.assertFalse(any("harina" in aviso.lower() for aviso in formula.advertencias))
+
+    def test_total_oficial_ocr_pagina_seis_activa_fallback_rendimiento(self):
+        ingredientes = [
+            ("Harina de trigo fuerte", "120"), ("Azúcar crema", "7.2"),
+            ("Aceite de soya", "7.2"), ("Levadura", "1.2"),
+            ("Leche en polvo", "3.6"), ("Huevos", "14.4"),
+            ("Agua", "30"), ("Zanahoria rallada", "30"), ("Sal", "2.4"),
+        ]
+        digital = "Formulación de Pan de Zanahorias\nIngredientes Libras Libras Libras Libras Libras Libras Libras\n"
+        digital += "\n".join(f"{nombre} {valor} " + " ".join("1" for _ in range(6)) for nombre, valor in ingredientes)
+        digital += "\nCantidad en\nunidades (Onzas)"
+
+        class OCRPagina:
+            def __init__(self): self.texto_paginas = []; self.rendimientos = []
+            def extract_pdf_page(self, archivo, numero):
+                self.texto_paginas.append(numero)
+                return "Total: 216 180 144 108 72 36 18"
+            def extract_pdf_page_yield(self, archivo, numero, indice, columnas):
+                self.rendimientos.append((numero, indice, columnas))
+                return {"valor": Decimal("1571")}
+
+        ocr = OCRPagina()
+        lector = SimpleNamespace(pages=[SimpleNamespace(extract_text=lambda: digital)])
+        log = Mock()
+        with patch("inventario.recipe_document_parser.PdfReader", return_value=lector), patch.dict(
+            os.environ, {"RECIPE_OCR_DEBUG": "1"}
+        ), patch("inventario.recipe_document_parser.ocr_debug_logger.warning", log):
+            formula = RecipeDocumentParser(ocr).parse_pdf(
+                SimpleUploadedFile("formulas.pdf", b"%PDF-falso")
+            ).formulas[0]
+        self.assertEqual(log.call_args_list[0].args[-1], ["rendimiento_base", "total"])
+        self.assertEqual(log.call_args_list[1].args[-1], ["rendimiento_base"])
+        self.assertEqual(log.call_args_list[2].args[-1], Decimal("1571"))
+        self.assertEqual(ocr.texto_paginas, [1])
+        self.assertEqual(ocr.rendimientos, [(1, 0, 7)])
+        self.assertEqual(len(formula.ingredientes), 9)
+        self.assertEqual(formula.nombre, "Pan de Zanahorias")
+        self.assertEqual(formula.columna_base, 0)
+        self.assertEqual(formula.total, Decimal("216"))
+        self.assertEqual(formula.rendimiento_base, Decimal("1571"))
+
+    def test_total_ocr_no_se_sustituye_por_suma_si_fila_discrepa(self):
+        formula = self.parser._parse_formula(
+            "Formulación de Pan\nIngredientes Libras Libras\nHarina 120 100\nSal 2 1"
+        )
+        self.assertIsNone(self.parser._total_oficial_desde_ocr("Total: 216 180", formula, 2))
+
+    def test_total_geometrico_conflictivo_no_se_aplica_y_marca_revision(self):
+        digital = (
+            "Formulación de Pan\nIngredientes Libras Libras\n"
+            "Harina 120 100\nSal 2 1\nCantidad en\nunidades (Onzas)"
+        )
+
+        class OCRConflictivo:
+            def extract_pdf_page_total(self, archivo, numero, indice, columnas, suma):
+                return {"valor": Decimal("216"), "numeros": [Decimal("216"), Decimal("180")]}
+            def extract_pdf_page(self, archivo, numero):
+                raise AssertionError("No debe reinterpretar la fórmula")
+            def extract_pdf_page_yield(self, archivo, numero, indice, columnas):
+                raise AssertionError("No debe buscar rendimiento con Total inválido")
+
+        lector = SimpleNamespace(pages=[SimpleNamespace(extract_text=lambda: digital)])
+        with patch("inventario.recipe_document_parser.PdfReader", return_value=lector):
+            formula = RecipeDocumentParser(OCRConflictivo()).parse_pdf(
+                SimpleUploadedFile("formula.pdf", b"%PDF-falso")
+            ).formulas[0]
+        self.assertIsNone(formula.total)
+        self.assertEqual(formula.estado, "REVISAR")
+        self.assertEqual(formula.ingredientes[0].cantidad, Decimal("120"))
+
+    def test_total_geometrico_valido_no_reinterpreta_nombre_ni_ingredientes(self):
+        digital = (
+            "Formulación de Pan\nIngredientes Libras Libras\n"
+            "Harina 120 100\nSal 2 1\nCantidad en\nunidades (Onzas)"
+        )
+
+        class OCRValido:
+            def extract_pdf_page_total(self, archivo, numero, indice, columnas, suma):
+                return {"valor": Decimal("122"), "numeros": [Decimal("122"), Decimal("101")]}
+            def extract_pdf_page_yield(self, archivo, numero, indice, columnas):
+                return {"valor": Decimal("1571")}
+            def extract_pdf_page(self, archivo, numero):
+                raise AssertionError("No debe usar OCR de la receta completa")
+
+        lector = SimpleNamespace(pages=[SimpleNamespace(extract_text=lambda: digital)])
+        with patch("inventario.recipe_document_parser.PdfReader", return_value=lector):
+            formula = RecipeDocumentParser(OCRValido()).parse_pdf(
+                SimpleUploadedFile("formula.pdf", b"%PDF-falso")
+            ).formulas[0]
+        self.assertEqual(formula.nombre, "Pan")
+        self.assertEqual([i.cantidad for i in formula.ingredientes], [Decimal("120"), Decimal("2")])
+        self.assertEqual(formula.columna_base, 0)
+        self.assertEqual(formula.total, Decimal("122"))
+        self.assertEqual(formula.rendimiento_base, Decimal("1571"))

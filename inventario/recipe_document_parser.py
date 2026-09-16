@@ -101,21 +101,47 @@ class RecipeDocumentParser:
             if faltantes:
                 try:
                     archivo.seek(0)
+                    filas_digitales = self._filas_tabla(self._unir_lineas_tabla([
+                        x.strip() for x in pagina.splitlines() if x.strip()
+                    ]))
+                    columnas = max((len(valores) for _, valores, _ in filas_digitales), default=0)
+                    if faltantes == {"total", "rendimiento_base"} and formula.columna_base is not None:
+                        suma = sum((ingrediente.cantidad for ingrediente in formula.ingredientes), Decimal("0"))
+                        hallazgo_total = self.ocr_provider.extract_pdf_page_total(
+                            archivo, numero, formula.columna_base, columnas, suma
+                        ) if hasattr(self.ocr_provider, "extract_pdf_page_total") else None
+                        if hallazgo_total:
+                            total = self._validar_total_oficial(hallazgo_total["numeros"], formula, columnas)
+                        else:
+                            texto_ocr = self.ocr_provider.extract_pdf_page(archivo, numero)
+                            total = self._total_oficial_desde_ocr(texto_ocr, formula, columnas)
+                        if total is not None:
+                            formula.total = total
+                            faltantes = self._campos_criticos_faltantes(formula)
+                            if os.getenv("RECIPE_OCR_DEBUG", "") == "1":
+                                ocr_debug_logger.warning(
+                                    "RECIPE_OCR_DEBUG parser_page=%s total_selected=%s faltantes=%s",
+                                    numero, total, sorted(faltantes),
+                                )
+                        else:
+                            formula.advertencias.append(f"Página {numero}: el OCR no pudo validar la fila oficial Total.")
+                            if hallazgo_total:
+                                formula.estado = "REVISAR"
                     if faltantes == {"rendimiento_base"} and hasattr(self.ocr_provider, "extract_pdf_page_yield"):
-                        filas_digitales = self._filas_tabla(self._unir_lineas_tabla([
-                            x.strip() for x in pagina.splitlines() if x.strip()
-                        ]))
-                        columnas = max((len(valores) for _, valores, _ in filas_digitales), default=0)
                         hallazgo = self.ocr_provider.extract_pdf_page_yield(
                             archivo, numero, formula.columna_base, columnas
                         )
                         if hallazgo:
                             formula.rendimiento_base = hallazgo["valor"]
                             formula.unidad_rendimiento = formula.unidad_rendimiento or "unidad"
+                            if os.getenv("RECIPE_OCR_DEBUG", "") == "1":
+                                ocr_debug_logger.warning(
+                                    "RECIPE_OCR_DEBUG parser_page=%s yield_selected=%s", numero, hallazgo["valor"]
+                                )
                         else:
                             formula.advertencias.append(f"Página {numero}: el OCR no pudo recuperar el rendimiento.")
                         self._actualizar_estado(formula)
-                    else:
+                    elif faltantes != {"total", "rendimiento_base"}:
                         texto_ocr = self.ocr_provider.extract_pdf_page(archivo, numero)
                         formula = self._completar_desde_ocr(formula, texto_ocr, faltantes, numero)
                 except OCRError as exc:
@@ -150,6 +176,26 @@ class RecipeDocumentParser:
             "rendimiento_base": formula.rendimiento_base,
         }
         return {campo for campo, valor in campos.items() if valor in (None, "", [])}
+
+    def _total_oficial_desde_ocr(self, texto, formula, columnas):
+        lineas = self._unir_lineas_tabla([x.strip() for x in texto.splitlines() if x.strip()])
+        totales = [valores for nombre, valores, _ in self._filas_tabla(lineas)
+                   if _normalizar(nombre).startswith("TOTAL")]
+        if len(totales) != 1 or columnas < 2 or len(totales[0]) != columnas:
+            return None
+        return self._validar_total_oficial(totales[0], formula, columnas)
+
+    @staticmethod
+    def _validar_total_oficial(valores, formula, columnas):
+        if columnas < 2 or len(valores) != columnas:
+            return None
+        indice = formula.columna_base
+        if indice is None or indice >= len(valores):
+            return None
+        valor = valores[indice]
+        suma = sum((ingrediente.cantidad for ingrediente in formula.ingredientes), Decimal("0"))
+        tolerancia = max(Decimal("0.15"), valor * Decimal("0.015"))
+        return valor if valor > 0 and abs(suma - valor) <= tolerancia else None
 
     def _completar_desde_ocr(self, digital, texto_ocr, faltantes, pagina):
         if faltantes == {"rendimiento_base"}:
