@@ -83,9 +83,11 @@
                 </div>
 
                 <div>
-                    <label>Matrícula</label>
+                    <label>Matrícula general (respaldo)</label>
                     <input type="number" name="matricula" min="0">
                 </div>
+                <div><label>Matrícula lunes a viernes</label><input type="number" name="matricula_lunes_viernes" min="0"></div>
+                <div><label>Matrícula sábado y domingo</label><input type="number" name="matricula_fin_semana" min="0"></div>
 
                 <div>
                     <label>Dirección</label>
@@ -137,7 +139,7 @@
                         <th>Teléfono</th>
                         <th>Provincia</th>
                         <th>Regional/Distrito</th>
-                        <th>Matrícula</th>
+                        <th>Matrícula general / regular / fin de semana</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -154,7 +156,7 @@
                         <td>{{ centro.telefono }}</td>
                         <td>{{ centro.provincia }}</td>
                         <td>{{ centro.regional_distrito }}</td>
-                        <td>{{ centro.matricula }}</td>
+                        <td>{{ centro.matricula }} / {{ centro.matricula_lunes_viernes|default_if_none:"—" }} / {{ centro.matricula_fin_semana|default_if_none:"—" }}</td>
                         <td>
                             <div class="row-actions">
                                 <a href="{% url 'editar_centro' centro.id %}" class="btn btn-small">

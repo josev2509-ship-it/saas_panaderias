@@ -65,4 +65,7 @@ def lista(request,recurso):
 def detalle(request,recurso,pk):
     if recurso not in RESOURCES:raise PermissionDenied
     model,titulo=RESOURCES[recurso];empresa=obtener_empresa_usuario(request);objeto=get_object_or_404(model,pk=pk,empresa=empresa)
+    if recurso=="ordenes" and objeto.origen=="INABIE":
+        from django.shortcuts import redirect
+        return redirect("compras:inabie_orden_detalle",pk=objeto.pk)
     return render(request,"compras/p2p/recurso_detalle.html",{"objeto":objeto,"titulo":titulo,"recurso":recurso,"documentos":obtener_documentos(objeto,empresa)})

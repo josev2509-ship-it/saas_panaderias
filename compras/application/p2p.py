@@ -89,16 +89,27 @@ def crear_orden_desde_adjudicacion(*,context,adjudicacion_id,proveedor_id=None):
     provider=first.proveedor;currency=first.oferta.moneda;o=OrdenCompraEnterprise.objects.create(empresa=context.empresa,numero=_num(context,"OCE"),adjudicacion=a,proveedor=provider,moneda=currency,tasa_cambio=first.oferta.tasa_cambio,fecha=timezone.localdate(),entrega_desde=timezone.localdate(),entrega_hasta=timezone.localdate()+timedelta(days=30),creado_por=context.usuario,actualizado_por=context.usuario)
     for d in details:DetalleOrdenCompraEnterprise.objects.create(orden=o,linea_adjudicacion=d,producto=d.linea_rfq.producto,descripcion=d.linea_rfq.descripcion,cantidad=d.cantidad,precio_unitario=d.precio_unitario,total=d.total,almacen=d.linea_rfq.almacen_destino)
     o.total=o.detalles.aggregate(v=Sum("total"))["v"] or 0;o.subtotal=o.total;o.save(update_fields=["subtotal","total"]);_emit(context,OrdenCompraCreada,o,"orden-creada");return o
+@transaction.atomic
 def transicionar_orden(*,context,orden_id,nuevo,comentario=""):
-    o=OrdenCompraEnterprise.objects.get(pk=orden_id,empresa=context.empresa);allowed={"BORRADOR":{"PENDIENTE_APROBACION","CANCELADA"},"PENDIENTE_APROBACION":{"APROBADA","BORRADOR","CANCELADA"},"APROBADA":{"ENVIADA","CANCELADA"},"ENVIADA":{"ACEPTADA","CANCELADA"},"ACEPTADA":{"PARCIALMENTE_RECIBIDA","RECIBIDA","CANCELADA"},"PARCIALMENTE_RECIBIDA":{"RECIBIDA","CANCELADA"},"RECIBIDA":{"PARCIALMENTE_FACTURADA","FACTURADA","CERRADA"},"FACTURADA":{"CERRADA"}};
+    o=OrdenCompraEnterprise.objects.select_for_update().get(pk=orden_id,empresa=context.empresa);allowed={"BORRADOR":{"PENDIENTE_APROBACION","CANCELADA"},"PENDIENTE_APROBACION":{"APROBADA","BORRADOR","CANCELADA"},"APROBADA":{"ENVIADA","CANCELADA"},"ENVIADA":{"ACEPTADA","CANCELADA"},"ACEPTADA":{"PARCIALMENTE_RECIBIDA","RECIBIDA","CANCELADA"},"PARCIALMENTE_RECIBIDA":{"RECIBIDA","CANCELADA"},"RECIBIDA":{"PARCIALMENTE_FACTURADA","FACTURADA","CERRADA"},"FACTURADA":{"CERRADA"}};
     if nuevo not in allowed.get(o.estado,set()):raise ValidationError("Transición de orden inválida.")
+    if o.origen=="INABIE" and nuevo not in {"BORRADOR","CANCELADA"}:
+        if not o.proveedor_id or o.proveedor.empresa_id!=context.empresa.pk or o.proveedor.estado!="ACTIVO" or o.proveedor.bloqueado:
+            raise ValidationError("Asigne un proveedor activo antes de continuar la orden INABIE.")
+        if not o.moneda_id or o.moneda.empresa_id!=context.empresa.pk or not o.moneda.activa:
+            raise ValidationError("La orden INABIE requiere una moneda activa de la empresa.")
+        if not o.detalles.exists() or o.detalles.filter(cantidad__lte=0).exists():
+            raise ValidationError("La orden INABIE requiere líneas con cantidades mayores que cero.")
     old=o.estado;o.estado=nuevo;o.save(update_fields=["estado"]);HistorialOrdenCompra.objects.create(orden=o,estado_anterior=old,estado_nuevo=nuevo,comentario=comentario,usuario=context.usuario);event={"APROBADA":OrdenCompraAprobada,"ENVIADA":OrdenCompraEnviada,"ACEPTADA":OrdenCompraAceptada,"CANCELADA":OrdenCompraCancelada}.get(nuevo);_emit(context,event,o,f"orden-{nuevo.lower()}") if event else None;return o
 def versionar_orden(*,context,orden_id):
     o=OrdenCompraEnterprise.objects.get(pk=orden_id,empresa=context.empresa);snap={"numero":o.numero,"estado":o.estado,"total":str(o.total),"detalles":list(o.detalles.values("descripcion","cantidad","precio_unitario","total"))};v,_=VersionOrdenCompra.objects.get_or_create(orden=o,version=o.version,defaults={"snapshot":snap,"creado_por":context.usuario});return v
 
 @transaction.atomic
 def crear_recepcion(*,context,orden_id,datos):
-    o=OrdenCompraEnterprise.objects.get(pk=orden_id,empresa=context.empresa,estado__in=["ACEPTADA","PARCIALMENTE_RECIBIDA"]);r=RecepcionCompra.objects.create(empresa=context.empresa,numero=datos.get("numero") or _num(context,"REC"),orden=o,estado="EN_PROCESO",fecha=datos.get("fecha",timezone.now()),almacen=datos["almacen"],documento_proveedor=datos.get("documento_proveedor",""),creado_por=context.usuario,actualizado_por=context.usuario);_emit(context,RecepcionCreada,r,"recepcion-creada");return r
+    o=OrdenCompraEnterprise.objects.get(pk=orden_id,empresa=context.empresa,estado__in=["ACEPTADA","PARCIALMENTE_RECIBIDA"])
+    if o.origen=="INABIE" and (not o.proveedor_id or o.proveedor.empresa_id!=context.empresa.pk):
+        raise ValidationError("La orden INABIE requiere proveedor antes de recibir.")
+    r=RecepcionCompra.objects.create(empresa=context.empresa,numero=datos.get("numero") or _num(context,"REC"),orden=o,estado="EN_PROCESO",fecha=datos.get("fecha",timezone.now()),almacen=datos["almacen"],documento_proveedor=datos.get("documento_proveedor",""),creado_por=context.usuario,actualizado_por=context.usuario);_emit(context,RecepcionCreada,r,"recepcion-creada");return r
 @transaction.atomic
 def agregar_detalle_recepcion(*,context,recepcion_id,detalle_orden_id,cantidad,aceptada=None,rechazada=0,lote="",vence_el=None,motivo=""):
     r=RecepcionCompra.objects.select_for_update().get(pk=recepcion_id,empresa=context.empresa,estado="EN_PROCESO");d=DetalleOrdenCompraEnterprise.objects.select_for_update().get(pk=detalle_orden_id,orden=r.orden);qty=Decimal(str(cantidad));accepted=Decimal(str(aceptada if aceptada is not None else qty-Decimal(str(rechazada))));rejected=Decimal(str(rechazada))
@@ -107,6 +118,8 @@ def agregar_detalle_recepcion(*,context,recepcion_id,detalle_orden_id,cantidad,a
 @transaction.atomic
 def cerrar_recepcion(*,context,recepcion_id):
     r=RecepcionCompra.objects.select_for_update().select_related("orden").get(pk=recepcion_id,empresa=context.empresa,estado="EN_PROCESO")
+    if r.orden.origen=="INABIE" and (not r.orden.proveedor_id or r.orden.proveedor.empresa_id!=context.empresa.pk):
+        raise ValidationError("La orden INABIE requiere proveedor antes de cerrar la recepción.")
     if not r.detalles.exists():raise ValidationError("La recepción no contiene detalles.")
     for x in r.detalles.select_related("detalle_orden__producto"):
         if x.cantidad_aceptada and x.detalle_orden.producto_id:

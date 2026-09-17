@@ -1,8 +1,12 @@
 from django.urls import path
-from . import p2p_finance_views, p2p_operational_views, p2p_views, settlements_views, views
+from . import inabie_views, p2p_finance_views, p2p_operational_views, p2p_views, settlements_views, views
 
 app_name="compras"
 urlpatterns=[
+    path("inabie/ordenes/generar/",inabie_views.generar,name="inabie_orden_generar"),
+    path("inabie/ordenes/<int:pk>/",inabie_views.detalle,name="inabie_orden_detalle"),
+    path("inabie/ordenes/<int:pk>/<str:accion>/",inabie_views.accion,name="inabie_orden_accion"),
+    path("inabie/ordenes/<int:pk>/lineas/<int:linea_id>/<str:accion>/",inabie_views.accion_linea,name="inabie_orden_linea_accion"),
     path("",views.dashboard,name="dashboard"),
     path("proveedores/",views.lista,name="lista"),
     path("proveedores/nuevo/",views.editar,name="crear"),

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="ds-page">
+  <h1>Orden INABIE {{ orden.numero }}</h1>
+  <p>{{ orden.periodo_desde }} – {{ orden.periodo_hasta }} · {{ orden.estado }} · {{ orden.moneda.moneda.codigo }}</p>
+  <p>Las cantidades sugeridas son referencia. Guardar este borrador no modifica inventario.</p>
+  {% if orden.dimensiones.advertencias %}<div class="ds-card"><h2>Advertencias del cálculo</h2><ul>{% for aviso in orden.dimensiones.advertencias %}<li>{{ aviso }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if orden.estado == "BORRADOR" %}
+  <form method="post" action="{% url 'compras:inabie_orden_accion' orden.pk 'guardar' %}" class="ds-card">
+    {% csrf_token %}
+    <label>Proveedor</label><select name="proveedor_id"><option value="">Sin asignar</option>{% for proveedor in proveedores %}<option value="{{ proveedor.pk }}" {% if orden.proveedor_id == proveedor.pk %}selected{% endif %}>{{ proveedor }}</option>{% endfor %}</select>
+    <label>Observaciones</label><textarea name="observaciones">{{ orden.observaciones }}</textarea>
+    <button type="submit">Guardar borrador</button>
+  </form>
+  {% else %}<p>Proveedor: {{ orden.proveedor|default:"Sin asignar" }}</p>{% endif %}
+  <div class="table-responsive"><table><thead><tr><th>Materia prima</th><th>Origen</th><th>Unidad base</th><th>Necesidad</th><th>Disponible</th><th>Sugerido base</th><th>Unidad compra</th><th>Por empaque</th><th>Empaques sugeridos</th><th>Cantidad final</th><th>Precio referencia</th><th>Subtotal</th><th>Acciones</th></tr></thead><tbody>
+    {% for linea in lineas %}<tr>
+      <td>{{ linea.descripcion }}</td><td>{{ linea.origen }}</td><td>{{ linea.producto.unidad_medida|default:"—" }}</td>
+      <td>{{ linea.necesidad_base }}</td><td>{{ linea.disponible_base }}</td><td>{{ linea.sugerido_base }}</td>
+      <td>{{ linea.producto.unidad_compra|default:"—" }}</td><td>{{ linea.cantidad_por_empaque }}</td><td>{{ linea.empaques_sugeridos }}</td>
+      <td>{% if orden.estado == "BORRADOR" %}<form method="post" action="{% url 'compras:inabie_orden_linea_accion' orden.pk linea.pk 'guardar' %}">{% csrf_token %}<input type="number" name="cantidad" min="0" step="0.0001" value="{{ linea.cantidad }}"><button type="submit">Guardar</button></form>{% else %}{{ linea.cantidad }}{% endif %}</td>
+      <td>{{ linea.precio_unitario }}</td><td>{{ linea.total }}</td>
+      <td>{% if orden.estado == "BORRADOR" %}<form method="post" action="{% url 'compras:inabie_orden_linea_accion' orden.pk linea.pk 'eliminar' %}">{% csrf_token %}<button type="submit">Eliminar</button></form>{% endif %}</td>
+    </tr><tr><td colspan="13"><details><summary>Ver cálculo de {{ linea.descripcion }}</summary><p>Necesidad {{ linea.necesidad_base }}; disponible {{ linea.disponible_base }}; sugerido {{ linea.sugerido_base }}.</p><ul>{% for paso in linea.traza %}<li>{{ paso.fecha }} · centro {{ paso.centro_id }} · {{ paso.matricula }} raciones ({{ paso.tipo_matricula }}) · {{ paso.producto }} · receta {{ paso.receta_id }} · factor {{ paso.factor }} · {{ paso.cantidad }} {{ linea.producto.unidad_medida }}</li>{% endfor %}</ul></details></td></tr>
+    {% empty %}<tr><td colspan="13">No hay líneas.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p><strong>Total estimado: {{ orden.total }}</strong></p>
+  {% if orden.estado == "BORRADOR" %}
+  <form method="post" action="{% url 'compras:inabie_orden_accion' orden.pk 'agregar' %}" class="ds-card">{% csrf_token %}<h2>Agregar producto manual</h2><select name="producto_id" required>{% for producto in productos %}<option value="{{ producto.pk }}">{{ producto.nombre }}</option>{% endfor %}</select><input type="number" name="cantidad" min="0" step="0.0001" required><button type="submit">Agregar</button></form>
+  <form method="post" action="{% url 'compras:inabie_orden_accion' orden.pk 'presentar' %}">{% csrf_token %}<button type="submit">Enviar a aprobación</button></form>
+  <form method="post" action="{% url 'compras:inabie_orden_accion' orden.pk 'cancelar' %}">{% csrf_token %}<button type="submit">Cancelar borrador</button></form>
+  {% endif %}
+</section>
+{% endblock %}

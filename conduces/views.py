@@ -525,6 +525,15 @@ def descargar_plantilla_menu(request):
 # GESTIÓN DE CENTROS
 # =====================================================
 
+def _matricula_opcional(post, campo):
+    texto = post.get(campo, "").strip()
+    if not texto:
+        return None
+    valor = int(texto)
+    if valor < 0:
+        raise ValueError("La matrícula no puede ser negativa.")
+    return valor
+
 @login_required(login_url="login_usuario")
 @modulo_requerido("modulo_centros")
 def pantalla_carga_centros(request):
@@ -562,6 +571,12 @@ def crear_centro(request):
     if request.method == "POST":
         codigo = request.POST.get("codigo", "").strip()
         nombre = request.POST.get("nombre", "").strip()
+        try:
+            matricula_regular = _matricula_opcional(request.POST, "matricula_lunes_viernes")
+            matricula_fin_semana = _matricula_opcional(request.POST, "matricula_fin_semana")
+        except ValueError:
+            messages.error(request, "Las matrículas deben ser números enteros no negativos.")
+            return redirect("carga_centros")
 
         if not codigo or not nombre:
             messages.error(request, "El código y el nombre del centro son obligatorios.")
@@ -582,6 +597,8 @@ def crear_centro(request):
             provincia=request.POST.get("provincia", "").strip(),
             regional_distrito=request.POST.get("regional_distrito", "").strip(),
             matricula=int(request.POST.get("matricula") or 0),
+            matricula_lunes_viernes=matricula_regular,
+            matricula_fin_semana=matricula_fin_semana,
             latitud=request.POST.get("latitud", "").strip().replace(",", ".") or None,
             longitud=request.POST.get("longitud", "").strip().replace(",", ".") or None,
             orden_carga=CentroEducativo.objects.filter(empresa=empresa).count() + 1,
@@ -599,6 +616,12 @@ def editar_centro(request, centro_id):
     centro = get_object_or_404(CentroEducativo, id=centro_id, empresa=empresa)
 
     if request.method == "POST":
+        try:
+            matricula_regular = _matricula_opcional(request.POST, "matricula_lunes_viernes")
+            matricula_fin_semana = _matricula_opcional(request.POST, "matricula_fin_semana")
+        except ValueError:
+            messages.error(request, "Las matrículas deben ser números enteros no negativos.")
+            return redirect("editar_centro", centro_id=centro.pk)
         centro.codigo = request.POST.get("codigo", "").strip()
         centro.nombre = request.POST.get("nombre", "").strip()
         centro.director = request.POST.get("director", "").strip()
@@ -607,6 +630,8 @@ def editar_centro(request, centro_id):
         centro.provincia = request.POST.get("provincia", "").strip()
         centro.regional_distrito = request.POST.get("regional_distrito", "").strip()
         centro.matricula = int(request.POST.get("matricula") or 0)
+        centro.matricula_lunes_viernes = matricula_regular
+        centro.matricula_fin_semana = matricula_fin_semana
         centro.latitud = request.POST.get("latitud", "").strip().replace(",", ".") or None
         centro.longitud = request.POST.get("longitud", "").strip().replace(",", ".") or None
         centro.save()

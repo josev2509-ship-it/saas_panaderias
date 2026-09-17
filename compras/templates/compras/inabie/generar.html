@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="ds-page">
+  <h1>Generar orden de compra INABIE</h1>
+  <p>Se calculará desde la programación escolar confirmada. La orden quedará en borrador y no moverá inventario.</p>
+  <form method="post" class="ds-card">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn btn-primary" type="submit">Generar orden de compra</button>
+  </form>
+</section>
+{% endblock %}

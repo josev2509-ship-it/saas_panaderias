@@ -14,6 +14,7 @@
   <article class="ds-card"><strong>{{ revision_pendiente }}</strong><span>Revisión pendiente</span></article>
 </div>
 <div class="ds-actions"><a class="btn btn-primary" href="{% url 'compras:lista' %}">Ver proveedores</a>{% if perms.compras.add_proveedor %}<a class="btn btn-secondary" href="{% url 'compras:crear' %}">Nuevo proveedor</a>{% endif %}</div>
+{% if perms.compras.add_ordencompraenterprise %}<div class="ds-actions"><a class="btn btn-primary" href="{% url 'compras:inabie_orden_generar' %}">Generar orden de compra INABIE</a></div>{% endif %}
 <div class="ds-grid ds-grid--2">
 <section class="ds-card"><h2>Por categoría</h2>{% for item in por_categoria %}<p>{{ item.categoria__nombre|default:"Sin categoría" }} <strong>{{ item.total }}</strong></p>{% empty %}{% include "components/empty_state.html" with title="Sin datos" %}{% endfor %}</section>
 <section class="ds-card"><h2>Por riesgo</h2>{% for item in por_riesgo %}<p>{% include "components/status_badge.html" with value=item.nivel_riesgo label=item.nivel_riesgo %} <strong>{{ item.total }}</strong></p>{% empty %}{% include "components/empty_state.html" with title="Sin datos" %}{% endfor %}</section>

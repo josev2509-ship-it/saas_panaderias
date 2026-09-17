@@ -96,6 +96,8 @@ class CentroEducativo(models.Model):
     provincia = models.CharField(max_length=100, blank=True, null=True)
     regional_distrito = models.CharField(max_length=100, blank=True, null=True)
     matricula = models.IntegerField(default=0)
+    matricula_lunes_viernes = models.PositiveIntegerField(null=True, blank=True)
+    matricula_fin_semana = models.PositiveIntegerField(null=True, blank=True)
     orden_carga = models.PositiveIntegerField(default=0)
 
     latitud = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
@@ -106,6 +108,13 @@ class CentroEducativo(models.Model):
 
     def __str__(self):
         return f"{self.codigo} - {self.nombre}"
+
+    def obtener_matricula_para_fecha(self, fecha, *, con_origen=False):
+        valor = self.matricula_fin_semana if fecha.weekday() >= 5 else self.matricula_lunes_viernes
+        origen = "fin_semana" if fecha.weekday() >= 5 else "regular"
+        if valor is None:
+            valor, origen = self.matricula, "fallback"
+        return (valor, origen) if con_origen else valor
 
 
 # ==========================

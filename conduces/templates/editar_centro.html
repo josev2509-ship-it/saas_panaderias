@@ -41,9 +41,11 @@
             </div>
 
             <div>
-                <label>Matrícula</label>
+                <label>Matrícula general (respaldo)</label>
                 <input type="number" name="matricula" value="{{ centro.matricula }}" min="0">
             </div>
+            <div><label>Matrícula lunes a viernes</label><input type="number" name="matricula_lunes_viernes" value="{{ centro.matricula_lunes_viernes|default_if_none:'' }}" min="0"></div>
+            <div><label>Matrícula sábado y domingo</label><input type="number" name="matricula_fin_semana" value="{{ centro.matricula_fin_semana|default_if_none:'' }}" min="0"></div>
 
             <div>
                 <label>Dirección</label>

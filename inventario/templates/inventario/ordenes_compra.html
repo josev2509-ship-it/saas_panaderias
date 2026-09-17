@@ -13,6 +13,9 @@
         </div>
 
         <div class="form-actions">
+            {% if perms.compras.add_ordencompraenterprise %}
+            <a href="{% url 'compras:inabie_orden_generar' %}" class="btn">Generar orden de compra INABIE</a>
+            {% endif %}
             <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">
                 Volver
             </a>
