@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from catalogos.models import MonedaEmpresa
 from compras.models import DetalleOrdenCompraEnterprise, OrdenCompraEnterprise, Proveedor
-from conduces.models import Empresa
+from conduces.models import Empresa, PerfilUsuario
 from core.application.numbering import obtener_siguiente_numero
 from inventario.models import ProductoInventario
 from inventario.proyeccion_menu_escolar import proyectar_necesidades_menu_escolar
@@ -20,8 +20,20 @@ PRECISION = Decimal("0.0001")
 CENTAVO = Decimal("0.01")
 
 
+def usuario_puede_operar_inabie(usuario, permiso):
+    if not usuario:
+        return False
+    if usuario.has_perm(f'compras.{permiso}'):
+        return True
+    return PerfilUsuario.objects.filter(
+        user=usuario,
+        rol='admin_empresa',
+        activo=True,
+    ).exists()
+
+
 def _exigir_permiso(context, permiso):
-    if not context.usuario or not context.usuario.has_perm(f"compras.{permiso}"):
+    if not usuario_puede_operar_inabie(context.usuario, permiso):
         raise PermissionDenied
 
 

@@ -13,7 +13,7 @@ from core.application.operation_context import OperationContext
 from inventario.models import ProductoInventario
 from .application.inabie_orders import (
     agregar_linea_inabie, editar_borrador_inabie, editar_linea_inabie,
-    eliminar_linea_inabie, generar_borrador_inabie,
+    eliminar_linea_inabie, generar_borrador_inabie, usuario_puede_operar_inabie,
 )
 from .application.p2p import transicionar_orden
 from .models import OrdenCompraEnterprise, Proveedor
@@ -39,7 +39,7 @@ def _context(request):
 
 
 def _permiso(request, codigo):
-    if not request.user.has_perm(f"compras.{codigo}"):
+    if not usuario_puede_operar_inabie(request.user, codigo):
         raise PermissionDenied
 
 

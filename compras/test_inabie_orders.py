@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from catalogos.models import Moneda, MonedaEmpresa
 from conduces.models import (AsignacionProgramaCentro, CalendarioEscolar,
-    CentroEducativo, DiaCalendarioEscolar, Empresa, ProgramaMenu,
+    CentroEducativo, DiaCalendarioEscolar, Empresa, EmpresaSaaS, PerfilUsuario, ProgramaMenu,
     ProgramacionMenuEscolar, VersionProgramaMenu)
 from core.application.operation_context import OperationContext
 from inventario.models import (DetalleRecetaProduccion, MovimientoInventario,
@@ -185,3 +185,49 @@ class InabieOrderDraftTests(TestCase):
         self.assertEqual(detalle.status_code, 200)
         self.assertContains(detalle, "Disponible")
         self.assertContains(detalle, "Ver cálculo")
+
+
+    def test_admin_empresa_sin_permisos_django_puede_generar_inabie(self):
+        self.fila(self.desde)
+        saas = EmpresaSaaS.objects.create(
+            nombre="Panaderia A SaaS", rnc="101", correo="saas-admin@test.local",
+            activa=True, requiere_pago=False,
+        )
+        PerfilUsuario.objects.create(
+            user=self.usuario, empresa=saas, rol="operaciones",
+            correo_validado=True, activo=True,
+        )
+        admin = get_user_model().objects.create_user("admin-inabie", password="x")
+        PerfilUsuario.objects.create(
+            user=admin, empresa=saas, rol="admin_empresa",
+            correo_validado=True, activo=True,
+        )
+        self.assertFalse(admin.has_perm("compras.add_ordencompraenterprise"))
+        self.client.force_login(admin)
+        respuesta = self.client.post(
+            reverse("compras:inabie_orden_generar"),
+            {"desde": str(self.desde), "hasta": str(self.desde)},
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(
+            OrdenCompraEnterprise.objects.filter(empresa=self.empresa, origen="INABIE").count(),
+            1,
+        )
+
+    def test_usuario_consulta_sin_permiso_no_puede_operar_inabie(self):
+        saas = EmpresaSaaS.objects.create(
+            nombre="Panaderia Consulta SaaS", rnc="102", correo="saas-consulta@test.local",
+            activa=True, requiere_pago=False,
+        )
+        PerfilUsuario.objects.create(
+            user=self.usuario, empresa=saas, rol="operaciones",
+            correo_validado=True, activo=True,
+        )
+        consulta = get_user_model().objects.create_user("consulta-inabie", password="x")
+        PerfilUsuario.objects.create(
+            user=consulta, empresa=saas, rol="consulta",
+            correo_validado=True, activo=True,
+        )
+        self.client.force_login(consulta)
+        respuesta = self.client.get(reverse("compras:inabie_orden_generar"))
+        self.assertEqual(respuesta.status_code, 403)
