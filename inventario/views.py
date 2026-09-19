@@ -616,6 +616,7 @@ def descargar_plantilla_inventario(request):
         "afecta_produccion", "unidad_medida", "unidad_compra",
         "cantidad_por_empaque", "stock_actual", "stock_minimo",
         "precio_unitario_compra", "porcentaje_itbis", "proveedor", "activo",
+        "origen_catalogo", "requiere_revision",
     ]
     ws.append(encabezados)
 
@@ -628,6 +629,7 @@ def descargar_plantilla_inventario(request):
                 producto.cantidad_por_empaque, producto.stock_actual,
                 producto.stock_minimo, producto.precio_unitario_compra,
                 producto.porcentaje_itbis, producto.proveedor or "", bool(producto.activo),
+                producto.origen_catalogo, bool(producto.requiere_revision),
             ])
 
     nombre_archivo = "plantilla_inventario.xlsx" if vacia else "catalogo_inventario.xlsx"
@@ -671,6 +673,8 @@ def cargar_inventario_excel(request):
 
     creados = 0
     actualizados = 0
+    from .recipe_matching import normalizar_nombre
+    from .recipe_catalog import evaluar_ingrediente
 
     for row in filas[1:]:
         nombre = str(valor(row, "nombre", "") or "").strip()
@@ -678,17 +682,33 @@ def cargar_inventario_excel(request):
         if not nombre:
             continue
 
+        tipo = str(valor(row, "tipo", "materia_prima") or "materia_prima").strip().lower()
+        unidad = str(valor(row, "unidad_medida", "lb") or "lb").strip().lower()
         producto = None
         if codigo:
             producto = ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).first()
         if producto is None:
-            producto = ProductoInventario.objects.filter(empresa=empresa, nombre__iexact=nombre).first()
+            iguales = [p for p in ProductoInventario.objects.filter(empresa=empresa, tipo=tipo)
+                       if normalizar_nombre(p.nombre) == normalizar_nombre(nombre)]
+            if len(iguales) > 1:
+                messages.warning(request, f"{nombre}: múltiples productos con nombre equivalente; revise esta fila.")
+                continue
+            if iguales:
+                if iguales[0].unidad_medida != unidad:
+                    messages.warning(request, f"{nombre}: unidad incompatible con el producto existente; revise esta fila.")
+                    continue
+                producto = iguales[0]
+                if codigo and producto.codigo and producto.codigo != codigo:
+                    messages.warning(request, f"{nombre}: el código no coincide con el producto existente; revise esta fila.")
+                    continue
+            elif tipo == "materia_prima" and evaluar_ingrediente(empresa=empresa, nombre=nombre, unidad=unidad).estado == "REVISAR":
+                messages.warning(request, f"{nombre}: hay candidatos similares; revise esta fila antes de crear otro producto.")
+                continue
 
         creado = producto is None
         if creado:
-            producto = ProductoInventario(empresa=empresa, stock_actual=Decimal("0"))
+            producto = ProductoInventario(empresa=empresa, stock_actual=Decimal("0"), origen_catalogo="EXCEL")
 
-        tipo = str(valor(row, "tipo", "materia_prima") or "materia_prima").strip().lower()
         clasificacion = str(valor(row, "clasificacion_operativa", "") or "").strip().lower()
         if not clasificacion:
             clasificacion = "empaque" if tipo == "empaque" else "materia_prima" if tipo == "materia_prima" else "otro"
@@ -698,7 +718,7 @@ def cargar_inventario_excel(request):
         producto.tipo = tipo
         producto.clasificacion_operativa = clasificacion
         producto.afecta_produccion = _valor_booleano(valor(row, "afecta_produccion", True), True)
-        producto.unidad_medida = str(valor(row, "unidad_medida", "lb") or "lb").strip().lower()
+        producto.unidad_medida = unidad
         producto.unidad_compra = str(valor(row, "unidad_compra", "") or "").strip()
         producto.cantidad_por_empaque = convertir_decimal(valor(row, "cantidad_por_empaque", 1), "1")
         producto.stock_minimo = convertir_decimal(valor(row, "stock_minimo", 0), "0")
@@ -706,14 +726,17 @@ def cargar_inventario_excel(request):
         producto.porcentaje_itbis = convertir_itbis(valor(row, "porcentaje_itbis", 0))
         producto.proveedor = str(valor(row, "proveedor", "") or "").strip()
         producto.activo = _valor_booleano(valor(row, "activo", True), True)
+        if producto.requiere_revision and producto.configuracion_compra_completa:
+            producto.requiere_revision = False
 
         if producto.cantidad_por_empaque <= 0:
             messages.warning(request, f"{nombre}: cantidad por empaque inválida; se dejó en 1.")
             producto.cantidad_por_empaque = Decimal("1")
 
         producto.save()
-        saldo_objetivo = convertir_decimal(valor(row, "stock_actual", 0), "0")
-        diferencia = saldo_objetivo - Decimal(producto.stock_actual or 0)
+        saldo_celda = valor(row, "stock_actual")
+        saldo_objetivo = convertir_decimal(saldo_celda, "0") if saldo_celda is not None and saldo_celda != "" else None
+        diferencia = saldo_objetivo - Decimal(producto.stock_actual or 0) if saldo_objetivo is not None else Decimal("0")
         if diferencia:
             _movimiento_desde_vista(
                 request, empresa=empresa, producto=producto,
@@ -2013,7 +2036,19 @@ def editar_producto_inventario(request, producto_id):
     )
 
     if request.method == "POST":
-        producto.codigo = request.POST.get("codigo", "").strip()
+        codigo_nuevo = request.POST.get("codigo", "").strip() or None
+        unidad_nueva = request.POST.get("unidad_medida")
+        tipo_nuevo = request.POST.get("tipo")
+        if codigo_nuevo and ProductoInventario.objects.filter(
+            empresa=empresa, codigo=codigo_nuevo).exclude(pk=producto.pk).exists():
+            messages.error(request, "Ya existe otro producto con ese código en la empresa.")
+            return redirect("inventario:editar_producto_inventario", producto_id=producto.pk)
+        if producto.uso_en_recetas_produccion.exists() and (
+            unidad_nueva != producto.unidad_medida or tipo_nuevo != producto.tipo
+        ):
+            messages.error(request, "No cambie tipo ni unidad base de un ingrediente usado en recetas; requiere revisión de las fórmulas.")
+            return redirect("inventario:editar_producto_inventario", producto_id=producto.pk)
+        producto.codigo = codigo_nuevo
         producto.nombre = request.POST.get("nombre", "").strip()
         producto.tipo = request.POST.get("tipo")
         producto.unidad_medida = request.POST.get("unidad_medida")
@@ -2031,6 +2066,11 @@ def editar_producto_inventario(request, producto_id):
         producto.afecta_produccion = (
     request.POST.get("afecta_produccion") == "on"
 )
+        if not producto.nombre or producto.cantidad_por_empaque <= 0 or producto.stock_minimo < 0 or producto.precio_unitario_compra < 0:
+            messages.error(request, "Revise nombre, empaque, stock mínimo y precio del producto.")
+            return redirect("inventario:editar_producto_inventario", producto_id=producto.pk)
+        if producto.requiere_revision and producto.configuracion_compra_completa:
+            producto.requiere_revision = False
         producto.save()
 
         messages.success(request, "Producto actualizado correctamente.")

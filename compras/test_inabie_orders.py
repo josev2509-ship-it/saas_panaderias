@@ -55,6 +55,7 @@ class InabieOrderDraftTests(TestCase):
             empresa=self.empresa, nombre="Pan", tipo="producto_terminado", unidad_medida="unidad")
         self.harina = ProductoInventario.objects.create(
             empresa=self.empresa, nombre="Harina", tipo="materia_prima", unidad_medida="lb",
+            unidad_compra="saco",
             stock_actual=Decimal("10"), cantidad_por_empaque=Decimal("25"),
             precio_unitario_compra=Decimal("100"))
         receta = RecetaProduccion.objects.create(
@@ -144,6 +145,22 @@ class InabieOrderDraftTests(TestCase):
         self.assertEqual(linea.cantidad, 0)
         editar_borrador_inabie(context=self.ctx, orden_id=orden.pk, proveedor_id=self.proveedor.pk)
         with self.assertRaises(ValidationError):
+            transicionar_orden(context=self.ctx, orden_id=orden.pk, nuevo="PENDIENTE_APROBACION")
+
+    def test_provisional_no_inventa_empaque_y_no_puede_presentarse(self):
+        self.harina.unidad_compra = ""
+        self.harina.requiere_revision = True
+        self.harina.save(update_fields=["unidad_compra", "requiere_revision"])
+        self.fila(self.desde)
+        orden, _ = self.generar()
+        linea = orden.detalles.get()
+        self.assertGreater(linea.necesidad_base, 0)
+        self.assertEqual(linea.empaques_sugeridos, 0)
+        self.assertEqual(linea.cantidad, 0)
+        self.assertEqual(linea.precio_unitario, 0)
+        editar_borrador_inabie(context=self.ctx, orden_id=orden.pk, proveedor_id=self.proveedor.pk)
+        editar_linea_inabie(context=self.ctx, orden_id=orden.pk, linea_id=linea.pk, cantidad=3)
+        with self.assertRaisesMessage(ValidationError, "productos pendientes de compra"):
             transicionar_orden(context=self.ctx, orden_id=orden.pk, nuevo="PENDIENTE_APROBACION")
 
     def test_aprobacion_y_recepcion_rechazan_proveedor_ausente(self):

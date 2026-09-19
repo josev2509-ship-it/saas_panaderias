@@ -32,6 +32,7 @@ class NecesidadProyectada:
     disponible: Decimal = Decimal("0")
     neta: Decimal = Decimal("0")
     empaques: int = 0
+    compra_pendiente: bool = False
     trazas: list = field(default_factory=list)
 
 
@@ -138,6 +139,10 @@ def proyectar_necesidades_menu_escolar(*, empresa, desde, hasta):
             context=SimpleNamespace(empresa=empresa), producto=producto,
         )["disponible"]
         necesidad.neta = max(Decimal("0"), necesidad.bruta - necesidad.disponible)
+        if not producto.listo_para_compras:
+            necesidad.compra_pendiente = True
+            resultado.advertencias.append(f"Producto pendiente de configuración de compra: {producto.nombre}")
+            continue
         empaque = Decimal(producto.cantidad_por_empaque or 0)
         if empaque <= 0:
             resultado.advertencias.append(f"Empaque inválido para {producto.nombre}")

@@ -102,7 +102,7 @@ def generar_borrador_inabie(*, context, desde, hasta):
     for necesidad in proyeccion.necesidades.values():
         producto = necesidad.ingrediente
         cantidad = Decimal(necesidad.empaques)
-        precio = Decimal(producto.precio_unitario_compra or 0)
+        precio = Decimal(producto.precio_unitario_compra or 0) if not necesidad.compra_pendiente else Decimal("0")
         DetalleOrdenCompraEnterprise.objects.create(
             orden=orden, producto=producto, descripcion=producto.nombre,
             cantidad=cantidad, precio_unitario=precio,

@@ -161,6 +161,11 @@ class ProductoInventario(models.Model):
         null=True
     )
 
+    origen_catalogo = models.CharField(max_length=12, default="MANUAL", choices=(
+        ("MANUAL", "Manual"), ("EXCEL", "Excel"), ("RECETA", "Receta"),
+    ))
+    requiere_revision = models.BooleanField(default=False)
+
     activo = models.BooleanField(default=True)
 
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -172,6 +177,19 @@ class ProductoInventario(models.Model):
 
     def __str__(self):
         return f"{self.codigo or ''} - {self.nombre}"
+
+    @property
+    def configuracion_compra_completa(self):
+        return bool(
+            self.activo and self.nombre.strip() and self.unidad_medida
+            and (self.unidad_compra or "").strip()
+            and self.cantidad_por_empaque and self.cantidad_por_empaque > 0
+            and self.precio_unitario_compra is not None and self.precio_unitario_compra >= 0
+        )
+
+    @property
+    def listo_para_compras(self):
+        return self.configuracion_compra_completa and not self.requiere_revision
 
     @property
     def costo_unitario(self):

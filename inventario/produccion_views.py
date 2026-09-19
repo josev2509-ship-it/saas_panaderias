@@ -29,7 +29,8 @@ from .produccion_forms import (
     RecetaProduccionForm,
 )
 from .recipe_document_parser import RecipeDocumentParser
-from .recipe_matching import encontrar_ingrediente, encontrar_producto_terminado, encontrar_producto_terminado_match
+from .recipe_matching import encontrar_producto_terminado, encontrar_producto_terminado_match
+from .recipe_catalog import evaluar_ingrediente, resolver_ingrediente_aprobado
 from .produccion_services import (
     calcular_necesidades, duplicar_receta, generar_ordenes_desde_plan,
     generar_plan_desde_pedidos, recalcular_necesidades_plan, transicionar_orden,
@@ -133,9 +134,9 @@ def _analizar_documento_receta(request, empresa):
         ).first() if producto_match.producto_id else None
         detalles_lote = []
         for extraido in resultado_lote.ingredientes:
-            match = encontrar_ingrediente(empresa=empresa, nombre=extraido.nombre)
+            match = evaluar_ingrediente(empresa=empresa, nombre=extraido.nombre, unidad=extraido.unidad)
             detalles_lote.append({"extraido": extraido, "match": match})
-            if match.estado not in {"EXACTA_NORMALIZADA", "ALTA_CONFIANZA"} and resultado_lote.estado == "LISTA":
+            if match.estado not in {"EXACTA_NORMALIZADA", "ALTA_CONFIANZA", "PROVISIONAL"} and resultado_lote.estado == "LISTA":
                 resultado_lote.estado = "REVISAR"
         if not producto_lote and resultado_lote.estado == "LISTA":
             resultado_lote.estado = "REVISAR"
@@ -148,7 +149,8 @@ def _analizar_documento_receta(request, empresa):
         "rendimiento_base": str(item["resultado"].rendimiento_base or ""),
         "unidad_rendimiento": item["resultado"].unidad_rendimiento,
         "producto_id": item["producto"].pk if item["producto"] else None,
-        "ingredientes": [{"producto_id": d["match"].producto_id, "cantidad": str(d["extraido"].cantidad),
+        "ingredientes": [{"producto_id": d["match"].producto_id, "nombre": d["extraido"].nombre,
+                           "cantidad": str(d["extraido"].cantidad),
                            "unidad": d["extraido"].unidad, "orden": posicion}
                           for posicion, d in enumerate(item["analisis_ingredientes"], 1)],
     } for item in formulas]
@@ -175,11 +177,7 @@ def _aprobar_lote_recetas(request, empresa, todas=False):
         producto = ProductoInventario.objects.filter(
             pk=datos.get("producto_id"), empresa=empresa, activo=True, tipo="producto_terminado"
         ).first()
-        ingredientes = list(ProductoInventario.objects.filter(
-            pk__in=[i["producto_id"] for i in datos["ingredientes"]], empresa=empresa, activo=True
-        ).exclude(tipo="producto_terminado"))
-        mapa = {p.pk: p for p in ingredientes}
-        if not producto or len(mapa) != len(datos["ingredientes"]):
+        if not producto:
             errores.append(f"{datos.get('nombre')}: asociaciones inválidas."); continue
         existente = RecetaProduccion.objects.filter(empresa=empresa).filter(
             Q(codigo=datos["codigo"]) | Q(producto_terminado=producto, version=datos["version"])
@@ -188,6 +186,26 @@ def _aprobar_lote_recetas(request, empresa, todas=False):
             creadas.append(existente); continue
         try:
             with transaction.atomic():
+                from conduces.models import Empresa
+                Empresa.objects.select_for_update().get(pk=empresa.pk)
+                existente = RecetaProduccion.objects.filter(empresa=empresa).filter(
+                    Q(codigo=datos["codigo"]) | Q(producto_terminado=producto, version=datos["version"])
+                ).first()
+                if existente:
+                    creadas.append(existente)
+                    continue
+                materias = []
+                for detalle in datos["ingredientes"]:
+                    if detalle.get("nombre"):
+                        materia = resolver_ingrediente_aprobado(
+                            empresa=empresa, nombre=detalle["nombre"], unidad=detalle["unidad"])
+                    else:
+                        materia = ProductoInventario.objects.filter(
+                            pk=detalle["producto_id"], empresa=empresa, activo=True,
+                            tipo="materia_prima", unidad_medida=detalle["unidad"]).first()
+                        if materia is None:
+                            raise ValidationError("Ingrediente existente no disponible o unidad incompatible.")
+                    materias.append(materia)
                 receta = RecetaProduccion(
                     empresa=empresa, codigo=datos["codigo"], nombre=datos["nombre"], producto_terminado=producto,
                     version=datos["version"], rendimiento_base=datos["rendimiento_base"],
@@ -195,9 +213,9 @@ def _aprobar_lote_recetas(request, empresa, todas=False):
                     fecha_vigencia_desde=timezone.localdate(), creado_por=request.user, actualizado_por=request.user,
                 )
                 receta.full_clean(); receta.save()
-                for detalle in datos["ingredientes"]:
+                for detalle, materia in zip(datos["ingredientes"], materias):
                     ingrediente = DetalleRecetaProduccion(
-                        receta=receta, materia_prima=mapa[detalle["producto_id"]], cantidad=detalle["cantidad"],
+                        receta=receta, materia_prima=materia, cantidad=detalle["cantidad"],
                         unidad_medida=detalle["unidad"], orden=detalle["orden"],
                     )
                     ingrediente.full_clean(); ingrediente.save()

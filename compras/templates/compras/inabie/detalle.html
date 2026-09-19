@@ -17,7 +17,7 @@
     {% for linea in lineas %}<tr>
       <td>{{ linea.descripcion }}</td><td>{{ linea.origen }}</td><td>{{ linea.producto.unidad_medida|default:"—" }}</td>
       <td>{{ linea.necesidad_base }}</td><td>{{ linea.disponible_base }}</td><td>{{ linea.sugerido_base }}</td>
-      <td>{{ linea.producto.unidad_compra|default:"—" }}</td><td>{{ linea.cantidad_por_empaque }}</td><td>{{ linea.empaques_sugeridos }}</td>
+      <td>{% if linea.producto.listo_para_compras %}{{ linea.producto.unidad_compra }}{% else %}PENDIENTE{% endif %}</td><td>{% if linea.producto.listo_para_compras %}{{ linea.cantidad_por_empaque }}{% else %}—{% endif %}</td><td>{{ linea.empaques_sugeridos }}</td>
       <td>{% if orden.estado == "BORRADOR" %}<form method="post" action="{% url 'compras:inabie_orden_linea_accion' orden.pk linea.pk 'guardar' %}">{% csrf_token %}<input type="number" name="cantidad" min="0" step="0.0001" value="{{ linea.cantidad }}"><button type="submit">Guardar</button></form>{% else %}{{ linea.cantidad }}{% endif %}</td>
       <td>{{ linea.precio_unitario }}</td><td>{{ linea.total }}</td>
       <td>{% if orden.estado == "BORRADOR" %}<form method="post" action="{% url 'compras:inabie_orden_linea_accion' orden.pk linea.pk 'eliminar' %}">{% csrf_token %}<button type="submit">Eliminar</button></form>{% endif %}</td>

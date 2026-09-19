@@ -39,7 +39,8 @@ class ProyeccionMenuEscolarTests(TestCase):
             empresa=self.empresa, nombre="Pan", tipo="producto_terminado", unidad_medida="unidad")
         self.harina = ProductoInventario.objects.create(
             empresa=self.empresa, nombre="Harina", tipo="materia_prima",
-            unidad_medida="lb", cantidad_por_empaque=Decimal("25"), stock_actual=Decimal("10"))
+            unidad_medida="lb", unidad_compra="saco",
+            cantidad_por_empaque=Decimal("25"), stock_actual=Decimal("10"))
         self.receta = RecetaProduccion.objects.create(
             empresa=self.empresa, codigo="R", nombre="Pan", producto_terminado=self.pan,
             rendimiento_base=Decimal("100"), unidad_rendimiento="unidad",
@@ -78,6 +79,18 @@ class ProyeccionMenuEscolarTests(TestCase):
         self.assertEqual(resultado.raciones, Decimal("950"))
         trazas = resultado.necesidades[self.harina.pk].trazas
         self.assertEqual([(t.matricula, t.tipo_matricula) for t in trazas], [(700, "regular"), (250, "fin_semana")])
+
+    def test_producto_provisional_muestra_necesidad_sin_inventar_empaques(self):
+        self.harina.unidad_compra = ""
+        self.harina.requiere_revision = True
+        self.harina.save(update_fields=["unidad_compra", "requiere_revision"])
+        self.fila(self.inicio)
+        resultado = self.proyectar()
+        necesidad = resultado.necesidades[self.harina.pk]
+        self.assertGreater(necesidad.neta, 0)
+        self.assertEqual(necesidad.empaques, 0)
+        self.assertTrue(necesidad.compra_pendiente)
+        self.assertTrue(any("pendiente de configuración de compra" in aviso for aviso in resultado.advertencias))
 
     def test_b_fallback_compatible(self):
         self.centro.matricula_lunes_viernes = None

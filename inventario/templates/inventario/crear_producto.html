@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Nuevo producto{% endblock %}
 {% block content %}
+<style>.inventory-toggle{display:inline-flex;align-items:center;gap:.55rem;margin:.35rem 1.2rem .35rem 0;cursor:pointer}.inventory-toggle input[type=checkbox]{width:1.1rem;min-width:1.1rem;height:1.1rem;margin:0;flex:none}@media(max-width:600px){.inventory-toggle{display:flex;margin-right:0}}</style>
 <div class="app-page">
   <div class="topbar"><div><h1>Nuevo producto</h1><p>Crea una materia prima, producto terminado, empaque u otro artículo de inventario.</p></div><div class="form-actions"><a href="{% url 'inventario:productos' %}" class="btn btn-light">Volver</a></div></div>
   {% if messages %}<div class="messages">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
@@ -19,8 +20,8 @@
       <div><label>ITBIS %</label><input type="number" min="0" step="0.01" name="porcentaje_itbis" value="{{ request.POST.porcentaje_itbis|default:'0' }}"></div>
       <div><label>Proveedor</label><input type="text" name="proveedor" value="{{ request.POST.proveedor|default:'' }}"></div>
     </div><br>
-    <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="afecta_produccion" {% if not request.POST or request.POST.afecta_produccion %}checked{% endif %}>Afecta proyección de producción</label>
-    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;"><input type="checkbox" name="activo" {% if not request.POST or request.POST.activo %}checked{% endif %}>Producto activo</label>
+    <label class="inventory-toggle"><input type="checkbox" name="afecta_produccion" {% if not request.POST or request.POST.afecta_produccion %}checked{% endif %}>Afecta proyección de producción</label>
+    <label class="inventory-toggle"><input type="checkbox" name="activo" {% if not request.POST or request.POST.activo %}checked{% endif %}>Producto activo</label>
     <div class="form-actions" style="margin-top:18px;"><button type="submit" class="btn btn-primary">Crear producto</button><a href="{% url 'inventario:productos' %}" class="btn btn-secondary">Cancelar</a></div>
   </form></section>
 </div>

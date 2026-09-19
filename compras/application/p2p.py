@@ -94,6 +94,8 @@ def transicionar_orden(*,context,orden_id,nuevo,comentario=""):
     o=OrdenCompraEnterprise.objects.select_for_update().get(pk=orden_id,empresa=context.empresa);allowed={"BORRADOR":{"PENDIENTE_APROBACION","CANCELADA"},"PENDIENTE_APROBACION":{"APROBADA","BORRADOR","CANCELADA"},"APROBADA":{"ENVIADA","CANCELADA"},"ENVIADA":{"ACEPTADA","CANCELADA"},"ACEPTADA":{"PARCIALMENTE_RECIBIDA","RECIBIDA","CANCELADA"},"PARCIALMENTE_RECIBIDA":{"RECIBIDA","CANCELADA"},"RECIBIDA":{"PARCIALMENTE_FACTURADA","FACTURADA","CERRADA"},"FACTURADA":{"CERRADA"}};
     if nuevo not in allowed.get(o.estado,set()):raise ValidationError("Transición de orden inválida.")
     if o.origen=="INABIE" and nuevo not in {"BORRADOR","CANCELADA"}:
+        if any(linea.producto and (linea.producto.empresa_id != context.empresa.pk or not linea.producto.listo_para_compras) for linea in o.detalles.select_related("producto")):
+            raise ValidationError("Configure los productos pendientes de compra antes de continuar la orden INABIE.")
         if not o.proveedor_id or o.proveedor.empresa_id!=context.empresa.pk or o.proveedor.estado!="ACTIVO" or o.proveedor.bloqueado:
             raise ValidationError("Asigne un proveedor activo antes de continuar la orden INABIE.")
         if not o.moneda_id or o.moneda.empresa_id!=context.empresa.pk or not o.moneda.activa:

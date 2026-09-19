@@ -85,7 +85,7 @@
                     {% for producto in productos %}
                     <tr>
                         <td>{{ producto.codigo|default:"-" }}</td>
-                        <td><strong>{{ producto.nombre }}</strong></td>
+                        <td><strong>{{ producto.nombre }}</strong>{% if producto.origen_catalogo == "RECETA" %}<br><small>Origen: Receta</small>{% endif %}<br>{% if producto.listo_para_compras %}<span class="status-pill status-generado">Lista para compras</span>{% else %}<span class="status-pill status-anulado">Pendiente de completar</span>{% endif %}</td>
                         <td>{{ producto.get_tipo_display }}</td>
                         <td>{{ producto.get_unidad_medida_display }}</td>
                         <td>{{ producto.existencia_formateada }}</td>
