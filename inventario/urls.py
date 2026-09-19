@@ -51,6 +51,7 @@ urlpatterns = [
     # PRODUCTOS / INVENTARIO
     # =====================================================
     path("productos/", views.productos_inventario, name="productos"),
+    path("producto/nuevo/", views.crear_producto_inventario, name="crear_producto_inventario"),
     path("producto/<int:producto_id>/editar/", views.editar_producto_inventario, name="editar_producto_inventario"),
     path("producto/<int:producto_id>/desactivar/", views.desactivar_producto_inventario, name="desactivar_producto_inventario"),
     path("producto/<int:producto_id>/kardex/", views.kardex_producto, name="kardex_producto"),

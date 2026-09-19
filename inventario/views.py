@@ -16,7 +16,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db import models
+from django.db import models, transaction
 from django.http import HttpResponse
 from django.contrib import messages
 from core.application.operation_context import OperationContext
@@ -515,32 +515,124 @@ def productos_inventario(request):
     })
 
 
+def _valor_booleano(valor, defecto=True):
+    if valor is None or valor == "":
+        return defecto
+    return str(valor).strip().lower() not in {
+        "no", "false", "0", "inactivo", "falso", "n", "off"
+    }
+
+
+@login_required
+def crear_producto_inventario(request):
+    empresa = obtener_empresa_usuario(request)
+    if not empresa:
+        messages.error(request, "Tu usuario no tiene una empresa asociada.")
+        return redirect("inicio")
+
+    if request.method == "POST":
+        codigo = request.POST.get("codigo", "").strip() or None
+        nombre = request.POST.get("nombre", "").strip()
+        tipo = request.POST.get("tipo") or "materia_prima"
+        clasificacion = request.POST.get("clasificacion_operativa") or (
+            "empaque" if tipo == "empaque"
+            else "materia_prima" if tipo == "materia_prima"
+            else "otro"
+        )
+        unidad_medida = request.POST.get("unidad_medida") or "lb"
+        cantidad_por_empaque = convertir_decimal(request.POST.get("cantidad_por_empaque"), "1")
+        stock_inicial = convertir_decimal(request.POST.get("stock_inicial"), "0")
+        stock_minimo = convertir_decimal(request.POST.get("stock_minimo"), "0")
+        precio = convertir_decimal(request.POST.get("precio_unitario_compra"), "0")
+
+        errores = []
+        if not nombre:
+            errores.append("El nombre del producto es obligatorio.")
+        if codigo and ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).exists():
+            errores.append("Ya existe un producto con ese código.")
+        if cantidad_por_empaque <= 0:
+            errores.append("La cantidad por empaque debe ser mayor que cero.")
+        if stock_inicial < 0:
+            errores.append("El stock inicial no puede ser negativo.")
+        if stock_minimo < 0:
+            errores.append("El stock mínimo no puede ser negativo.")
+        if precio < 0:
+            errores.append("El precio de compra no puede ser negativo.")
+
+        if errores:
+            for error in errores:
+                messages.error(request, error)
+        else:
+            with transaction.atomic():
+                producto = ProductoInventario.objects.create(
+                    empresa=empresa,
+                    codigo=codigo,
+                    nombre=nombre,
+                    tipo=tipo,
+                    clasificacion_operativa=clasificacion,
+                    afecta_produccion=request.POST.get("afecta_produccion") == "on",
+                    unidad_medida=unidad_medida,
+                    unidad_compra=request.POST.get("unidad_compra", "").strip(),
+                    cantidad_por_empaque=cantidad_por_empaque,
+                    stock_actual=Decimal("0"),
+                    stock_minimo=stock_minimo,
+                    precio_unitario_compra=precio,
+                    porcentaje_itbis=convertir_itbis(request.POST.get("porcentaje_itbis")),
+                    proveedor=request.POST.get("proveedor", "").strip(),
+                    activo=request.POST.get("activo") == "on",
+                )
+                if stock_inicial > 0:
+                    _movimiento_desde_vista(
+                        request,
+                        empresa=empresa,
+                        producto=producto,
+                        tipo="ajuste",
+                        cantidad=stock_inicial,
+                        referencia=f"INICIAL-{producto.codigo or producto.pk}",
+                        observacion="Stock inicial registrado al crear el producto.",
+                    )
+
+            messages.success(request, "Producto creado correctamente.")
+            return redirect("inventario:productos")
+
+    return render(request, "inventario/crear_producto.html", {
+        "titulo": "Nuevo producto",
+        "tipos": ProductoInventario.TIPOS,
+        "unidades": ProductoInventario.UNIDADES_BASE,
+        "clasificaciones": ProductoInventario.CLASIFICACION_OPERATIVA,
+    })
+
+
 @login_required
 def descargar_plantilla_inventario(request):
+    empresa = obtener_empresa_usuario(request)
+    vacia = request.GET.get("vacia") == "1"
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Inventario"
+    encabezados = [
+        "codigo", "nombre", "tipo", "clasificacion_operativa",
+        "afecta_produccion", "unidad_medida", "unidad_compra",
+        "cantidad_por_empaque", "stock_actual", "stock_minimo",
+        "precio_unitario_compra", "porcentaje_itbis", "proveedor", "activo",
+    ]
+    ws.append(encabezados)
 
-    ws.append([
-        "codigo",
-        "nombre",
-        "tipo",
-        "unidad_medida",
-        "unidad_compra",
-        "cantidad_por_empaque",
-        "stock_actual",
-        "stock_minimo",
-        "precio_unitario_compra",
-        "porcentaje_itbis",
-        "proveedor",
-        "activo",
-    ])
+    if empresa and not vacia:
+        for producto in ProductoInventario.objects.filter(empresa=empresa).order_by("tipo", "nombre"):
+            ws.append([
+                producto.codigo or "", producto.nombre, producto.tipo,
+                producto.clasificacion_operativa, bool(producto.afecta_produccion),
+                producto.unidad_medida, producto.unidad_compra or "",
+                producto.cantidad_por_empaque, producto.stock_actual,
+                producto.stock_minimo, producto.precio_unitario_compra,
+                producto.porcentaje_itbis, producto.proveedor or "", bool(producto.activo),
+            ])
 
-    response = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    response["Content-Disposition"] = 'attachment; filename="plantilla_inventario.xlsx"'
-
+    nombre_archivo = "plantilla_inventario.xlsx" if vacia else "catalogo_inventario.xlsx"
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{nombre_archivo}"'
     wb.save(response)
     return response
 
@@ -549,82 +641,94 @@ def descargar_plantilla_inventario(request):
 def cargar_inventario_excel(request):
     empresa = obtener_empresa_usuario(request)
 
-    if request.method == "POST":
-        archivo = request.FILES.get("archivo")
-
-        if not archivo:
-            messages.error(request, "Debe seleccionar un archivo Excel.")
-            return redirect("inventario:productos")
-
-        wb = load_workbook(archivo)
-        ws = wb.active
-
-        creados = 0
-        actualizados = 0
-
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            (
-                codigo,
-                nombre,
-                tipo,
-                unidad_medida,
-                unidad_compra,
-                cantidad_por_empaque,
-                stock_actual,
-                stock_minimo,
-                precio_unitario_compra,
-                porcentaje_itbis,
-                proveedor,
-                activo,
-            ) = row
-
-            if not codigo or not nombre:
-                continue
-
-            activo_valor = True
-
-            if str(activo).strip().lower() in ["no", "false", "0", "inactivo", "falso"]:
-                activo_valor = False
-
-            producto, creado = ProductoInventario.objects.update_or_create(
-                empresa=empresa,
-                codigo=str(codigo).strip(),
-                defaults={
-                    "nombre": str(nombre).strip(),
-                    "tipo": str(tipo or "materia_prima").strip().lower(),
-                    "unidad_medida": str(unidad_medida or "lb").strip().lower(),
-                    "unidad_compra": str(unidad_compra or "").strip(),
-                    "cantidad_por_empaque": convertir_decimal(cantidad_por_empaque, "1"),
-                    "stock_minimo": convertir_decimal(stock_minimo, "0"),
-                    "precio_unitario_compra": convertir_decimal(precio_unitario_compra, "0"),
-                    "porcentaje_itbis": convertir_itbis(porcentaje_itbis),
-                    "proveedor": str(proveedor or "").strip(),
-                    "activo": activo_valor,
-                }
-            )
-            saldo_objetivo = convertir_decimal(stock_actual, "0")
-            diferencia = saldo_objetivo - Decimal(producto.stock_actual or 0)
-            if diferencia:
-                _movimiento_desde_vista(
-                    request, empresa=empresa, producto=producto,
-                    tipo="ajuste" if diferencia > 0 else "salida",
-                    cantidad=abs(diferencia),
-                    referencia=f"IMPORT-{producto.codigo}-{saldo_objetivo}",
-                    observacion="Ajuste autorizado por importacion de inventario.",
-                )
-
-            if creado:
-                creados += 1
-            else:
-                actualizados += 1
-
-        messages.success(
-            request,
-            f"Inventario cargado correctamente. Creados: {creados}. Actualizados: {actualizados}."
-        )
-
+    if request.method != "POST":
         return redirect("inventario:productos")
 
+    archivo = request.FILES.get("archivo")
+    if not archivo:
+        messages.error(request, "Debe seleccionar un archivo Excel.")
+        return redirect("inventario:productos")
+
+    wb = load_workbook(archivo)
+    ws = wb.active
+    filas = list(ws.iter_rows(values_only=True))
+    if not filas:
+        messages.error(request, "El archivo está vacío.")
+        return redirect("inventario:productos")
+
+    encabezados = [str(valor or "").strip().lower() for valor in filas[0]]
+    indice = {nombre: pos for pos, nombre in enumerate(encabezados)}
+    faltantes = sorted({"nombre", "tipo", "unidad_medida"} - set(indice))
+    if faltantes:
+        messages.error(request, "Faltan columnas requeridas: " + ", ".join(faltantes))
+        return redirect("inventario:productos")
+
+    def valor(row, campo, defecto=None):
+        pos = indice.get(campo)
+        if pos is None or pos >= len(row):
+            return defecto
+        return row[pos]
+
+    creados = 0
+    actualizados = 0
+
+    for row in filas[1:]:
+        nombre = str(valor(row, "nombre", "") or "").strip()
+        codigo = str(valor(row, "codigo", "") or "").strip() or None
+        if not nombre:
+            continue
+
+        producto = None
+        if codigo:
+            producto = ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).first()
+        if producto is None:
+            producto = ProductoInventario.objects.filter(empresa=empresa, nombre__iexact=nombre).first()
+
+        creado = producto is None
+        if creado:
+            producto = ProductoInventario(empresa=empresa, stock_actual=Decimal("0"))
+
+        tipo = str(valor(row, "tipo", "materia_prima") or "materia_prima").strip().lower()
+        clasificacion = str(valor(row, "clasificacion_operativa", "") or "").strip().lower()
+        if not clasificacion:
+            clasificacion = "empaque" if tipo == "empaque" else "materia_prima" if tipo == "materia_prima" else "otro"
+
+        producto.codigo = codigo or producto.codigo
+        producto.nombre = nombre
+        producto.tipo = tipo
+        producto.clasificacion_operativa = clasificacion
+        producto.afecta_produccion = _valor_booleano(valor(row, "afecta_produccion", True), True)
+        producto.unidad_medida = str(valor(row, "unidad_medida", "lb") or "lb").strip().lower()
+        producto.unidad_compra = str(valor(row, "unidad_compra", "") or "").strip()
+        producto.cantidad_por_empaque = convertir_decimal(valor(row, "cantidad_por_empaque", 1), "1")
+        producto.stock_minimo = convertir_decimal(valor(row, "stock_minimo", 0), "0")
+        producto.precio_unitario_compra = convertir_decimal(valor(row, "precio_unitario_compra", 0), "0")
+        producto.porcentaje_itbis = convertir_itbis(valor(row, "porcentaje_itbis", 0))
+        producto.proveedor = str(valor(row, "proveedor", "") or "").strip()
+        producto.activo = _valor_booleano(valor(row, "activo", True), True)
+
+        if producto.cantidad_por_empaque <= 0:
+            messages.warning(request, f"{nombre}: cantidad por empaque inválida; se dejó en 1.")
+            producto.cantidad_por_empaque = Decimal("1")
+
+        producto.save()
+        saldo_objetivo = convertir_decimal(valor(row, "stock_actual", 0), "0")
+        diferencia = saldo_objetivo - Decimal(producto.stock_actual or 0)
+        if diferencia:
+            _movimiento_desde_vista(
+                request, empresa=empresa, producto=producto,
+                tipo="ajuste" if diferencia > 0 else "salida",
+                cantidad=abs(diferencia),
+                referencia=f"IMPORT-{producto.codigo or producto.pk}-{saldo_objetivo}",
+                observacion="Ajuste autorizado por importación de inventario.",
+            )
+
+        if creado:
+            creados += 1
+        else:
+            actualizados += 1
+
+    messages.success(request, f"Inventario cargado correctamente. Creados: {creados}. Actualizados: {actualizados}.")
     return redirect("inventario:productos")
 
 
@@ -1934,6 +2038,9 @@ def editar_producto_inventario(request, producto_id):
 
     return render(request, "inventario/editar_producto.html", {
         "producto": producto,
+        "tipos": ProductoInventario.TIPOS,
+        "unidades": ProductoInventario.UNIDADES_BASE,
+        "clasificaciones": ProductoInventario.CLASIFICACION_OPERATIVA,
     })
 
 

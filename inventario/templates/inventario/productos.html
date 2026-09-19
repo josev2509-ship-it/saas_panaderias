@@ -14,21 +14,12 @@
         </div>
 
         <div class="form-actions">
-            <a href="{% url 'inventario:descargar_plantilla' %}" class="btn">
-                Descargar plantilla
-            </a>
-
-            <a href="{% url 'inventario:registrar_movimiento_manual' %}" class="btn btn-secondary">
-                Registrar movimiento
-            </a>
-
-            <a href="{% url 'inventario:pdf_inventario' %}" class="btn btn-light" target="_blank">
-                PDF inventario
-            </a>
-
-            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">
-                Volver
-            </a>
+            <a href="{% url 'inventario:crear_producto_inventario' %}" class="btn btn-primary">Nuevo producto</a>
+            <a href="{% url 'inventario:descargar_plantilla' %}" class="btn">Descargar Excel</a>
+            <a href="{% url 'inventario:descargar_plantilla' %}?vacia=1" class="btn btn-light">Plantilla vacía</a>
+            <a href="{% url 'inventario:registrar_movimiento_manual' %}" class="btn btn-secondary">Registrar movimiento</a>
+            <a href="{% url 'inventario:pdf_inventario' %}" class="btn btn-light" target="_blank">PDF inventario</a>
+            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">Volver</a>
         </div>
     </div>
 
