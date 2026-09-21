@@ -10,19 +10,34 @@
       <div><label>Código</label><input type="text" name="codigo" value="{{ request.POST.codigo|default:'' }}"></div>
       <div><label>Nombre *</label><input type="text" name="nombre" value="{{ request.POST.nombre|default:'' }}" required></div>
       <div><label>Tipo *</label><select name="tipo" required>{% for valor, etiqueta in tipos %}<option value="{{ valor }}" {% if request.POST.tipo == valor or not request.POST.tipo and valor == "materia_prima" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
-      <div><label>Clasificación operativa</label><select name="clasificacion_operativa">{% for valor, etiqueta in clasificaciones %}<option value="{{ valor }}" {% if request.POST.clasificacion_operativa == valor or not request.POST.clasificacion_operativa and valor == "materia_prima" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
-      <div><label>Presentación de compra · ¿cómo compras este producto?</label><input type="text" name="unidad_compra" placeholder="Saco, caja, fardo..." value="{{ request.POST.unidad_compra|default:'' }}"></div>
-      <div><label>Contenido de cada presentación *</label><input type="number" min="0.0001" step="0.0001" name="contenido_compra" value="{{ request.POST.contenido_compra|default:'1' }}" required></div>
-      <div><label>Unidad del contenido *</label><select name="unidad_contenido_compra" required>{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if request.POST.unidad_contenido_compra == valor or not request.POST.unidad_contenido_compra and valor == "lb" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select><small>Ejemplo: 1 saco = 120 lb.</small></div>
+      <div data-production-unit><label>Unidad de producción</label><select name="unidad_medida">{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if request.POST.unidad_medida == valor or not request.POST.unidad_medida and valor == "unidad" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
+      <div data-purchase-field><label>Clasificación operativa</label><select name="clasificacion_operativa">{% for valor, etiqueta in clasificaciones %}<option value="{{ valor }}" {% if request.POST.clasificacion_operativa == valor or not request.POST.clasificacion_operativa and valor == "materia_prima" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
+      <div data-purchase-field><label>Presentación de compra · ¿cómo compras este producto?</label><input type="text" name="unidad_compra" placeholder="Saco, caja, fardo..." value="{{ request.POST.unidad_compra|default:'' }}"></div>
+      <div data-purchase-field><label>Contenido de cada presentación *</label><input type="number" min="0.0001" step="0.0001" name="contenido_compra" value="{{ request.POST.contenido_compra|default:'1' }}" required></div>
+      <div data-purchase-field><label>Unidad del contenido *</label><select name="unidad_contenido_compra" required>{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if request.POST.unidad_contenido_compra == valor or not request.POST.unidad_contenido_compra and valor == "lb" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select><small>Ejemplo: 1 saco = 120 lb.</small></div>
       <div><label>Stock inicial</label><input type="number" min="0" step="0.0001" name="stock_inicial" value="{{ request.POST.stock_inicial|default:'0' }}"><small>Se registrará como movimiento de inventario.</small></div>
-      <div><label>Stock mínimo</label><input type="number" min="0" step="0.0001" name="stock_minimo" value="{{ request.POST.stock_minimo|default:'0' }}"></div>
-      <div><label>Precio de la presentación de compra</label><input type="number" min="0" step="0.0001" name="precio_unitario_compra" value="{{ request.POST.precio_unitario_compra|default:'0' }}"></div>
-      <div><label>ITBIS %</label><input type="number" min="0" step="0.01" name="porcentaje_itbis" value="{{ request.POST.porcentaje_itbis|default:'0' }}"></div>
-      <div><label>Proveedor</label><input type="text" name="proveedor" value="{{ request.POST.proveedor|default:'' }}"></div>
+      <div data-purchase-field><label>Stock mínimo</label><input type="number" min="0" step="0.0001" name="stock_minimo" value="{{ request.POST.stock_minimo|default:'0' }}"></div>
+      <div data-purchase-field><label>Precio de la presentación de compra</label><input type="number" min="0" step="0.0001" name="precio_unitario_compra" value="{{ request.POST.precio_unitario_compra|default:'0' }}"></div>
+      <div data-purchase-field><label>ITBIS %</label><input type="number" min="0" step="0.01" name="porcentaje_itbis" value="{{ request.POST.porcentaje_itbis|default:'0' }}"></div>
+      <div data-purchase-field><label>Proveedor</label><input type="text" name="proveedor" value="{{ request.POST.proveedor|default:'' }}"></div>
     </div><br>
     <label class="inventory-toggle"><input type="checkbox" name="afecta_produccion" {% if not request.POST or request.POST.afecta_produccion %}checked{% endif %}>Afecta proyección de producción</label>
     <label class="inventory-toggle"><input type="checkbox" name="activo" {% if not request.POST or request.POST.activo %}checked{% endif %}>Producto activo</label>
     <div class="form-actions" style="margin-top:18px;"><button type="submit" class="btn btn-primary">Crear producto</button><a href="{% url 'inventario:productos' %}" class="btn btn-secondary">Cancelar</a></div>
   </form></section>
 </div>
+<script>
+(() => {
+  const tipo = document.querySelector('[name="tipo"]');
+  const compra = [...document.querySelectorAll('[data-purchase-field]')];
+  const produccion = document.querySelector('[data-production-unit]');
+  function actualizar() {
+    const terminado = tipo.value === 'producto_terminado';
+    compra.forEach(el => { el.hidden = terminado; el.querySelectorAll('input,select').forEach(c => c.disabled = terminado); });
+    produccion.hidden = !terminado;
+    produccion.querySelectorAll('select').forEach(c => c.disabled = !terminado);
+  }
+  tipo.addEventListener('change', actualizar); actualizar();
+})();
+</script>
 {% endblock %}

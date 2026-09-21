@@ -4,6 +4,20 @@
 <div class="app-page">
   <div class="topbar"><div><h1>Editar producto</h1><p>{{ producto.nombre }}</p></div><div class="form-actions"><a href="{% url 'inventario:kardex_producto' producto.id %}" class="btn btn-secondary">Kardex</a><a href="{% url 'inventario:productos' %}" class="btn btn-light">Volver</a></div></div>
   <section class="card"><form method="post">{% csrf_token %}
+    {% if producto.es_producto_terminado %}
+    <h3>Datos del producto</h3>
+    <div class="form-grid">
+      <div><label>Código</label><input type="text" name="codigo" value="{{ producto.codigo|default:'' }}"></div>
+      <div><label>Nombre *</label><input type="text" name="nombre" value="{{ producto.nombre }}" required></div>
+      <div><label>Tipo</label><input type="text" value="Producto terminado" disabled></div>
+      <div><label>Unidad de producción</label><select name="unidad_medida">{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if producto.unidad_medida == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
+    </div>
+    <h3 style="margin-top:24px;">Origen y receta</h3>
+    <div class="form-grid"><div><label>Origen</label><p>{{ producto.get_origen_catalogo_display }}</p></div><div><label>Receta asociada</label><p>{% if receta %}{{ receta.codigo }} · v{{ receta.version }}{% else %}Sin receta asociada{% endif %}</p></div><div><label>Rendimiento</label><p>{% if receta %}{{ receta.rendimiento_base }} {{ receta.unidad_rendimiento }}{% else %}—{% endif %}</p></div><div><label>Estado receta</label><p>{% if receta %}{{ receta.activa|yesno:"Activa,Inactiva" }}{% else %}—{% endif %}</p></div></div>
+    <h3 style="margin-top:24px;">Inventario</h3>
+    <div class="form-grid"><div><label>Existencia actual</label><input type="text" value="{{ producto.stock_actual }} {{ producto.get_unidad_medida_display }}" disabled><small>La existencia se modifica mediante movimientos para conservar trazabilidad.</small></div></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:18px;"><input type="checkbox" name="activo" {% if producto.activo %}checked{% endif %}>Producto activo</label>
+    {% else %}
     <div class="form-grid">
       <div><label>Código</label><input type="text" name="codigo" value="{{ producto.codigo|default:'' }}"></div>
       <div><label>Nombre *</label><input type="text" name="nombre" value="{{ producto.nombre }}" required></div>
@@ -21,6 +35,7 @@
     </div><br>
     <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="afecta_produccion" {% if producto.afecta_produccion %}checked{% endif %}>Afecta proyección de producción</label>
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px;"><input type="checkbox" name="activo" {% if producto.activo %}checked{% endif %}>Producto activo</label>
+    {% endif %}
     <div class="form-actions" style="margin-top:18px;"><button type="submit" class="btn btn-primary">Guardar cambios</button><a href="{% url 'inventario:productos' %}" class="btn btn-secondary">Cancelar</a></div>
   </form></section>
 </div>

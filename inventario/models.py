@@ -204,10 +204,26 @@ class ProductoInventario(models.Model):
         return f"{self.codigo or ''} - {self.nombre}"
 
     @property
+    def es_producto_terminado(self):
+        return self.tipo == "producto_terminado"
+
+    @property
+    def es_articulo_comprable(self):
+        return not self.es_producto_terminado
+
+    @property
+    def receta_mas_reciente(self):
+        recetas_prefetched = getattr(self, "recetas_catalogo", None)
+        if recetas_prefetched is not None:
+            return recetas_prefetched[0] if recetas_prefetched else None
+        return self.recetas_produccion.order_by("-version", "-pk").first()
+
+    @property
     def configuracion_compra_completa(self):
         from .units import unidades_compatibles
         return bool(
-            self.activo and self.nombre.strip() and self.unidad_medida
+            self.es_articulo_comprable
+            and self.activo and self.nombre.strip() and self.unidad_medida
             and (self.unidad_compra or "").strip()
             and self.cantidad_por_empaque and self.cantidad_por_empaque > 0
             and self.precio_unitario_compra is not None and self.precio_unitario_compra >= 0
@@ -216,7 +232,7 @@ class ProductoInventario(models.Model):
 
     @property
     def listo_para_compras(self):
-        return self.configuracion_compra_completa and not self.requiere_revision
+        return self.es_articulo_comprable and self.configuracion_compra_completa and not self.requiere_revision
 
     @property
     def costo_unitario(self):
@@ -233,7 +249,8 @@ class ProductoInventario(models.Model):
         return Decimal(self.stock_actual or 0) * self.costo_unitario
 
     def esta_bajo_minimo(self):
-        return Decimal(self.stock_actual or 0) <= Decimal(self.stock_minimo or 0)
+        minimo = Decimal(self.stock_minimo or 0)
+        return minimo > 0 and Decimal(self.stock_actual or 0) <= minimo
 
     def cantidad_empaques_completos(self):
         if not self.cantidad_por_empaque:

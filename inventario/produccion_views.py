@@ -245,7 +245,7 @@ def _aprobar_lote_recetas(request, empresa, todas=False):
                         producto = ProductoInventario.objects.create(
                             empresa=empresa, codigo=siguiente_codigo_producto(empresa=empresa, tipo="producto_terminado"),
                             nombre=nombre, tipo="producto_terminado", unidad_medida="unidad", stock_actual=0,
-                            origen_catalogo="RECETA", requiere_revision=True, activo=True)
+                            origen_catalogo="RECETA", requiere_revision=False, activo=True)
                 if not producto:
                     raise ValidationError("Producto terminado sin asociación válida.")
                 existente = RecetaProduccion.objects.filter(

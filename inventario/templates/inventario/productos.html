@@ -1,138 +1,26 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% load static %}
-
 {% block content %}
-
 <div class="app-page el-page" data-enterprise-list>
-    {% include "components/enterprise_list_command_bar.html" %}
-
-    <div class="topbar el-legacy-header" data-enterprise-page-header>
-        <div>
-            <h1>Materia prima e inventario</h1>
-            <p>Control de productos, stock, costos, mínimos y trazabilidad.</p>
-        </div>
-
-        <div class="form-actions">
-            <a href="{% url 'inventario:crear_producto_inventario' %}" class="btn btn-primary">Nuevo producto</a>
-            <a href="{% url 'inventario:descargar_plantilla' %}" class="btn">Descargar Excel</a>
-            <a href="{% url 'inventario:descargar_plantilla' %}?vacia=1" class="btn btn-light">Plantilla vacía</a>
-            <a href="{% url 'inventario:registrar_movimiento_manual' %}" class="btn btn-secondary">Registrar movimiento</a>
-            <a href="{% url 'inventario:pdf_inventario' %}" class="btn btn-light" target="_blank">PDF inventario</a>
-            <a href="{% url 'inventario:dashboard' %}" class="btn btn-light">Volver</a>
-        </div>
-    </div>
-
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <div class="message {{ message.tags }}">{{ message }}</div>
-            {% endfor %}
-        </div>
-    {% endif %}
-
-    <section class="card">
-        <div class="section-header">
-            <h3>Cargar inventario desde Excel</h3>
-            <p>Sube materias primas, empaques, consumibles, activos y otros productos.</p>
-        </div>
-
-        <form method="post"
-              action="{% url 'inventario:cargar_excel' %}"
-              enctype="multipart/form-data">
-
-            {% csrf_token %}
-
-            <div class="form-grid">
-                <div>
-                    <label>Archivo Excel</label>
-                    <input type="file" name="archivo" accept=".xlsx" required>
-                </div>
-            </div>
-
-            <br>
-
-            <button type="submit" class="btn">
-                Subir inventario
-            </button>
-        </form>
-    </section>
-
-    <section class="table-card">
-        <div class="section-header">
-            <h3>Productos registrados</h3>
-            <p>Total mostrado: {{ productos.count }} productos.</p>
-        </div>
-
-        <div class="table-responsive">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Producto</th>
-                        <th>Tipo</th>
-                        <th>Unidad base</th>
-                        <th>Existencia</th>
-                        <th>Stock mínimo</th>
-                        <th>Costo empaque</th>
-                        <th>ITBIS</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {% for producto in productos %}
-                    <tr>
-                        <td>{{ producto.codigo|default:"-" }}</td>
-                        <td><strong>{{ producto.nombre }}</strong>{% if producto.origen_catalogo == "RECETA" %}<br><small>Origen: Receta</small>{% endif %}<br>{% if producto.listo_para_compras %}<span class="status-pill status-generado">Lista para compras</span>{% else %}<span class="status-pill status-anulado">Pendiente de completar</span>{% endif %}</td>
-                        <td>{{ producto.get_tipo_display }}</td>
-                        <td>{{ producto.get_unidad_medida_display }}</td>
-                        <td>{{ producto.existencia_formateada }}</td>
-                        <td>{{ producto.stock_minimo|floatformat:2|intcomma }}</td>
-                        <td>RD$ {{ producto.precio_unitario_compra|floatformat:2|intcomma }}</td>
-                        <td>{{ producto.porcentaje_itbis|floatformat:2 }}%</td>
-                        <td>
-                            {% if not producto.activo %}
-                                <span class="status-pill status-anulado">Inactivo</span>
-                            {% elif producto.esta_bajo_minimo %}
-                                <span class="status-pill status-anulado">Bajo mínimo</span>
-                            {% else %}
-                                <span class="status-pill status-generado">Normal</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="row-actions">
-                                <a href="{% url 'inventario:editar_producto_inventario' producto.id %}"
-                                   class="btn btn-small">
-                                    Editar
-                                </a>
-
-                                <a href="{% url 'inventario:kardex_producto' producto.id %}"
-                                   class="btn btn-secondary btn-small">
-                                    Kardex
-                                </a>
-
-                                {% if producto.activo %}
-                                <a href="{% url 'inventario:desactivar_producto_inventario' producto.id %}"
-                                   class="btn btn-danger btn-small"
-                                   onclick="return confirm('¿Seguro que deseas desactivar este producto?');">
-                                    Desactivar
-                                </a>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="10">Todavía no tienes productos registrados.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
-
+  {% include "components/enterprise_list_command_bar.html" %}
+  <div class="topbar el-legacy-header" data-enterprise-page-header>
+    <div><h1>Productos e inventario</h1><p>Gestiona materias primas, productos terminados, empaques y otros artículos con trazabilidad de existencias.</p></div>
+    <div class="form-actions"><a href="{% url 'inventario:crear_producto_inventario' %}" class="btn btn-primary">Nuevo producto</a><a href="{% url 'inventario:descargar_plantilla' %}" class="btn">Descargar Excel</a><a href="{% url 'inventario:descargar_plantilla' %}?vacia=1" class="btn btn-light">Plantilla vacía</a><a href="{% url 'inventario:registrar_movimiento_manual' %}" class="btn btn-secondary">Registrar movimiento</a><a href="{% url 'inventario:pdf_inventario' %}" class="btn btn-light" target="_blank">PDF inventario</a><a href="{% url 'inventario:dashboard' %}" class="btn btn-light">Volver</a></div>
+  </div>
+  {% if messages %}<div class="messages">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+  <nav class="form-actions" style="margin-bottom:18px;"><a class="btn {% if vista == 'todos' %}btn-primary{% else %}btn-light{% endif %}" href="?vista=todos">Todos</a><a class="btn {% if vista == 'materias' %}btn-primary{% else %}btn-light{% endif %}" href="?vista=materias">Materias primas</a><a class="btn {% if vista == 'terminados' %}btn-primary{% else %}btn-light{% endif %}" href="?vista=terminados">Productos terminados</a></nav>
+  <section class="card"><div class="section-header"><h3>Cargar inventario desde Excel</h3><p>Sube materias primas, empaques, consumibles, productos terminados y otros artículos.</p></div><form method="post" action="{% url 'inventario:cargar_excel' %}" enctype="multipart/form-data">{% csrf_token %}<div class="form-grid"><div><label>Archivo Excel</label><input type="file" name="archivo" accept=".xlsx" required></div></div><br><button type="submit" class="btn">Subir inventario</button></form></section>
+  <section class="table-card"><div class="section-header"><h3>Productos registrados</h3><p>Total mostrado: {{ productos|length }} productos.</p></div><div class="table-responsive"><table>
+  {% if vista == 'terminados' %}
+    <thead><tr><th>Código</th><th>Producto</th><th>Unidad de producción</th><th>Receta</th><th>Rendimiento</th><th>Existencia</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>{% for producto in productos %}{% with receta=producto.receta_mas_reciente %}<tr><td>{{ producto.codigo|default:"-" }}</td><td><strong>{{ producto.nombre }}</strong><br><small>Origen: {{ producto.get_origen_catalogo_display }}</small></td><td>{{ producto.get_unidad_medida_display }}</td><td>{% if receta %}{{ receta.codigo }} · v{{ receta.version }}{% else %}—{% endif %}</td><td>{% if receta %}{{ receta.rendimiento_base|floatformat:-4|intcomma }} {{ receta.unidad_rendimiento }}{% else %}—{% endif %}</td><td>{{ producto.stock_actual|floatformat:-4|intcomma }} {{ producto.get_unidad_medida_display }}</td><td><span class="status-pill {% if producto.activo %}status-generado{% else %}status-anulado{% endif %}">{{ producto.activo|yesno:"Configurado,Inactivo" }}</span></td><td>{% include "inventario/_producto_acciones.html" %}</td></tr>{% endwith %}{% empty %}<tr><td colspan="8">No hay productos terminados registrados.</td></tr>{% endfor %}</tbody>
+  {% elif vista == 'materias' %}
+    <thead><tr><th>Código</th><th>Producto</th><th>Tipo</th><th>Presentación</th><th>Existencia</th><th>Stock mínimo</th><th>Precio presentación</th><th>ITBIS</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>{% for producto in productos %}<tr><td>{{ producto.codigo|default:"-" }}</td><td><strong>{{ producto.nombre }}</strong><br>{% if producto.listo_para_compras %}<span class="status-pill status-generado">Lista para compras</span>{% else %}<span class="status-pill status-anulado">Pendiente de completar</span>{% endif %}</td><td>{{ producto.get_tipo_display }}</td><td>{{ producto.unidad_compra|default:"—" }}</td><td>{{ producto.existencia_formateada }}</td><td>{{ producto.stock_minimo|floatformat:2|intcomma }}</td><td>RD$ {{ producto.precio_unitario_compra|floatformat:2|intcomma }}</td><td>{{ producto.porcentaje_itbis|floatformat:2 }}%</td><td>{% if not producto.activo %}<span class="status-pill status-anulado">Inactivo</span>{% elif producto.esta_bajo_minimo %}<span class="status-pill status-anulado">Bajo mínimo</span>{% else %}<span class="status-pill status-generado">Normal</span>{% endif %}</td><td>{% include "inventario/_producto_acciones.html" %}</td></tr>{% empty %}<tr><td colspan="10">No hay materias primas registradas.</td></tr>{% endfor %}</tbody>
+  {% else %}
+    <thead><tr><th>Código</th><th>Producto</th><th>Tipo</th><th>Unidad</th><th>Existencia</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>{% for producto in productos %}<tr><td>{{ producto.codigo|default:"-" }}</td><td><strong>{{ producto.nombre }}</strong>{% if producto.origen_catalogo == "RECETA" %}<br><small>Origen: Receta</small>{% endif %}</td><td>{{ producto.get_tipo_display }}</td><td>{{ producto.get_unidad_medida_display }}</td><td>{{ producto.stock_actual|floatformat:-4|intcomma }} {{ producto.get_unidad_medida_display }}</td><td>{% if producto.es_producto_terminado %}<span class="status-pill {% if producto.activo %}status-generado{% else %}status-anulado{% endif %}">{{ producto.activo|yesno:"Configurado,Inactivo" }}</span>{% elif producto.listo_para_compras %}<span class="status-pill status-generado">Lista para compras</span>{% else %}<span class="status-pill status-anulado">Pendiente de completar</span>{% endif %}</td><td>{% include "inventario/_producto_acciones.html" %}</td></tr>{% empty %}<tr><td colspan="7">Todavía no tienes productos registrados.</td></tr>{% endfor %}</tbody>
+  {% endif %}
+  </table></div></section>
 </div>
-
 {% endblock %}

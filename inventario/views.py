@@ -7,7 +7,7 @@ from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
-from django.db.models import Sum
+from django.db.models import Sum, Prefetch
 from django.db.models import Sum
 from decimal import Decimal
 
@@ -504,14 +504,27 @@ def registrar_devolucion_prestamo(request, prestamo_id):
 @login_required
 def productos_inventario(request):
     empresa = obtener_empresa_usuario(request)
-
-    productos = ProductoInventario.objects.filter(
-        empresa=empresa
-    ).order_by("tipo", "nombre") if empresa else ProductoInventario.objects.none()
+    vista = request.GET.get("vista", "todos")
+    if vista not in {"todos", "materias", "terminados"}:
+        vista = "todos"
+    if empresa:
+        from .models import RecetaProduccion
+        recetas = RecetaProduccion.objects.order_by("-version", "-pk")
+        productos = ProductoInventario.objects.filter(empresa=empresa).prefetch_related(
+            Prefetch("recetas_produccion", queryset=recetas, to_attr="recetas_catalogo")
+        )
+        if vista == "materias":
+            productos = productos.filter(tipo="materia_prima")
+        elif vista == "terminados":
+            productos = productos.filter(tipo="producto_terminado")
+        productos = productos.order_by("tipo", "nombre")
+    else:
+        productos = ProductoInventario.objects.none()
 
     return render(request, "inventario/productos.html", {
-        "titulo": "Materia Prima e Inventario",
+        "titulo": "Productos e inventario",
         "productos": productos,
+        "vista": vista,
     })
 
 
@@ -541,8 +554,12 @@ def crear_producto_inventario(request):
         )
         from .units import normalizar_unidad
         from .product_codes import siguiente_codigo_producto
-        unidad_medida = normalizar_unidad(request.POST.get("unidad_contenido_compra") or request.POST.get("unidad_medida") or "lb")
-        cantidad_por_empaque = convertir_decimal(request.POST.get("contenido_compra") or request.POST.get("cantidad_por_empaque"), "1")
+        es_producto_terminado = tipo == "producto_terminado"
+        unidad_medida = normalizar_unidad(
+            request.POST.get("unidad_medida") if es_producto_terminado
+            else request.POST.get("unidad_contenido_compra") or request.POST.get("unidad_medida") or "lb"
+        )
+        cantidad_por_empaque = Decimal("1") if es_producto_terminado else convertir_decimal(request.POST.get("contenido_compra") or request.POST.get("cantidad_por_empaque"), "1")
         stock_inicial = convertir_decimal(request.POST.get("stock_inicial"), "0")
         stock_minimo = convertir_decimal(request.POST.get("stock_minimo"), "0")
         precio = convertir_decimal(request.POST.get("precio_unitario_compra"), "0")
@@ -554,7 +571,7 @@ def crear_producto_inventario(request):
             errores.append("Seleccione una unidad de contenido válida.")
         if codigo and ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).exists():
             errores.append("Ya existe un producto con ese código.")
-        if cantidad_por_empaque <= 0:
+        if not es_producto_terminado and cantidad_por_empaque <= 0:
             errores.append("La cantidad por empaque debe ser mayor que cero.")
         if stock_inicial < 0:
             errores.append("El stock inicial no puede ser negativo.")
@@ -582,14 +599,15 @@ def crear_producto_inventario(request):
                     clasificacion_operativa=clasificacion,
                     afecta_produccion=request.POST.get("afecta_produccion") == "on",
                     unidad_medida=unidad_medida,
-                    unidad_contenido_compra=unidad_medida,
-                    unidad_compra=request.POST.get("unidad_compra", "").strip(),
+                    unidad_contenido_compra="" if es_producto_terminado else unidad_medida,
+                    unidad_compra="" if es_producto_terminado else request.POST.get("unidad_compra", "").strip(),
                     cantidad_por_empaque=cantidad_por_empaque,
                     stock_actual=Decimal("0"),
-                    stock_minimo=stock_minimo,
-                    precio_unitario_compra=precio,
-                    porcentaje_itbis=convertir_itbis(request.POST.get("porcentaje_itbis")),
-                    proveedor=request.POST.get("proveedor", "").strip(),
+                    stock_minimo=Decimal("0") if es_producto_terminado else stock_minimo,
+                    precio_unitario_compra=Decimal("0") if es_producto_terminado else precio,
+                    porcentaje_itbis=Decimal("0") if es_producto_terminado else convertir_itbis(request.POST.get("porcentaje_itbis")),
+                    proveedor="" if es_producto_terminado else request.POST.get("proveedor", "").strip(),
+                    requiere_revision=False,
                     activo=request.POST.get("activo") == "on",
                 )
                 if stock_inicial > 0:
@@ -2077,6 +2095,23 @@ def editar_producto_inventario(request, producto_id):
         from .units import normalizar_unidad, unidades_compatibles
         from .product_codes import siguiente_codigo_producto
         codigo_nuevo = request.POST.get("codigo", "").strip() or None
+        if producto.es_producto_terminado:
+            nombre_nuevo = request.POST.get("nombre", "").strip()
+            unidad_nueva = normalizar_unidad(request.POST.get("unidad_medida") or producto.unidad_medida)
+            if codigo_nuevo and ProductoInventario.objects.filter(
+                empresa=empresa, codigo=codigo_nuevo).exclude(pk=producto.pk).exists():
+                messages.error(request, "Ya existe otro producto con ese código en la empresa.")
+                return redirect("inventario:editar_producto_inventario", producto_id=producto.pk)
+            if not nombre_nuevo or unidad_nueva not in dict(ProductoInventario.UNIDADES_BASE):
+                messages.error(request, "Revise el nombre y la unidad de producción.")
+                return redirect("inventario:editar_producto_inventario", producto_id=producto.pk)
+            producto.codigo = codigo_nuevo or siguiente_codigo_producto(empresa=empresa, tipo=producto.tipo)
+            producto.nombre = nombre_nuevo
+            producto.unidad_medida = unidad_nueva
+            producto.activo = request.POST.get("activo") == "on"
+            producto.save(update_fields=["codigo", "nombre", "unidad_medida", "activo", "actualizado_en"])
+            messages.success(request, "Producto actualizado correctamente.")
+            return redirect("inventario:productos")
         unidad_contenido = normalizar_unidad(request.POST.get("unidad_contenido_compra") or request.POST.get("unidad_medida") or producto.unidad_medida)
         unidad_nueva = producto.unidad_medida if "unidad_contenido_compra" in request.POST else request.POST.get("unidad_medida")
         tipo_nuevo = request.POST.get("tipo")
@@ -2124,6 +2159,7 @@ def editar_producto_inventario(request, producto_id):
 
     return render(request, "inventario/editar_producto.html", {
         "producto": producto,
+        "receta": producto.receta_mas_reciente,
         "tipos": ProductoInventario.TIPOS,
         "unidades": ProductoInventario.UNIDADES_BASE,
         "clasificaciones": ProductoInventario.CLASIFICACION_OPERATIVA,
