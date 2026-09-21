@@ -9,12 +9,13 @@
       <div><label>Nombre *</label><input type="text" name="nombre" value="{{ producto.nombre }}" required></div>
       <div><label>Tipo</label><select name="tipo">{% for valor, etiqueta in tipos %}<option value="{{ valor }}" {% if producto.tipo == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
       <div><label>Clasificación operativa</label><select name="clasificacion_operativa">{% for valor, etiqueta in clasificaciones %}<option value="{{ valor }}" {% if producto.clasificacion_operativa == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
-      <div><label>Unidad base</label><select name="unidad_medida">{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if producto.unidad_medida == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
-      <div><label>Unidad compra</label><input type="text" name="unidad_compra" value="{{ producto.unidad_compra|default:'' }}"></div>
-      <div><label>Cantidad por empaque</label><input type="number" min="0.0001" step="0.0001" name="cantidad_por_empaque" value="{{ producto.cantidad_por_empaque }}"></div>
+      <div><strong>Presentación de compra</strong><p>Unidad interna{% if producto.origen_catalogo == 'RECETA' %} detectada en receta{% endif %}: {{ producto.unidad_medida }}. Completa cómo compras este producto.</p></div>
+      <div><label>¿Cómo lo compras?</label><input type="text" name="unidad_compra" placeholder="Saco, caja, fardo..." value="{{ producto.unidad_compra|default:'' }}"></div>
+      <div><label>Contenido por presentación</label><input type="number" min="0.0001" step="0.0001" name="contenido_compra" value="{{ producto.cantidad_por_empaque }}"></div>
+      <div><label>Unidad del contenido</label><select name="unidad_contenido_compra">{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if producto.unidad_contenido_compra == valor or not producto.unidad_contenido_compra and producto.unidad_medida == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select><small>1 {{ producto.unidad_compra|default:'presentación' }} = {{ producto.cantidad_por_empaque }} {{ producto.unidad_contenido_compra|default:producto.unidad_medida }}</small></div>
       <div><label>Existencia actual</label><input type="text" value="{{ producto.existencia_formateada }}" disabled><small>La existencia se modifica mediante movimientos para conservar trazabilidad.</small></div>
       <div><label>Stock mínimo</label><input type="number" min="0" step="0.0001" name="stock_minimo" value="{{ producto.stock_minimo }}"></div>
-      <div><label>Precio por empaque</label><input type="number" min="0" step="0.0001" name="precio_unitario_compra" value="{{ producto.precio_unitario_compra }}"></div>
+      <div><label>Precio de la presentación de compra</label><input type="number" min="0" step="0.0001" name="precio_unitario_compra" value="{{ producto.precio_unitario_compra }}"><small>Costo equivalente actual: RD$ {{ producto.costo_unitario|floatformat:2 }} por {{ producto.unidad_medida }}.</small></div>
       <div><label>ITBIS %</label><input type="number" min="0" step="0.01" name="porcentaje_itbis" value="{{ producto.porcentaje_itbis }}"></div>
       <div><label>Proveedor</label><input type="text" name="proveedor" value="{{ producto.proveedor|default:'' }}"></div>
     </div><br>

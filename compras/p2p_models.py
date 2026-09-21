@@ -59,6 +59,19 @@ class DetalleOrdenCompraEnterprise(models.Model):
     empaques_sugeridos=models.PositiveIntegerField(default=0)
     cantidad_por_empaque=models.DecimalField(max_digits=18,decimal_places=4,default=1)
     traza=models.JSONField(default=list,blank=True)
+
+    @property
+    def equivalencia_compra(self):
+        if self.origen != "INABIE" or not self.producto_id or not self.producto.listo_para_compras:
+            return "Pendiente de configuración"
+        from inventario.units import convertir, desglosar_empaques, formatear_masa_lb
+        contenido = convertir(self.cantidad_por_empaque,
+            self.producto.unidad_contenido_compra or self.producto.unidad_medida,
+            self.producto.unidad_medida)
+        completos, resto, _ = desglosar_empaques(self.sugerido_base, contenido)
+        nombre = self.producto.unidad_compra or "empaque"
+        resto_texto = formatear_masa_lb(resto) if self.producto.unidad_medida == "lb" else f"{resto.normalize()} {self.producto.unidad_medida}"
+        return f"{completos} {nombre}(s)" + (f" + {resto_texto}" if resto else "")
 class VersionOrdenCompra(models.Model):
     orden=models.ForeignKey(OrdenCompraEnterprise,on_delete=models.CASCADE,related_name="versiones");version=models.PositiveIntegerField();snapshot=models.JSONField();creado_por=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True);creado_en=models.DateTimeField(auto_now_add=True)
 class HistorialOrdenCompra(models.Model):

@@ -9,6 +9,7 @@ from .engine import InventoryEngine
 from .models import ProductoInventario
 from .produccion_inabie_services import receta_vigente
 from .recipe_matching import encontrar_producto_terminado_match
+from .units import convertir, unidades_compatibles, desglosar_empaques, formatear_masa_lb
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,11 @@ class NecesidadProyectada:
     neta: Decimal = Decimal("0")
     empaques: int = 0
     compra_pendiente: bool = False
+    contenido_interno: Decimal = Decimal("0")
+    empaques_completos: int = 0
+    restante: Decimal = Decimal("0")
+    necesidad_legible: str = ""
+    neta_legible: str = ""
     trazas: list = field(default_factory=list)
 
 
@@ -121,10 +127,10 @@ def proyectar_necesidades_menu_escolar(*, empresa, desde, hasta):
         resultado.raciones += raciones
         for detalle in receta.ingredientes.select_related("materia_prima").all():
             ingrediente = detalle.materia_prima
-            if ingrediente.empresa_id != empresa.pk or detalle.unidad_medida != ingrediente.unidad_medida:
+            if ingrediente.empresa_id != empresa.pk or not unidades_compatibles(detalle.unidad_medida, ingrediente.unidad_medida):
                 resultado.advertencias.append(f"{fila.fecha}: unidad incompatible para {ingrediente.nombre}")
                 continue
-            cantidad = detalle.cantidad * factor
+            cantidad = convertir(detalle.cantidad, detalle.unidad_medida, ingrediente.unidad_medida) * factor
             necesidad = resultado.necesidades.setdefault(
                 ingrediente.pk, NecesidadProyectada(ingrediente=ingrediente)
             )
@@ -139,13 +145,20 @@ def proyectar_necesidades_menu_escolar(*, empresa, desde, hasta):
             context=SimpleNamespace(empresa=empresa), producto=producto,
         )["disponible"]
         necesidad.neta = max(Decimal("0"), necesidad.bruta - necesidad.disponible)
+        if producto.unidad_medida == "lb":
+            necesidad.necesidad_legible = formatear_masa_lb(necesidad.bruta)
+            necesidad.neta_legible = formatear_masa_lb(necesidad.neta)
+        else:
+            necesidad.necesidad_legible = f"{necesidad.bruta.normalize()} {producto.unidad_medida}"
+            necesidad.neta_legible = f"{necesidad.neta.normalize()} {producto.unidad_medida}"
         if not producto.listo_para_compras:
             necesidad.compra_pendiente = True
             resultado.advertencias.append(f"Producto pendiente de configuración de compra: {producto.nombre}")
             continue
-        empaque = Decimal(producto.cantidad_por_empaque or 0)
+        empaque = convertir(producto.cantidad_por_empaque, producto.unidad_contenido_compra or producto.unidad_medida, producto.unidad_medida)
         if empaque <= 0:
             resultado.advertencias.append(f"Empaque inválido para {producto.nombre}")
         else:
-            necesidad.empaques = int((necesidad.neta / empaque).to_integral_value(rounding=ROUND_CEILING))
+            necesidad.contenido_interno = empaque
+            necesidad.empaques_completos, necesidad.restante, necesidad.empaques = desglosar_empaques(necesidad.neta, empaque)
     return resultado

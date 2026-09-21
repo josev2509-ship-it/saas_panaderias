@@ -92,6 +92,34 @@ class ProyeccionMenuEscolarTests(TestCase):
         self.assertTrue(necesidad.compra_pendiente)
         self.assertTrue(any("pendiente de configuración de compra" in aviso for aviso in resultado.advertencias))
 
+    def test_receta_oz_se_convierte_a_stock_lb(self):
+        detalle = self.receta.ingredientes.get()
+        detalle.unidad_medida = "oz"
+        detalle.cantidad = Decimal("320")
+        detalle.save(update_fields=["unidad_medida", "cantidad"])
+        self.fila(self.inicio)
+        necesidad = self.proyectar().necesidades[self.harina.pk]
+        self.assertEqual(necesidad.bruta, Decimal("140"))
+        self.assertEqual(necesidad.neta, Decimal("130"))
+
+    def test_receta_lb_se_convierte_a_stock_oz(self):
+        self.harina.unidad_medida = "oz"
+        self.harina.cantidad_por_empaque = Decimal("400")
+        self.harina.save(update_fields=["unidad_medida", "cantidad_por_empaque"])
+        self.fila(self.inicio)
+        necesidad = self.proyectar().necesidades[self.harina.pk]
+        self.assertEqual(necesidad.bruta, Decimal("2240"))
+        self.assertEqual(necesidad.neta, Decimal("2230"))
+
+    def test_presentacion_en_otra_unidad_compatible(self):
+        self.harina.unidad_contenido_compra = "oz"
+        self.harina.cantidad_por_empaque = Decimal("1920")
+        self.harina.save(update_fields=["unidad_contenido_compra", "cantidad_por_empaque"])
+        self.fila(self.inicio)
+        necesidad = self.proyectar().necesidades[self.harina.pk]
+        self.assertEqual(necesidad.contenido_interno, Decimal("120"))
+        self.assertEqual(necesidad.empaques, 2)
+
     def test_b_fallback_compatible(self):
         self.centro.matricula_lunes_viernes = None
         self.centro.matricula_fin_semana = None

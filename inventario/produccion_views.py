@@ -31,6 +31,8 @@ from .produccion_forms import (
 from .recipe_document_parser import RecipeDocumentParser
 from .recipe_matching import encontrar_producto_terminado, encontrar_producto_terminado_match
 from .recipe_catalog import evaluar_ingrediente, resolver_ingrediente_aprobado
+from .product_codes import siguiente_codigo_producto
+from .recipe_matching import normalizar_nombre
 from .produccion_services import (
     calcular_necesidades, duplicar_receta, generar_ordenes_desde_plan,
     generar_plan_desde_pedidos, recalcular_necesidades_plan, transicionar_orden,
@@ -127,21 +129,39 @@ def _analizar_documento_receta(request, empresa):
             "preview_local": getattr(request, "recipe_preview_local", False),
         })
     formulas = []
+    productos_terminados = list(ProductoInventario.objects.filter(empresa=empresa, activo=True, tipo="producto_terminado").order_by("nombre"))
     for resultado_lote in lote.formulas:
+        estado_documento = resultado_lote.estado
         producto_match = encontrar_producto_terminado_match(empresa=empresa, nombre=resultado_lote.nombre)
         producto_lote = ProductoInventario.objects.filter(
             pk=producto_match.producto_id, empresa=empresa, activo=True, tipo="producto_terminado"
         ).first() if producto_match.producto_id else None
         detalles_lote = []
+        motivo_ingrediente = ""
         for extraido in resultado_lote.ingredientes:
             match = evaluar_ingrediente(empresa=empresa, nombre=extraido.nombre, unidad=extraido.unidad)
             detalles_lote.append({"extraido": extraido, "match": match})
             if match.estado not in {"EXACTA_NORMALIZADA", "ALTA_CONFIANZA", "PROVISIONAL"} and resultado_lote.estado == "LISTA":
                 resultado_lote.estado = "REVISAR"
-        if not producto_lote and resultado_lote.estado == "LISTA":
-            resultado_lote.estado = "REVISAR"
+                motivo_ingrediente = "Unidad de ingrediente incompatible o asociación ambigua"
+        opcion_producto = "existente" if producto_lote else ""
+        permite_crear_pt = False
+        motivo = "Lista para aprobar" if resultado_lote.estado == "LISTA" else (motivo_ingrediente or "Revisar datos incompletos de la fórmula")
+        if not producto_lote and estado_documento == "LISTA" and resultado_lote.estado == "LISTA":
+            equivalentes = [p for p in productos_terminados if normalizar_nombre(p.nombre) == normalizar_nombre(resultado_lote.nombre)]
+            permite_crear_pt = bool(resultado_lote.nombre.strip() and len(resultado_lote.nombre) <= 180 and not equivalentes)
+            if permite_crear_pt and not producto_match.candidatos:
+                opcion_producto = "crear"
+                motivo = "Producto terminado nuevo: se creará al aprobar"
+            else:
+                resultado_lote.estado = "REVISAR_PT"
+                motivo = "Falta asociar producto terminado"
+        elif not producto_lote and resultado_lote.estado == "LISTA":
+            resultado_lote.estado = "REVISAR_PT"
+            motivo = "Falta asociar producto terminado"
         formulas.append({"resultado": resultado_lote, "producto": producto_lote, "producto_match": producto_match,
-                         "analisis_ingredientes": detalles_lote})
+                         "analisis_ingredientes": detalles_lote, "opcion_producto": opcion_producto,
+                         "permite_crear_pt": permite_crear_pt, "motivo": motivo})
     request.session["recetas_importacion_lote"] = [{
         "empresa_id": empresa.pk, "estado": item["resultado"].estado,
         "codigo": item["resultado"].codigo, "nombre": item["resultado"].nombre,
@@ -149,6 +169,8 @@ def _analizar_documento_receta(request, empresa):
         "rendimiento_base": str(item["resultado"].rendimiento_base or ""),
         "unidad_rendimiento": item["resultado"].unidad_rendimiento,
         "producto_id": item["producto"].pk if item["producto"] else None,
+        "producto_opcion": item["opcion_producto"],
+        "permite_crear_pt": item["permite_crear_pt"],
         "ingredientes": [{"producto_id": d["match"].producto_id, "nombre": d["extraido"].nombre,
                            "cantidad": str(d["extraido"].cantidad),
                            "unidad": d["extraido"].unidad, "orden": posicion}
@@ -158,6 +180,7 @@ def _analizar_documento_receta(request, empresa):
         "empresa": empresa, "titulo": "Revisar fórmulas detectadas", "upload_form": FormulaRecetaUploadForm(),
         "lote": lote,
         "formulas_detectadas": formulas,
+        "productos_terminados": productos_terminados,
         "hay_formulas_listas": any(item["resultado"].estado == "LISTA" for item in formulas),
         "archivo_nombre": upload_form.cleaned_data["archivo"].name,
         "vista_previa": True,
@@ -172,22 +195,44 @@ def _aprobar_lote_recetas(request, empresa, todas=False):
         if indice < 0 or indice >= len(lote):
             errores.append("Fórmula inexistente."); continue
         datos = lote[indice]
-        if datos.get("empresa_id") != empresa.pk or datos.get("estado") != "LISTA":
+        if todas and datos.get("estado") != "LISTA":
+            continue
+        if datos.get("empresa_id") != empresa.pk or datos.get("estado") not in {"LISTA", "REVISAR_PT"}:
             errores.append(f"{datos.get('nombre') or indice + 1}: no está LISTA."); continue
-        producto = ProductoInventario.objects.filter(
-            pk=datos.get("producto_id"), empresa=empresa, activo=True, tipo="producto_terminado"
-        ).first()
-        if not producto:
-            errores.append(f"{datos.get('nombre')}: asociaciones inválidas."); continue
-        existente = RecetaProduccion.objects.filter(empresa=empresa).filter(
-            Q(codigo=datos["codigo"]) | Q(producto_terminado=producto, version=datos["version"])
-        ).first()
-        if existente:
-            creadas.append(existente); continue
+        opcion = request.POST.get(f"producto_accion_{indice}") if not todas else None
+        opcion = opcion or datos.get("producto_opcion") or ("existente" if datos.get("producto_id") else "")
+        elegido_id = request.POST.get(f"producto_id_{indice}") if not todas else None
+        if datos.get("estado") == "REVISAR_PT" and not elegido_id and not (opcion == "crear" and datos.get("permite_crear_pt")):
+            errores.append(f"{datos.get('nombre')}: seleccione un producto terminado."); continue
         try:
             with transaction.atomic():
                 from conduces.models import Empresa
                 Empresa.objects.select_for_update().get(pk=empresa.pk)
+                existente_codigo = RecetaProduccion.objects.filter(empresa=empresa, codigo=datos["codigo"]).first()
+                if existente_codigo:
+                    creadas.append(existente_codigo)
+                    continue
+                producto = None
+                if opcion == "existente":
+                    producto = ProductoInventario.objects.filter(
+                        pk=elegido_id or datos.get("producto_id"), empresa=empresa,
+                        activo=True, tipo="producto_terminado").first()
+                elif opcion == "crear" and datos.get("permite_crear_pt"):
+                    nombre = " ".join(datos["nombre"].split())
+                    if not nombre or len(nombre) > 180:
+                        raise ValidationError("Nombre del producto terminado inválido.")
+                    equivalentes = [p for p in ProductoInventario.objects.filter(empresa=empresa, tipo="producto_terminado")
+                                   if normalizar_nombre(p.nombre) == normalizar_nombre(nombre)]
+                    if len(equivalentes) > 1:
+                        raise ValidationError("Producto terminado ambiguo; requiere asociación manual.")
+                    producto = equivalentes[0] if equivalentes else None
+                    if producto is None:
+                        producto = ProductoInventario.objects.create(
+                            empresa=empresa, codigo=siguiente_codigo_producto(empresa=empresa, tipo="producto_terminado"),
+                            nombre=nombre, tipo="producto_terminado", unidad_medida="unidad", stock_actual=0,
+                            origen_catalogo="RECETA", requiere_revision=True, activo=True)
+                if not producto:
+                    raise ValidationError("Producto terminado sin asociación válida.")
                 existente = RecetaProduccion.objects.filter(empresa=empresa).filter(
                     Q(codigo=datos["codigo"]) | Q(producto_terminado=producto, version=datos["version"])
                 ).first()

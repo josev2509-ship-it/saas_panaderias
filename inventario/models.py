@@ -40,6 +40,15 @@ class CategoriaInventario(models.Model):
 # PRODUCTOS / ARTÍCULOS DE INVENTARIO
 # =====================================================
 
+class SecuenciaProductoInventario(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    prefijo = models.CharField(max_length=4)
+    ultimo_numero = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["empresa", "prefijo"], name="inv_secuencia_producto_empresa_prefijo")]
+
+
 class ProductoInventario(models.Model):
     TIPOS = (
         ("materia_prima", "Materia prima"),
@@ -56,6 +65,10 @@ class ProductoInventario(models.Model):
     UNIDADES_BASE = (
         ("lb", "Libras"),
         ("oz", "Onzas"),
+        ("ml", "Mililitros"),
+        ("fl_oz", "Onzas líquidas"),
+        ("gal_us", "Galón estadounidense"),
+        ("docena", "Docena"),
         ("g", "Gramos"),
         ("kg", "Kilogramos"),
         ("unidad", "Unidad"),
@@ -160,6 +173,7 @@ class ProductoInventario(models.Model):
         blank=True,
         null=True
     )
+    unidad_contenido_compra = models.CharField(max_length=20, blank=True, default="")
 
     origen_catalogo = models.CharField(max_length=12, default="MANUAL", choices=(
         ("MANUAL", "Manual"), ("EXCEL", "Excel"), ("RECETA", "Receta"),
@@ -180,11 +194,13 @@ class ProductoInventario(models.Model):
 
     @property
     def configuracion_compra_completa(self):
+        from .units import unidades_compatibles
         return bool(
             self.activo and self.nombre.strip() and self.unidad_medida
             and (self.unidad_compra or "").strip()
             and self.cantidad_por_empaque and self.cantidad_por_empaque > 0
             and self.precio_unitario_compra is not None and self.precio_unitario_compra >= 0
+            and unidades_compatibles(self.unidad_contenido_compra or self.unidad_medida, self.unidad_medida)
         )
 
     @property
@@ -195,7 +211,12 @@ class ProductoInventario(models.Model):
     def costo_unitario(self):
         if not self.cantidad_por_empaque:
             return Decimal("0")
-        return Decimal(self.precio_unitario_compra or 0) / Decimal(self.cantidad_por_empaque or 1)
+        from .units import convertir, unidades_compatibles
+        origen = self.unidad_contenido_compra or self.unidad_medida
+        if not unidades_compatibles(origen, self.unidad_medida):
+            return Decimal("0")
+        contenido_interno = convertir(self.cantidad_por_empaque, origen, self.unidad_medida)
+        return Decimal(self.precio_unitario_compra or 0) / contenido_interno
 
     def valor_actual(self):
         return Decimal(self.stock_actual or 0) * self.costo_unitario
@@ -1001,6 +1022,7 @@ class DetalleRecetaProduccion(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+        from .units import unidades_compatibles
         errors = {}
         if self.materia_prima_id and self.receta_id:
             if self.materia_prima.empresa_id != self.receta.empresa_id:
@@ -1009,6 +1031,8 @@ class DetalleRecetaProduccion(models.Model):
                 errors["materia_prima"] = "La materia prima no puede ser el producto terminado."
             if not self.materia_prima.activo or self.materia_prima.tipo == "producto_terminado":
                 errors["materia_prima"] = "Selecciona una materia prima activa."
+            if not unidades_compatibles(self.unidad_medida, self.materia_prima.unidad_medida):
+                errors["unidad_medida"] = "Unidad incompatible; requiere equivalencia específica del producto."
         if errors: raise ValidationError(errors)
 
 

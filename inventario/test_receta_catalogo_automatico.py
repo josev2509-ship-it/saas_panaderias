@@ -87,7 +87,7 @@ class RecetaCatalogoAutomaticoTests(TestCase):
         self.assertEqual(evaluar_ingrediente(empresa=self.empresa, nombre="Harina fuerte", unidad="lb").producto_id, fuerte.pk)
 
     def test_unidad_incompatible_requiere_revision(self):
-        resolver_ingrediente_aprobado(empresa=self.empresa, nombre="Harina fuerte", unidad="kg")
+        resolver_ingrediente_aprobado(empresa=self.empresa, nombre="Harina fuerte", unidad="litro")
         self.assertEqual(evaluar_ingrediente(empresa=self.empresa, nombre="Harina fuerte", unidad="lb").estado, "REVISAR")
 
     def test_edicion_completa_mismo_producto_y_referencia(self):

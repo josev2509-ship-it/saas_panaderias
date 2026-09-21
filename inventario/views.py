@@ -539,8 +539,10 @@ def crear_producto_inventario(request):
             else "materia_prima" if tipo == "materia_prima"
             else "otro"
         )
-        unidad_medida = request.POST.get("unidad_medida") or "lb"
-        cantidad_por_empaque = convertir_decimal(request.POST.get("cantidad_por_empaque"), "1")
+        from .units import normalizar_unidad
+        from .product_codes import siguiente_codigo_producto
+        unidad_medida = normalizar_unidad(request.POST.get("unidad_contenido_compra") or request.POST.get("unidad_medida") or "lb")
+        cantidad_por_empaque = convertir_decimal(request.POST.get("contenido_compra") or request.POST.get("cantidad_por_empaque"), "1")
         stock_inicial = convertir_decimal(request.POST.get("stock_inicial"), "0")
         stock_minimo = convertir_decimal(request.POST.get("stock_minimo"), "0")
         precio = convertir_decimal(request.POST.get("precio_unitario_compra"), "0")
@@ -548,6 +550,8 @@ def crear_producto_inventario(request):
         errores = []
         if not nombre:
             errores.append("El nombre del producto es obligatorio.")
+        if unidad_medida not in dict(ProductoInventario.UNIDADES_BASE):
+            errores.append("Seleccione una unidad de contenido válida.")
         if codigo and ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).exists():
             errores.append("Ya existe un producto con ese código.")
         if cantidad_por_empaque <= 0:
@@ -564,6 +568,12 @@ def crear_producto_inventario(request):
                 messages.error(request, error)
         else:
             with transaction.atomic():
+                from conduces.models import Empresa
+                Empresa.objects.select_for_update().get(pk=empresa.pk)
+                if codigo and ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).exists():
+                    messages.error(request, "Ya existe un producto con ese código.")
+                    return redirect("inventario:crear_producto_inventario")
+                codigo = codigo or siguiente_codigo_producto(empresa=empresa, tipo=tipo)
                 producto = ProductoInventario.objects.create(
                     empresa=empresa,
                     codigo=codigo,
@@ -572,6 +582,7 @@ def crear_producto_inventario(request):
                     clasificacion_operativa=clasificacion,
                     afecta_produccion=request.POST.get("afecta_produccion") == "on",
                     unidad_medida=unidad_medida,
+                    unidad_contenido_compra=unidad_medida,
                     unidad_compra=request.POST.get("unidad_compra", "").strip(),
                     cantidad_por_empaque=cantidad_por_empaque,
                     stock_actual=Decimal("0"),
@@ -617,6 +628,7 @@ def descargar_plantilla_inventario(request):
         "cantidad_por_empaque", "stock_actual", "stock_minimo",
         "precio_unitario_compra", "porcentaje_itbis", "proveedor", "activo",
         "origen_catalogo", "requiere_revision",
+        "contenido_compra", "unidad_contenido", "precio_presentacion",
     ]
     ws.append(encabezados)
 
@@ -630,6 +642,8 @@ def descargar_plantilla_inventario(request):
                 producto.stock_minimo, producto.precio_unitario_compra,
                 producto.porcentaje_itbis, producto.proveedor or "", bool(producto.activo),
                 producto.origen_catalogo, bool(producto.requiere_revision),
+                producto.cantidad_por_empaque, producto.unidad_contenido_compra or producto.unidad_medida,
+                producto.precio_unitario_compra,
             ])
 
     nombre_archivo = "plantilla_inventario.xlsx" if vacia else "catalogo_inventario.xlsx"
@@ -660,7 +674,9 @@ def cargar_inventario_excel(request):
 
     encabezados = [str(valor or "").strip().lower() for valor in filas[0]]
     indice = {nombre: pos for pos, nombre in enumerate(encabezados)}
-    faltantes = sorted({"nombre", "tipo", "unidad_medida"} - set(indice))
+    faltantes = sorted({"nombre", "tipo"} - set(indice))
+    if "unidad_medida" not in indice and "unidad_contenido" not in indice:
+        faltantes.append("unidad_medida o unidad_contenido")
     if faltantes:
         messages.error(request, "Faltan columnas requeridas: " + ", ".join(faltantes))
         return redirect("inventario:productos")
@@ -675,6 +691,8 @@ def cargar_inventario_excel(request):
     actualizados = 0
     from .recipe_matching import normalizar_nombre
     from .recipe_catalog import evaluar_ingrediente
+    from .units import normalizar_unidad, unidades_compatibles
+    from .product_codes import siguiente_codigo_producto
 
     for row in filas[1:]:
         nombre = str(valor(row, "nombre", "") or "").strip()
@@ -683,7 +701,11 @@ def cargar_inventario_excel(request):
             continue
 
         tipo = str(valor(row, "tipo", "materia_prima") or "materia_prima").strip().lower()
-        unidad = str(valor(row, "unidad_medida", "lb") or "lb").strip().lower()
+        unidad_contenido = normalizar_unidad(valor(row, "unidad_contenido") or valor(row, "unidad_medida") or "lb")
+        unidad = normalizar_unidad(valor(row, "unidad_medida") or unidad_contenido)
+        if unidad not in dict(ProductoInventario.UNIDADES_BASE) or not unidades_compatibles(unidad_contenido, unidad):
+            messages.warning(request, f"{nombre}: unidad de compra incompatible o no reconocida; revise esta fila.")
+            continue
         producto = None
         if codigo:
             producto = ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).first()
@@ -694,11 +716,15 @@ def cargar_inventario_excel(request):
                 messages.warning(request, f"{nombre}: múltiples productos con nombre equivalente; revise esta fila.")
                 continue
             if iguales:
-                if iguales[0].unidad_medida != unidad:
+                if not unidades_compatibles(iguales[0].unidad_medida, unidad):
                     messages.warning(request, f"{nombre}: unidad incompatible con el producto existente; revise esta fila.")
                     continue
                 producto = iguales[0]
-                if codigo and producto.codigo and producto.codigo != codigo:
+                if codigo and producto.codigo and producto.codigo != codigo and not (
+                    producto.origen_catalogo == "RECETA" and producto.requiere_revision
+                    and producto.codigo.startswith({"materia_prima": "MP-", "producto_terminado": "PT-"}.get(producto.tipo, "PRD-"))
+                    and producto.codigo.rsplit("-", 1)[-1].isdigit()
+                ):
                     messages.warning(request, f"{nombre}: el código no coincide con el producto existente; revise esta fila.")
                     continue
             elif tipo == "materia_prima" and evaluar_ingrediente(empresa=empresa, nombre=nombre, unidad=unidad).estado == "REVISAR":
@@ -708,6 +734,7 @@ def cargar_inventario_excel(request):
         creado = producto is None
         if creado:
             producto = ProductoInventario(empresa=empresa, stock_actual=Decimal("0"), origen_catalogo="EXCEL")
+            codigo = codigo or siguiente_codigo_producto(empresa=empresa, tipo=tipo)
 
         clasificacion = str(valor(row, "clasificacion_operativa", "") or "").strip().lower()
         if not clasificacion:
@@ -718,11 +745,12 @@ def cargar_inventario_excel(request):
         producto.tipo = tipo
         producto.clasificacion_operativa = clasificacion
         producto.afecta_produccion = _valor_booleano(valor(row, "afecta_produccion", True), True)
-        producto.unidad_medida = unidad
+        producto.unidad_medida = producto.unidad_medida if not creado else unidad
+        producto.unidad_contenido_compra = unidad_contenido
         producto.unidad_compra = str(valor(row, "unidad_compra", "") or "").strip()
-        producto.cantidad_por_empaque = convertir_decimal(valor(row, "cantidad_por_empaque", 1), "1")
+        producto.cantidad_por_empaque = convertir_decimal(valor(row, "contenido_compra") or valor(row, "cantidad_por_empaque", 1), "1")
         producto.stock_minimo = convertir_decimal(valor(row, "stock_minimo", 0), "0")
-        producto.precio_unitario_compra = convertir_decimal(valor(row, "precio_unitario_compra", 0), "0")
+        producto.precio_unitario_compra = convertir_decimal(valor(row, "precio_presentacion") if valor(row, "precio_presentacion") is not None else valor(row, "precio_unitario_compra", 0), "0")
         producto.porcentaje_itbis = convertir_itbis(valor(row, "porcentaje_itbis", 0))
         producto.proveedor = str(valor(row, "proveedor", "") or "").strip()
         producto.activo = _valor_booleano(valor(row, "activo", True), True)
@@ -1746,9 +1774,7 @@ def registrar_consumo_manual(request, produccion_id):
     if request.method == "POST":
 
         producto_id = request.POST.get("producto")
-        cantidad = convertir_decimal(
-            request.POST.get("cantidad")
-        )
+        cantidad = convertir_decimal(request.POST.get("cantidad"))
 
         observacion = request.POST.get("observacion")
 
@@ -1757,23 +1783,35 @@ def registrar_consumo_manual(request, produccion_id):
             id=producto_id,
             empresa=empresa
         )
+        from .units import convertir
+        from django.core.exceptions import ValidationError
+        from decimal import ROUND_HALF_UP
+        try:
+            cantidad = (convertir(cantidad, request.POST.get("unidad_cantidad") or producto.unidad_medida, producto.unidad_medida)
+                + convertir(convertir_decimal(request.POST.get("cantidad_adicional"), "0"), request.POST.get("unidad_adicional") or producto.unidad_medida, producto.unidad_medida)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if cantidad <= 0:
+                raise ValidationError("La cantidad debe ser positiva.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("inventario:detalle_produccion", produccion.id)
 
-        DetalleConsumoProduccion.objects.create(
-            produccion=produccion,
-            producto=producto,
-            cantidad=cantidad,
-            observacion=observacion,
-            usuario=request.user
-        )
+        with transaction.atomic():
+            DetalleConsumoProduccion.objects.create(
+                produccion=produccion,
+                producto=producto,
+                cantidad=cantidad,
+                observacion=observacion,
+                usuario=request.user
+            )
 
-        _movimiento_desde_vista(request,
-            empresa=empresa,
-            producto=producto,
-            tipo="salida",
-            cantidad=cantidad,
-            observacion=f"Consumo manual producción #{produccion.id}",
-            usuario=request.user
-        )
+            _movimiento_desde_vista(request,
+                empresa=empresa,
+                producto=producto,
+                tipo="salida",
+                cantidad=cantidad,
+                observacion=f"Consumo manual producción #{produccion.id}",
+                usuario=request.user
+            )
 
         messages.success(
             request,
@@ -2036,8 +2074,11 @@ def editar_producto_inventario(request, producto_id):
     )
 
     if request.method == "POST":
+        from .units import normalizar_unidad, unidades_compatibles
+        from .product_codes import siguiente_codigo_producto
         codigo_nuevo = request.POST.get("codigo", "").strip() or None
-        unidad_nueva = request.POST.get("unidad_medida")
+        unidad_contenido = normalizar_unidad(request.POST.get("unidad_contenido_compra") or request.POST.get("unidad_medida") or producto.unidad_medida)
+        unidad_nueva = producto.unidad_medida if "unidad_contenido_compra" in request.POST else request.POST.get("unidad_medida")
         tipo_nuevo = request.POST.get("tipo")
         if codigo_nuevo and ProductoInventario.objects.filter(
             empresa=empresa, codigo=codigo_nuevo).exclude(pk=producto.pk).exists():
@@ -2048,12 +2089,17 @@ def editar_producto_inventario(request, producto_id):
         ):
             messages.error(request, "No cambie tipo ni unidad base de un ingrediente usado en recetas; requiere revisión de las fórmulas.")
             return redirect("inventario:editar_producto_inventario", producto_id=producto.pk)
-        producto.codigo = codigo_nuevo
+        if unidad_contenido not in dict(ProductoInventario.UNIDADES_BASE) or not unidades_compatibles(unidad_contenido, unidad_nueva):
+            messages.error(request, "La presentación requiere una unidad compatible con la unidad interna; no se convierten masa y volumen.")
+            return redirect("inventario:editar_producto_inventario", producto_id=producto.pk)
+        producto.codigo = codigo_nuevo or siguiente_codigo_producto(empresa=empresa, tipo=tipo_nuevo)
         producto.nombre = request.POST.get("nombre", "").strip()
         producto.tipo = request.POST.get("tipo")
         producto.unidad_medida = request.POST.get("unidad_medida")
+        producto.unidad_medida = unidad_nueva
+        producto.unidad_contenido_compra = unidad_contenido
         producto.unidad_compra = request.POST.get("unidad_compra", "").strip()
-        producto.cantidad_por_empaque = convertir_decimal(request.POST.get("cantidad_por_empaque"), "1")
+        producto.cantidad_por_empaque = convertir_decimal(request.POST.get("contenido_compra") or request.POST.get("cantidad_por_empaque"), "1")
         producto.stock_minimo = convertir_decimal(request.POST.get("stock_minimo"), "0")
         producto.precio_unitario_compra = convertir_decimal(request.POST.get("precio_unitario_compra"), "0")
         producto.porcentaje_itbis = convertir_itbis(request.POST.get("porcentaje_itbis"))
@@ -2173,6 +2219,15 @@ def registrar_movimiento_manual(request):
 
         tipo = request.POST.get("tipo")
         cantidad = convertir_decimal(request.POST.get("cantidad"), "0")
+        from .units import convertir
+        from django.core.exceptions import ValidationError
+        from decimal import ROUND_HALF_UP
+        try:
+            cantidad = (convertir(cantidad, request.POST.get("unidad_cantidad") or producto.unidad_medida, producto.unidad_medida)
+                + convertir(convertir_decimal(request.POST.get("cantidad_adicional"), "0"), request.POST.get("unidad_adicional") or producto.unidad_medida, producto.unidad_medida)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("inventario:registrar_movimiento_manual")
         costo_unitario = convertir_decimal(request.POST.get("costo_unitario"), "0")
         referencia = request.POST.get("referencia", "").strip()
         observacion = request.POST.get("observacion", "").strip()
@@ -2198,6 +2253,7 @@ def registrar_movimiento_manual(request):
 
     return render(request, "inventario/registrar_movimiento.html", {
         "productos": productos,
+        "unidades": [(codigo, etiqueta) for codigo, etiqueta in ProductoInventario.UNIDADES_BASE if codigo in {"lb", "oz", "g", "kg", "ml", "litro", "fl_oz", "gal_us", "unidad", "docena"}],
     })
 
 

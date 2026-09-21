@@ -11,12 +11,12 @@
       <div><label>Nombre *</label><input type="text" name="nombre" value="{{ request.POST.nombre|default:'' }}" required></div>
       <div><label>Tipo *</label><select name="tipo" required>{% for valor, etiqueta in tipos %}<option value="{{ valor }}" {% if request.POST.tipo == valor or not request.POST.tipo and valor == "materia_prima" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
       <div><label>Clasificación operativa</label><select name="clasificacion_operativa">{% for valor, etiqueta in clasificaciones %}<option value="{{ valor }}" {% if request.POST.clasificacion_operativa == valor or not request.POST.clasificacion_operativa and valor == "materia_prima" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
-      <div><label>Unidad base *</label><select name="unidad_medida" required>{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if request.POST.unidad_medida == valor or not request.POST.unidad_medida and valor == "lb" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select></div>
-      <div><label>Unidad de compra</label><input type="text" name="unidad_compra" placeholder="Ej. saco, caja, fardo" value="{{ request.POST.unidad_compra|default:'' }}"></div>
-      <div><label>Cantidad por empaque *</label><input type="number" min="0.0001" step="0.0001" name="cantidad_por_empaque" value="{{ request.POST.cantidad_por_empaque|default:'1' }}" required></div>
+      <div><label>Presentación de compra · ¿cómo compras este producto?</label><input type="text" name="unidad_compra" placeholder="Saco, caja, fardo..." value="{{ request.POST.unidad_compra|default:'' }}"></div>
+      <div><label>Contenido de cada presentación *</label><input type="number" min="0.0001" step="0.0001" name="contenido_compra" value="{{ request.POST.contenido_compra|default:'1' }}" required></div>
+      <div><label>Unidad del contenido *</label><select name="unidad_contenido_compra" required>{% for valor, etiqueta in unidades %}<option value="{{ valor }}" {% if request.POST.unidad_contenido_compra == valor or not request.POST.unidad_contenido_compra and valor == "lb" %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}</select><small>Ejemplo: 1 saco = 120 lb.</small></div>
       <div><label>Stock inicial</label><input type="number" min="0" step="0.0001" name="stock_inicial" value="{{ request.POST.stock_inicial|default:'0' }}"><small>Se registrará como movimiento de inventario.</small></div>
       <div><label>Stock mínimo</label><input type="number" min="0" step="0.0001" name="stock_minimo" value="{{ request.POST.stock_minimo|default:'0' }}"></div>
-      <div><label>Precio por empaque</label><input type="number" min="0" step="0.0001" name="precio_unitario_compra" value="{{ request.POST.precio_unitario_compra|default:'0' }}"></div>
+      <div><label>Precio de la presentación de compra</label><input type="number" min="0" step="0.0001" name="precio_unitario_compra" value="{{ request.POST.precio_unitario_compra|default:'0' }}"></div>
       <div><label>ITBIS %</label><input type="number" min="0" step="0.01" name="porcentaje_itbis" value="{{ request.POST.porcentaje_itbis|default:'0' }}"></div>
       <div><label>Proveedor</label><input type="text" name="proveedor" value="{{ request.POST.proveedor|default:'' }}"></div>
     </div><br>

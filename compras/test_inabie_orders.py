@@ -94,6 +94,7 @@ class InabieOrderDraftTests(TestCase):
         self.assertEqual(linea.sugerido_base, Decimal("180"))
         self.assertEqual(linea.empaques_sugeridos, 8)
         self.assertEqual(linea.cantidad, 8)
+        self.assertIn("saco", linea.equivalencia_compra)
         self.assertEqual([t["matricula"] for t in linea.traza], [700, 250])
         self.assertEqual(orden.moneda, self.moneda)
         self.assertEqual((orden.origen, orden.periodo_desde, orden.periodo_hasta),
