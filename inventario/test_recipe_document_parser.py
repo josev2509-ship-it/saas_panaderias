@@ -104,11 +104,11 @@ class RecipeDocumentParserTests(SimpleTestCase):
         self.assertEqual([i.nombre for i in lote.formulas[1].ingredientes], ["Avena"])
 
     def test_tabla_elige_mayor_harina_y_misma_columna(self):
-        lote = self.parser.parse_text("PRODUCTO: Muffin\nCODIGO: MZ-01\nHarina de trigo suave | 80 lb | 100 lb | 60 lb\nZanahoria | 40 lb | 50 lb | 30 lb\nAzucar | 48 lb | 60 lb | 36 lb\nTotal | 276.8 lb | 346.38 lb | 208 lb\nCantidad en unidades | 2015 | 2519 | 1511")
+        lote = self.parser.parse_text("PRODUCTO: Muffin\nCODIGO: MZ-01\nHarina de trigo suave | 80 lb | 100 lb | 60 lb\nZanahoria | 40 lb | 50 lb | 30 lb\nAzucar | 48 lb | 60 lb | 36 lb\nTotal | 168 lb | 210 lb | 126 lb\nCantidad en unidades | 2015 | 2519 | 1511")
         formula = lote.formulas[0]
         self.assertEqual(formula.columna_base, 1)
         self.assertEqual([i.cantidad for i in formula.ingredientes], [Decimal("100"), Decimal("50"), Decimal("60")])
-        self.assertEqual(formula.total, Decimal("346.38"))
+        self.assertEqual(formula.total, Decimal("210"))
         self.assertEqual(formula.rendimiento_base, Decimal("2519"))
 
     def test_revision_no_se_contamina_con_pagina(self):

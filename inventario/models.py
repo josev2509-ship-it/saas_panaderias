@@ -49,6 +49,17 @@ class SecuenciaProductoInventario(models.Model):
         constraints = [models.UniqueConstraint(fields=["empresa", "prefijo"], name="inv_secuencia_producto_empresa_prefijo")]
 
 
+class AliasIngredienteReceta(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    alias_normalizado = models.CharField(max_length=180)
+    producto = models.ForeignKey("ProductoInventario", on_delete=models.PROTECT)
+    creado_por = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["empresa", "alias_normalizado"], name="inv_alias_receta_empresa_nombre_uniq")]
+
+
 class ProductoInventario(models.Model):
     TIPOS = (
         ("materia_prima", "Materia prima"),

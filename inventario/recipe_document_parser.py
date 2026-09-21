@@ -164,7 +164,7 @@ class RecipeDocumentParser:
             if not bloque.strip():
                 continue
             formula = self._parse_formula(bloque)
-            if formula.nombre and formula.ingredientes:
+            if formula.nombre and (formula.ingredientes or any("Ninguna columna coincide" in aviso for aviso in formula.advertencias)):
                 formulas.append(formula)
         return ResultadoDocumentoRecetas(formulas=formulas)
 
@@ -236,7 +236,7 @@ class RecipeDocumentParser:
     def _actualizar_estado(resultado):
         base_tabular_faltante = resultado.total is not None and resultado.columna_base is None
         faltantes = not resultado.nombre or not resultado.rendimiento_base or not resultado.ingredientes or base_tabular_faltante
-        ambiguo = bool(resultado.advertencias) or any(i.estado == "REVISAR" for i in resultado.ingredientes)
+        ambiguo = any("se excluyó de la selección base" not in aviso for aviso in resultado.advertencias) or any(i.estado == "REVISAR" for i in resultado.ingredientes)
         resultado.estado = "INCOMPLETA" if faltantes else ("REVISAR" if ambiguo else "LISTA")
 
     def _separar_formulas(self, texto):
@@ -272,7 +272,12 @@ class RecipeDocumentParser:
         harina = next((f for f in filas if re.search(r"\bHARINA(?:\s+DE\s+TRIGO)?\b", _normalizar(f[0]))), None)
         if filas and harina and len(harina[1]) > 1:
             validas = self._columnas_validas(filas)
-            candidatas = validas or list(range(len(harina[1])))
+            total_oficial = any(_normalizar(nombre).startswith("TOTAL") for nombre, _, _ in filas)
+            if total_oficial and not validas:
+                r.advertencias.append("Ninguna columna coincide con la suma de ingredientes y el Total oficial; no se eligió formulación base.")
+                self._actualizar_estado(r)
+                return r
+            candidatas = validas if total_oficial else list(range(len(harina[1])))
             indice = max(candidatas, key=lambda i: harina[1][i] if i < len(harina[1]) and harina[1][i] is not None else Decimal("-1")); r.columna_base = indice
             for descartada in sorted(set(range(len(harina[1]))) - set(validas)):
                 if harina[1][descartada] > harina[1][indice]:

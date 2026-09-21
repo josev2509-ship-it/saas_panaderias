@@ -6,7 +6,7 @@ from conduces.models import Empresa
 from .models import ProductoInventario, SecuenciaProductoInventario
 
 
-PREFIJOS = {"materia_prima": "MP", "producto_terminado": "PT", "empaque": "EMP", "consumible": "CON"}
+PREFIJOS = {"materia_prima": "MP", "producto_terminado": "PT", "empaque": "EMP", "consumible": "CON", "receta": "REC"}
 
 
 def siguiente_codigo_producto(*, empresa, tipo):
@@ -19,6 +19,11 @@ def siguiente_codigo_producto(*, empresa, tipo):
         while True:
             secuencia.ultimo_numero += 1
             codigo = f"{prefijo}-{secuencia.ultimo_numero:06d}"
-            if not ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).exists():
+            if tipo == "receta":
+                from .models import RecetaProduccion
+                ocupado = RecetaProduccion.objects.filter(empresa=empresa, codigo=codigo).exists()
+            else:
+                ocupado = ProductoInventario.objects.filter(empresa=empresa, codigo=codigo).exists()
+            if not ocupado:
                 secuencia.save(update_fields=["ultimo_numero"])
                 return codigo

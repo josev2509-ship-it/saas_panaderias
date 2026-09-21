@@ -24,22 +24,27 @@
     {% if formulas_detectadas %}<section class="com-card"><h2>Se detectaron {{ formulas_detectadas|length }} fórmulas</h2>
       {% for item in formulas_detectadas %}
       <details class="recipe-card" name="formula-detectada">
-        <summary><span><strong>{{ forloop.counter|stringformat:"02d" }} · {{ item.resultado.nombre|default:"Sin nombre" }}</strong><br>{{ item.resultado.ingredientes|length }} ingredientes · Rendimiento: {{ item.resultado.rendimiento_base|default:"—" }} {{ item.resultado.unidad_rendimiento }}</span><span><span class="status {% if item.resultado.estado == 'LISTA' %}status-ok{% elif item.resultado.estado == 'REVISAR' or item.resultado.estado == 'REVISAR_PT' %}status-review{% else %}status-none{% endif %}">{{ item.resultado.estado }}</span> · {{ item.motivo }}</span></summary>
+        <summary><span><strong>{{ forloop.counter|stringformat:"02d" }} · {{ item.resultado.nombre|default:"Sin nombre" }}</strong><br>{{ item.resultado.ingredientes|length }} ingredientes · Rendimiento: {{ item.resultado.rendimiento_base|default:"—" }} {{ item.resultado.unidad_rendimiento }}</span><span><span class="status {% if item.resultado.estado == 'LISTA' %}status-ok{% elif item.resultado.estado == 'INCOMPLETA' %}status-none{% else %}status-review{% endif %}">{{ item.resultado.estado }}</span> · {{ item.motivo }}</span></summary>
         <div class="recipe-card-body">
           <p>Producto sugerido: <strong>{{ item.producto_match.producto_nombre|default:"Sin asociación" }}</strong><br>Confianza: {{ item.producto_match.estado }}{% if item.producto_match.concepto_menu %}<br>Concepto de menú: {{ item.producto_match.concepto_menu }}{% endif %}</p>
           {% if item.producto_match.candidatos %}<p>Candidatos: {% for candidato in item.producto_match.candidatos %}{{ candidato.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
           <div class="recipe-review-table"><table data-enterprise-controls="off"><thead><tr><th>Detectado</th><th>Inventario sugerido</th><th>Cantidad</th><th>Unidad</th><th>Estado</th></tr></thead><tbody>
           {% for detalle in item.analisis_ingredientes %}<tr><td>{{ detalle.extraido.nombre }}</td><td>{{ detalle.match.producto_nombre|default:"Ingrediente no encontrado" }}</td><td>{{ detalle.extraido.cantidad }}</td><td>{{ detalle.extraido.unidad|default:detalle.extraido.unidad_original }}</td><td>
-            <span class="status {% if detalle.match.estado == 'EXACTA_NORMALIZADA' or detalle.match.estado == 'ALTA_CONFIANZA' %}status-ok{% elif detalle.match.estado == 'REVISAR' or detalle.match.estado == 'PROVISIONAL' %}status-review{% else %}status-none{% endif %}">{{ detalle.match.estado }}</span>
+            <span class="status {% if detalle.decision == 'EXISTENTE' %}status-ok{% elif detalle.decision == 'REVISAR' or detalle.decision == 'PROVISIONAL' %}status-review{% else %}status-none{% endif %}">{{ detalle.decision }}</span>
             {% if detalle.match.estado == 'PROVISIONAL' %}<br><small>Se creará producto provisional al aprobar; quedará pendiente de completar para compras.</small>{% elif not detalle.match.producto_id %}<br><a href="{% url 'inventario:productos' %}">Revisar catálogo</a>{% endif %}
           </td></tr>{% endfor %}</tbody></table></div>
           {% for aviso in item.resultado.advertencias %}<div class="alert alert-warning">{{ aviso }}</div>{% endfor %}
-          {% if not preview_local and item.resultado.estado == 'LISTA' or not preview_local and item.resultado.estado == 'REVISAR_PT' %}<form method="post">{% csrf_token %}<input type="hidden" name="accion" value="aprobar_formula"><input type="hidden" name="formula_index" value="{{ forloop.counter0 }}">
+          {% if not preview_local and item.resultado.estado == 'LISTA' or not preview_local and item.resultado.estado == 'REVISAR_PT' or not preview_local and item.resultado.estado == 'REVISAR_ING' or not preview_local and item.resultado.estado == 'REVISAR_ASOCIACIONES' %}<form method="post">{% csrf_token %}<input type="hidden" name="accion" value="aprobar_formula"><input type="hidden" name="formula_index" value="{{ forloop.counter0 }}">
             <fieldset><legend>Producto terminado</legend>
               {% if item.permite_crear_pt %}<label><input type="radio" name="producto_accion_{{ forloop.counter0 }}" value="crear" {% if item.opcion_producto == 'crear' %}checked{% endif %}> Crear «{{ item.resultado.nombre }}» (unidad de producción: unidad)</label><br>{% endif %}
               <label><input type="radio" name="producto_accion_{{ forloop.counter0 }}" value="existente" {% if item.opcion_producto == 'existente' %}checked{% endif %}> Usar producto existente</label>
               <select name="producto_id_{{ forloop.counter0 }}"><option value="">Seleccione...</option>{% for pt in productos_terminados %}<option value="{{ pt.pk }}" {% if item.producto.pk == pt.pk %}selected{% endif %}>{{ pt.nombre }}</option>{% endfor %}</select>
             </fieldset>
+            {% for detalle in item.analisis_ingredientes %}{% if detalle.decision == 'REVISAR' %}<fieldset><legend>Resolver ingrediente: {{ detalle.extraido.nombre }}</legend><p>Se encontró un producto similar o una unidad incompatible. Confirma la asociación; no se decidirá automáticamente.</p>
+              <label><input type="radio" name="ingrediente_accion_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="existente"> Usar producto existente</label>
+              <select name="ingrediente_id_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}"><option value="">Seleccione...</option>{% for materia in materias_primas %}<option value="{{ materia.pk }}">{{ materia.nombre }} · {{ materia.unidad_medida }}</option>{% endfor %}</select><br>
+              <label><input type="radio" name="ingrediente_accion_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}" value="crear"> Crear «{{ detalle.extraido.nombre }}» como producto diferente</label>
+            </fieldset>{% endif %}{% endfor %}
             <button class="com-btn" type="submit">Aprobar receta</button></form>{% endif %}
         </div>
       </details>
