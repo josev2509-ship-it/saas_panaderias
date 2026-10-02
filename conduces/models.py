@@ -479,6 +479,13 @@ class Plan(models.Model):
 # EMPRESA SaaS
 # ==========================
 class EmpresaSaaS(models.Model):
+    empresa_operativa = models.OneToOneField(
+        "Empresa",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="empresa_saas",
+    )
     nombre = models.CharField(max_length=255)
     rnc = models.CharField(max_length=20)
     correo = models.EmailField(unique=True)

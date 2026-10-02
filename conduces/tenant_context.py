@@ -10,12 +10,15 @@ La sesión de soporte solamente será tomada en cuenta cuando
 la activemos expresamente después de migrar los módulos.
 """
 
+import logging
+
 from django.core.exceptions import PermissionDenied
 
 from .models import Empresa, EmpresaSaaS, PerfilUsuario
 
 
 GRUPO_SOPORTE_SASTRE = "Soporte SASTRE"
+logger = logging.getLogger(__name__)
 
 SESSION_SOPORTE_SAAS = "soporte_empresa_saas_id"
 SESSION_SOPORTE_OPERATIVA = "soporte_empresa_operativa_id"
@@ -65,7 +68,7 @@ def obtener_perfil_saas_usuario(user):
 
     return (
         PerfilUsuario.objects
-        .select_related("empresa")
+        .select_related("empresa", "empresa__empresa_operativa")
         .filter(
             user=user,
             activo=True,
@@ -95,6 +98,10 @@ def empresa_operativa_desde_saas(empresa_saas):
     if empresa_saas is None:
         return None
 
+    explicita = getattr(empresa_saas, "empresa_operativa", None)
+    if explicita is not None:
+        return explicita
+
     perfiles = (
         PerfilUsuario.objects
         .filter(
@@ -107,18 +114,11 @@ def empresa_operativa_desde_saas(empresa_saas):
         )
     )
 
-    for perfil in perfiles:
-        user = perfil.user
-        empresa = (
-            Empresa.objects
-            .filter(usuario=user)
-            .first()
-        )
-
-        if empresa:
-            return empresa
-
-    return None
+    candidatas = Empresa.objects.filter(
+        usuario_id__in=perfiles.values_list("user_id", flat=True)
+    ).distinct()
+    ids = list(candidatas.values_list("pk", flat=True)[:2])
+    return candidatas.filter(pk=ids[0]).first() if len(ids) == 1 else None
 
 
 def empresa_operativa_usuario(user):
@@ -131,20 +131,16 @@ def empresa_operativa_usuario(user):
     if not getattr(user, "is_authenticated", False):
         return None
 
-    empresa = (
-        Empresa.objects
-        .filter(usuario=user)
-        .first()
-    )
-
-    if empresa:
-        return empresa
-
     empresa_saas = obtener_empresa_saas_usuario(user)
-
-    return empresa_operativa_desde_saas(
-        empresa_saas
-    )
+    vinculada = empresa_operativa_desde_saas(empresa_saas)
+    directa = Empresa.objects.filter(usuario=user).first()
+    if vinculada and directa and vinculada.pk != directa.pk:
+        logger.error(
+            "TENANT_CONTRADICTORIO user_id=%s empresa_saas_id=%s vinculada_id=%s directa_id=%s",
+            user.pk, getattr(empresa_saas, "pk", None), vinculada.pk, directa.pk,
+        )
+        return None
+    return vinculada or directa
 
 
 def contexto_soporte_activo(request):
@@ -263,6 +259,13 @@ def obtener_empresa_request(
     if empresa is None:
         empresa = empresa_operativa_usuario(request.user)
 
+    return empresa
+
+
+def obtener_empresa_requerida(request, *, permitir_soporte=True):
+    empresa = obtener_empresa_request(request, permitir_soporte=permitir_soporte)
+    if empresa is None:
+        raise PermissionDenied("No existe una empresa operativa vinculada a esta cuenta.")
     return empresa
 
 def obtener_empresa_saas_request(

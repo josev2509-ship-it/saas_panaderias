@@ -1,7 +1,7 @@
 import csv
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponse
@@ -12,7 +12,8 @@ from django.views.decorators.http import require_POST
 
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
-from conduces.services import obtener_empresa_usuario
+from conduces.tenant_context import obtener_empresa_requerida
+from rrhh.access import gestion_humana_requerida
 from rrhh.models import Empleado, HistorialLaboral, SolicitudDocumentoRRHH
 from documentos.models import TipoDocumento
 from documentos.services import crear_documento_asociado
@@ -26,7 +27,9 @@ from .services import procesar_nomina
 
 
 def _e(request):
-    return obtener_empresa_usuario(request)
+    return getattr(request, "empresa_operativa", None) or obtener_empresa_requerida(
+        request, permitir_soporte=True
+    )
 
 
 def _audit(request, obj, description, before=None, after=None):
@@ -34,7 +37,7 @@ def _audit(request, obj, description, before=None, after=None):
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def dashboard(request):
     periods = PeriodoNomina.objects.filter(empresa=_e(request)).select_related("tipo").order_by("-desde")
     payrolls = Nomina.objects.filter(empresa=_e(request)).select_related("periodo__tipo").order_by("-periodo__desde")
@@ -43,7 +46,7 @@ def dashboard(request):
 
 
 @login_required
-@permission_required("nomina.add_periodonomina", raise_exception=True)
+@gestion_humana_requerida("nomina.add_periodonomina")
 @transaction.atomic
 def periodo_crear(request):
     form = PeriodoForm(request.POST or None, empresa=_e(request))
@@ -58,7 +61,7 @@ def periodo_crear(request):
 
 @login_required
 @require_POST
-@permission_required("nomina.add_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.add_nomina")
 @transaction.atomic
 def calcular(request, periodo_id):
     period = get_object_or_404(PeriodoNomina, empresa=_e(request), pk=periodo_id)
@@ -73,7 +76,7 @@ def calcular(request, periodo_id):
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def detalle(request, pk):
     payroll = get_object_or_404(Nomina.objects.select_related("periodo__tipo"), empresa=_e(request), pk=pk)
     details = payroll.detalles.select_related("empleado__puesto", "empleado__departamento").order_by("empleado__apellidos")
@@ -81,7 +84,7 @@ def detalle(request, pk):
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def empleado_detalle(request, pk, detalle_id):
     payroll = get_object_or_404(Nomina, empresa=_e(request), pk=pk)
     detail = get_object_or_404(DetalleNominaEmpleado.objects.select_related("empleado__puesto", "nomina__periodo"), nomina=payroll, pk=detalle_id)
@@ -89,7 +92,7 @@ def empleado_detalle(request, pk, detalle_id):
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def panel(request, pk, seccion):
     allowed = {"ingresos", "descuentos", "prestamos", "aportes", "volantes", "documentos"}
     if seccion not in allowed:
@@ -106,7 +109,7 @@ def panel(request, pk, seccion):
 
 @login_required
 @require_POST
-@permission_required("nomina.change_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.change_nomina")
 @transaction.atomic
 def estado(request, pk):
     obj = get_object_or_404(Nomina, empresa=_e(request), pk=pk)
@@ -125,13 +128,13 @@ def estado(request, pk):
 
 
 @login_required
-@permission_required("nomina.view_conceptonomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_conceptonomina")
 def conceptos(request):
     return render(request, "rrhh/workforce_list.html", {"titulo": "Conceptos de nómina", "objetos": ConceptoNomina.objects.filter(empresa=_e(request)).order_by("codigo"), "tipo": "conceptos"})
 
 
 @login_required
-@permission_required("nomina.add_conceptonomina", raise_exception=True)
+@gestion_humana_requerida("nomina.add_conceptonomina")
 def concepto_crear(request):
     form = ConceptoForm(request.POST or None, empresa=_e(request))
     if request.method == "POST" and form.is_valid():
@@ -144,7 +147,7 @@ def concepto_crear(request):
 
 
 @login_required
-@permission_required("nomina.add_novedadnomina", raise_exception=True)
+@gestion_humana_requerida("nomina.add_novedadnomina")
 def novedad_crear(request):
     naturaleza = request.GET.get("tipo", "").upper()
     payroll = None
@@ -165,14 +168,14 @@ def novedad_crear(request):
 
 
 @login_required
-@permission_required("nomina.view_liquidacionlaboral", raise_exception=True)
+@gestion_humana_requerida("nomina.view_liquidacionlaboral")
 def prestaciones(request):
     objects = LiquidacionLaboral.objects.filter(empresa=_e(request)).select_related("empleado").order_by("-fecha")
     return render(request, "nomina/prestaciones.html", {"objetos": objects})
 
 
 @login_required
-@permission_required("nomina.add_liquidacionlaboral", raise_exception=True)
+@gestion_humana_requerida("nomina.add_liquidacionlaboral")
 @transaction.atomic
 def prestacion_crear(request):
     form = LiquidacionForm(request.POST or None, empresa=_e(request))
@@ -189,7 +192,7 @@ def prestacion_crear(request):
 
 @login_required
 @require_POST
-@permission_required("nomina.change_liquidacionlaboral", raise_exception=True)
+@gestion_humana_requerida("nomina.change_liquidacionlaboral")
 def prestacion_recalcular(request, pk):
     obj = get_object_or_404(LiquidacionLaboral, empresa=_e(request), pk=pk)
     try:
@@ -201,7 +204,7 @@ def prestacion_recalcular(request, pk):
 
 
 @login_required
-@permission_required("nomina.view_liquidacionlaboral", raise_exception=True)
+@gestion_humana_requerida("nomina.view_liquidacionlaboral")
 def prestacion_detalle(request, pk):
     obj = get_object_or_404(LiquidacionLaboral.objects.select_related("empleado"), empresa=_e(request), pk=pk)
     return render(request, "nomina/prestacion_detalle.html", {"obj": obj, "desglose": obj.prestaciones.all()})
@@ -214,7 +217,7 @@ def _download(content, content_type, filename, inline=False):
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def exportar(request, pk):
     obj = get_object_or_404(Nomina, empresa=_e(request), pk=pk)
     response = HttpResponse(content_type="text/csv; charset=utf-8")
@@ -228,55 +231,55 @@ def exportar(request, pk):
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def exportar_excel(request, pk):
     obj = get_object_or_404(Nomina.objects.select_related("periodo"), empresa=_e(request), pk=pk)
     return _download(payroll_xlsx(obj), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", f"{obj.numero}.xlsx")
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def nomina_pdf(request, pk):
     obj = get_object_or_404(Nomina.objects.select_related("periodo"), empresa=_e(request), pk=pk)
     return _download(payroll_pdf(obj), "application/pdf", f"{obj.numero}.pdf", inline=request.GET.get("download") != "1")
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def volante_pdf(request, pk, detalle_id):
     detail = get_object_or_404(DetalleNominaEmpleado.objects.select_related("nomina__empresa", "nomina__periodo", "empleado"), pk=detalle_id, nomina_id=pk, nomina__empresa=_e(request))
     return _download(payslip_pdf(detail), "application/pdf", f"volante-{detail.empleado.codigo}-{detail.nomina.numero}.pdf", inline=request.GET.get("download") != "1")
 
 
 @login_required
-@permission_required("nomina.view_nomina", raise_exception=True)
+@gestion_humana_requerida("nomina.view_nomina")
 def volantes_zip(request, pk):
     obj = get_object_or_404(Nomina.objects.select_related("periodo"), empresa=_e(request), pk=pk)
     return _download(payslips_zip(obj), "application/zip", f"volantes-{obj.numero}.zip")
 
 
 @login_required
-@permission_required("nomina.view_liquidacionlaboral", raise_exception=True)
+@gestion_humana_requerida("nomina.view_liquidacionlaboral")
 def prestacion_pdf(request, pk):
     obj = get_object_or_404(LiquidacionLaboral.objects.select_related("empleado"), empresa=_e(request), pk=pk)
     return _download(settlement_pdf(obj), "application/pdf", f"prestaciones-{obj.empleado.codigo}.pdf", inline=request.GET.get("download") != "1")
 
 
 @login_required
-@permission_required("nomina.view_liquidacionlaboral", raise_exception=True)
+@gestion_humana_requerida("nomina.view_liquidacionlaboral")
 def liquidacion_carta(request, pk):
     obj = get_object_or_404(LiquidacionLaboral.objects.select_related("empleado"), empresa=_e(request), pk=pk)
     return _download(settlement_pdf(obj, letter=True), "application/pdf", f"carta-liquidacion-{obj.empleado.codigo}.pdf", inline=request.GET.get("download") != "1")
 
 
 @login_required
-@permission_required("nomina.view_plantilladocumentorrhh", raise_exception=True)
+@gestion_humana_requerida("nomina.view_plantilladocumentorrhh")
 def plantillas(request):
     return render(request, "nomina/plantillas.html", {"objetos": PlantillaDocumentoRRHH.objects.filter(empresa=_e(request)).order_by("tipo")})
 
 
 @login_required
-@permission_required("nomina.change_plantilladocumentorrhh", raise_exception=True)
+@gestion_humana_requerida("nomina.change_plantilladocumentorrhh")
 def plantilla_editar(request, pk=None):
     obj = get_object_or_404(PlantillaDocumentoRRHH, empresa=_e(request), pk=pk) if pk else None
     form = PlantillaDocumentoForm(request.POST or None, instance=obj, empresa=_e(request))
@@ -290,14 +293,14 @@ def plantilla_editar(request, pk=None):
 
 
 @login_required
-@permission_required("nomina.view_prestamoempleado", raise_exception=True)
+@gestion_humana_requerida("nomina.view_prestamoempleado")
 def prestamos(request):
     objects = PrestamoEmpleado.objects.filter(empresa=_e(request)).select_related("empleado").order_by("-fecha", "-pk")
     return render(request, "nomina/prestamos.html", {"objetos": objects})
 
 
 @login_required
-@permission_required("nomina.add_prestamoempleado", raise_exception=True)
+@gestion_humana_requerida("nomina.add_prestamoempleado")
 @transaction.atomic
 def prestamo_crear(request):
     form = PrestamoForm(request.POST or None, request.FILES or None, empresa=_e(request))
@@ -312,21 +315,21 @@ def prestamo_crear(request):
 
 
 @login_required
-@permission_required("nomina.view_prestamoempleado", raise_exception=True)
+@gestion_humana_requerida("nomina.view_prestamoempleado")
 def prestamo_detalle(request, pk):
     obj = get_object_or_404(PrestamoEmpleado.objects.select_related("empleado"), empresa=_e(request), pk=pk)
     return render(request, "nomina/prestamo_detalle.html", {"obj": obj, "totales": loan_totals(obj), "historial": obj.cuotas_detalle.filter(estado="APLICADA").select_related("nomina").order_by("numero")})
 
 
 @login_required
-@permission_required("nomina.view_prestamoempleado", raise_exception=True)
+@gestion_humana_requerida("nomina.view_prestamoempleado")
 def prestamo_pdf(request, pk):
     obj = get_object_or_404(PrestamoEmpleado.objects.select_related("empleado"), empresa=_e(request), pk=pk)
     return _download(loan_statement_pdf(obj), "application/pdf", f"estado-{obj.codigo}.pdf", inline=request.GET.get("download") != "1")
 
 
 @login_required
-@permission_required("nomina.view_plantilladocumentorrhh", raise_exception=True)
+@gestion_humana_requerida("nomina.view_plantilladocumentorrhh")
 def documento_empleado(request, empleado_id, tipo):
     kind = tipo.upper()
     allowed = {"CONTRATO", "TEMPORAL", "LABORAL", "CONSULAR", "BANCARIA", "ANEXO", "EXPEDIENTE"}

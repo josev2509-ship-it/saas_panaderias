@@ -135,30 +135,7 @@ MODULOS = (
 
 
 def _empresa_operativa_desde_saas(empresa_saas):
-    perfiles = (
-        PerfilUsuario.objects
-        .filter(empresa=empresa_saas)
-        .select_related("user")
-    )
-
-    for perfil in perfiles:
-        empresa = getattr(
-            perfil.user,
-            "empresa_principal",
-            None,
-        )
-
-        if empresa:
-            return empresa
-
-        empresa = Empresa.objects.filter(
-            usuario=perfil.user
-        ).first()
-
-        if empresa:
-            return empresa
-
-    return None
+    return empresa_operativa_desde_saas(empresa_saas)
 
 
 def _diagnostico_acceso(empresa_saas):
@@ -346,6 +323,7 @@ def soporte_empresa_detalle(
         EmpresaSaaS.objects.select_related(
             "suscripcion",
             "suscripcion__plan",
+            "empresa_operativa",
         ),
         pk=empresa_id,
     )
@@ -481,8 +459,35 @@ def soporte_empresa_detalle(
                 )
             ),
             "ultimo_login": ultimo_login,
+            "empresas_operativas_disponibles": Empresa.objects.filter(
+                empresa_saas__isnull=True
+            ).order_by("nombre"),
         },
     )
+
+
+@soporte_sastre_required
+@require_POST
+def soporte_vincular_empresa_operativa(request, empresa_id):
+    empresa_saas = get_object_or_404(EmpresaSaaS, pk=empresa_id)
+    operativa = get_object_or_404(Empresa, pk=request.POST.get("empresa_operativa_id"))
+    if request.POST.get("confirmar") != "1":
+        messages.error(request, "Debes confirmar expresamente la vinculación.")
+        return redirect("soporte_empresa_detalle", empresa_id=empresa_saas.pk)
+    ocupada = EmpresaSaaS.objects.filter(empresa_operativa=operativa).exclude(pk=empresa_saas.pk).exists()
+    if ocupada:
+        messages.error(request, "La empresa operativa ya está vinculada a otra cuenta SaaS.")
+        return redirect("soporte_empresa_detalle", empresa_id=empresa_saas.pk)
+    anterior = empresa_saas.empresa_operativa_id
+    empresa_saas.empresa_operativa = operativa
+    empresa_saas.save(update_fields=["empresa_operativa"])
+    _registrar_evento(
+        empresa_saas, request, "EMPRESA_OPERATIVA_VINCULADA",
+        "Vinculación manual de empresa operativa.",
+        datos={"antes": anterior, "despues": operativa.pk},
+    )
+    messages.success(request, "Empresa operativa vinculada correctamente.")
+    return redirect("soporte_empresa_detalle", empresa_id=empresa_saas.pk)
 
 
 @soporte_sastre_required

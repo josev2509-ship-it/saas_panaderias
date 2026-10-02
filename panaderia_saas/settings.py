@@ -87,8 +87,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "conduces.support_middleware.SoporteSastreMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "conduces.support_middleware.SoporteSastreMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 

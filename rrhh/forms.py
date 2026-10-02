@@ -4,6 +4,7 @@ from .models import AccionDisciplinaria, Capacitacion, CentroTrabajo, ContratoEm
 
 class TenantForm(forms.ModelForm):
     def __init__(self,*args,empresa=None,**kwargs):
+        if empresa is None:raise ValueError("TenantForm requiere una empresa operativa.")
         self.empresa=empresa;super().__init__(*args,**kwargs)
         for field in self.fields.values():field.widget.attrs.setdefault("class","form-control")
         for name in ("puesto","departamento","centro","supervisor","empleado","renovacion_de"):

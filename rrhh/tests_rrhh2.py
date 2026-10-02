@@ -13,7 +13,7 @@ from .models import CentroTrabajo,CierreAsistencia,Departamento,Empleado,HoraExt
 class WorkforceEnterpriseTests(TestCase):
  @classmethod
  def setUpTestData(cls):
-  cls.u=User.objects.create_superuser("rrhh2","rrhh2@example.test","x");cls.e=Empresa.objects.create(usuario=cls.u,nombre="RRHH2");cls.d=Departamento.objects.create(empresa=cls.e,codigo="D",nombre="Demo");cls.p=Puesto.objects.create(empresa=cls.e,codigo="P",nombre="Puesto");cls.c=CentroTrabajo.objects.create(empresa=cls.e,codigo="C",nombre="Centro");cls.emp=Empleado.objects.create(empresa=cls.e,codigo="E1",nombres="Persona",apellidos="Sintética",identificacion="DEMO-1",puesto=cls.p,departamento=cls.d,centro=cls.c,fecha_ingreso=date.today(),salario=Decimal("1000"))
+  cls.u=User.objects.create_superuser("rrhh2","rrhh2@example.test","x");cls.e=Empresa.objects.create(usuario=cls.u,nombre="RRHH2",modulo_nomina=True);cls.d=Departamento.objects.create(empresa=cls.e,codigo="D",nombre="Demo");cls.p=Puesto.objects.create(empresa=cls.e,codigo="P",nombre="Puesto");cls.c=CentroTrabajo.objects.create(empresa=cls.e,codigo="C",nombre="Centro");cls.emp=Empleado.objects.create(empresa=cls.e,codigo="E1",nombres="Persona",apellidos="Sintética",identificacion="DEMO-1",puesto=cls.p,departamento=cls.d,centro=cls.c,fecha_ingreso=date.today(),salario=Decimal("1000"))
  def setUp(self):self.client.force_login(self.u)
  def test_manual_punch_correction_and_close_are_audited(self):
   entrada=timezone.make_aware(datetime.combine(date.today(),datetime.min.time())+timedelta(hours=8));salida=entrada+timedelta(hours=8)

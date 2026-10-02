@@ -25,7 +25,7 @@ class PayrollRDEngineTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_superuser("payroll-rd", "payroll@example.test", "test")
-        cls.company = Empresa.objects.create(usuario=cls.user, nombre="Payroll RD", rnc="101000001")
+        cls.company = Empresa.objects.create(usuario=cls.user, nombre="Payroll RD", rnc="101000001", modulo_nomina=True)
         cls.department = Departamento.objects.create(empresa=cls.company, codigo="FIN", nombre="Finanzas")
         cls.position = Puesto.objects.create(empresa=cls.company, codigo="ANA", nombre="Analista")
         cls.center = CentroTrabajo.objects.create(empresa=cls.company, codigo="SDQ", nombre="Principal")

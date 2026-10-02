@@ -13,7 +13,7 @@ class RRHHCoreTests(TestCase):
  @classmethod
  def setUpTestData(cls):
   cls.user=User.objects.create_superuser("hr-admin","hr@example.test","test-only");cls.other_user=User.objects.create_superuser("hr-other","other@example.test","test-only")
-  cls.empresa=Empresa.objects.create(usuario=cls.user,nombre="Empresa RRHH");cls.other=Empresa.objects.create(usuario=cls.other_user,nombre="Otra RRHH")
+  cls.empresa=Empresa.objects.create(usuario=cls.user,nombre="Empresa RRHH",modulo_nomina=True);cls.other=Empresa.objects.create(usuario=cls.other_user,nombre="Otra RRHH",modulo_nomina=True)
   cls.dep=Departamento.objects.create(empresa=cls.empresa,codigo="ADM",nombre="Administración");cls.pos=Puesto.objects.create(empresa=cls.empresa,codigo="ANA",nombre="Analista");cls.centro=CentroTrabajo.objects.create(empresa=cls.empresa,codigo="SDQ",nombre="Principal")
   cls.other_dep=Departamento.objects.create(empresa=cls.other,codigo="ADM",nombre="Ajeno");cls.other_pos=Puesto.objects.create(empresa=cls.other,codigo="ANA",nombre="Ajeno");cls.other_centro=CentroTrabajo.objects.create(empresa=cls.other,codigo="SDQ",nombre="Ajeno")
   cls.emp=Empleado.objects.create(empresa=cls.empresa,codigo="E-001",nombres="Ana",apellidos="Pérez",identificacion="001",puesto=cls.pos,departamento=cls.dep,centro=cls.centro,fecha_ingreso=date.today()-timedelta(days=365),salario=50000)

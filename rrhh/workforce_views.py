@@ -2,7 +2,7 @@ import csv
 from datetime import datetime
 from decimal import Decimal
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required,permission_required
+from django.contrib.auth.decorators import login_required
 from django.db import models,transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404,redirect,render
@@ -10,12 +10,13 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from auditoria.models import EventoAuditoria
 from auditoria.services import registrar_evento
-from conduces.services import obtener_empresa_usuario
+from conduces.tenant_context import obtener_empresa_requerida
 from .models import (AsignacionTurno,CierreAsistencia,ContratoEmpleado,Empleado,HistorialLaboral,
  HoraExtra,IncidenciaAsistencia,NovedadTSS,RegistroAsistencia,ReingresoEmpleado)
 from .workforce_forms import HoraExtraForm,IncidenciaForm,PoncheForm,ReingresoForm,TSSForm
+from .access import gestion_humana_requerida, tiene_autorizacion_gestion_humana
 
-def _e(r):return obtener_empresa_usuario(r)
+def _e(r):return getattr(r,"empresa_operativa",None) or obtener_empresa_requerida(r,permitir_soporte=True)
 def _audit(r,obj,descripcion,antes=None,nuevos=None):return registrar_evento(empresa=_e(r),usuario=r.user,request=r,objeto=obj,modulo="rrhh",accion=EventoAuditoria.Accion.EDITAR if antes else EventoAuditoria.Accion.CREAR,descripcion=descripcion,datos_anteriores=antes,datos_nuevos=nuevos)
 def _calcular(registro):
  if registro.entrada and registro.salida and registro.salida>=registro.entrada:registro.horas_trabajadas=Decimal(str(round((registro.salida-registro.entrada).total_seconds()/3600,2)))
@@ -25,20 +26,21 @@ def _calcular(registro):
  return registro
 
 @login_required
-@permission_required("rrhh.view_registroasistencia",raise_exception=True)
+@gestion_humana_requerida("rrhh.view_registroasistencia")
 def ponches(request):
  qs=RegistroAsistencia.objects.filter(empresa=_e(request)).select_related("empleado").order_by("-fecha","-pk");return render(request,"rrhh/workforce_list.html",{"titulo":"Asistencia y ponches","objetos":qs,"tipo":"ponches"})
 @login_required
+@gestion_humana_requerida()
 @transaction.atomic
 def ponche_form(request,pk=None):
  obj=get_object_or_404(RegistroAsistencia,empresa=_e(request),pk=pk) if pk else None;perm="rrhh.change_registroasistencia" if obj else "rrhh.add_registroasistencia"
- if not request.user.has_perm(perm):return HttpResponse(status=403)
+ if not tiene_autorizacion_gestion_humana(request,perm):return HttpResponse(status=403)
  antes={"entrada":str(obj.entrada),"salida":str(obj.salida),"estado":obj.estado} if obj else None;form=PoncheForm(request.POST or None,instance=obj,empresa=_e(request))
  if request.method=="POST" and form.is_valid():
   obj=form.save(commit=False);obj.empresa=_e(request);obj.corregido=bool(antes);_calcular(obj);obj.save();_audit(request,obj,"Ponche corregido." if antes else "Ponche registrado.",antes,{"entrada":str(obj.entrada),"salida":str(obj.salida),"horas":str(obj.horas_trabajadas)});HistorialLaboral.objects.create(empleado=obj.empleado,accion="PONCHE_CORREGIDO" if antes else "PONCHE",snapshot={"registro":obj.pk});messages.success(request,"Ponche guardado.");return redirect("rrhh:ponches")
  return render(request,"rrhh/form.html",{"form":form,"titulo":"Corregir ponche" if obj else "Registrar ponche"})
 @login_required
-@permission_required("rrhh.add_incidenciaasistencia",raise_exception=True)
+@gestion_humana_requerida("rrhh.add_incidenciaasistencia")
 @transaction.atomic
 def incidencia_crear(request):
  form=IncidenciaForm(request.POST or None,empresa=_e(request))
@@ -46,7 +48,7 @@ def incidencia_crear(request):
  return render(request,"rrhh/form.html",{"form":form,"titulo":"Registrar tardanza, ausencia o permiso"})
 @login_required
 @require_POST
-@permission_required("rrhh.add_cierreasistencia",raise_exception=True)
+@gestion_humana_requerida("rrhh.add_cierreasistencia")
 @transaction.atomic
 def cerrar_asistencia(request):
  desde=request.POST.get("desde");hasta=request.POST.get("hasta")
@@ -57,10 +59,10 @@ def cerrar_asistencia(request):
  _audit(request,obj,"Período de asistencia cerrado.",nuevos={"desde":desde,"hasta":hasta})
  messages.success(request,"Período de asistencia cerrado.");return redirect("rrhh:ponches")
 @login_required
-@permission_required("rrhh.view_horaextra",raise_exception=True)
+@gestion_humana_requerida("rrhh.view_horaextra")
 def horas_extra(request):return render(request,"rrhh/workforce_list.html",{"titulo":"Horas extra","objetos":HoraExtra.objects.filter(empresa=_e(request)).select_related("empleado").order_by("-fecha"),"tipo":"horas-extra"})
 @login_required
-@permission_required("rrhh.add_horaextra",raise_exception=True)
+@gestion_humana_requerida("rrhh.add_horaextra")
 @transaction.atomic
 def hora_extra_crear(request):
  form=HoraExtraForm(request.POST or None,empresa=_e(request))
@@ -68,30 +70,30 @@ def hora_extra_crear(request):
  return render(request,"rrhh/form.html",{"form":form,"titulo":"Registrar horas extra"})
 @login_required
 @require_POST
-@permission_required("rrhh.change_horaextra",raise_exception=True)
+@gestion_humana_requerida("rrhh.change_horaextra")
 @transaction.atomic
 def hora_extra_estado(request,pk):
  obj=get_object_or_404(HoraExtra,empresa=_e(request),pk=pk);nuevo=request.POST.get("estado","").upper()
  if nuevo not in {"APROBADA","RECHAZADA"} or obj.estado!="PENDIENTE":return HttpResponse("Transición no permitida.",status=400)
  anterior=obj.estado;obj.estado=nuevo;obj.aprobador=request.user;obj.save(update_fields=["estado","aprobador"]);_audit(request,obj,"Horas extra decididas.",{"estado":anterior},{"estado":nuevo});HistorialLaboral.objects.create(empleado=obj.empleado,accion="ESTADO_HORA_EXTRA",snapshot={"antes":anterior,"despues":nuevo});return redirect("rrhh:horas_extra")
 @login_required
-@permission_required("rrhh.view_novedadtss",raise_exception=True)
+@gestion_humana_requerida("rrhh.view_novedadtss")
 def tss(request):return render(request,"rrhh/workforce_list.html",{"titulo":"Novedades TSS","objetos":NovedadTSS.objects.filter(empresa=_e(request)).select_related("empleado").order_by("-fecha_efectiva"),"tipo":"tss"})
 @login_required
-@permission_required("rrhh.add_novedadtss",raise_exception=True)
+@gestion_humana_requerida("rrhh.add_novedadtss")
 @transaction.atomic
 def tss_crear(request):
  form=TSSForm(request.POST or None,empresa=_e(request))
  if request.method=="POST" and form.is_valid():obj=form.save(commit=False);obj.empresa=_e(request);obj.save();_audit(request,obj,"Novedad TSS registrada.");HistorialLaboral.objects.create(empleado=obj.empleado,accion="NOVEDAD_TSS",snapshot={"tipo":obj.tipo,"periodo":obj.periodo});return redirect("rrhh:tss")
  return render(request,"rrhh/form.html",{"form":form,"titulo":"Registrar novedad TSS"})
 @login_required
-@permission_required("rrhh.view_novedadtss",raise_exception=True)
+@gestion_humana_requerida("rrhh.view_novedadtss")
 def tss_exportar(request):
  response=HttpResponse(content_type="text/csv; charset=utf-8");response["Content-Disposition"]='attachment; filename="novedades_tss.csv"';response.write("\ufeff");w=csv.writer(response);w.writerow(["Período","Empleado","Tipo","Fecha efectiva","Salario reportable","Estado"])
  for x in NovedadTSS.objects.filter(empresa=_e(request)).select_related("empleado"):w.writerow([x.periodo,x.empleado.codigo,x.tipo,x.fecha_efectiva,x.salario_reportable,x.estado])
  return response
 @login_required
-@permission_required("rrhh.add_reingresoempleado",raise_exception=True)
+@gestion_humana_requerida("rrhh.add_reingresoempleado")
 @transaction.atomic
 def reingresar(request,pk):
  emp=get_object_or_404(Empleado,empresa=_e(request),pk=pk);form=ReingresoForm(request.POST or None,empresa=_e(request),initial={"empleado":emp})

@@ -51,6 +51,11 @@ urlpatterns = [
         name="soporte_empresa_modulos",
     ),
     path(
+        "sastre-admin/empresas/<int:empresa_id>/vincular-operativa/",
+        support_views.soporte_vincular_empresa_operativa,
+        name="soporte_vincular_empresa_operativa",
+    ),
+    path(
         "sastre-admin/empresas/<int:empresa_id>/plan/",
         support_views.soporte_empresa_plan,
         name="soporte_empresa_plan",

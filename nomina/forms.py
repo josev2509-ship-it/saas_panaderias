@@ -5,6 +5,8 @@ from .models import ConceptoNomina, LiquidacionLaboral, NovedadNomina, PeriodoNo
 
 class TenantForm(forms.ModelForm):
     def __init__(self, *args, empresa=None, **kwargs):
+        if empresa is None:
+            raise ValueError("TenantForm requiere una empresa operativa.")
         self.empresa = empresa
         super().__init__(*args, **kwargs)
         for field in self.fields.values():

@@ -141,6 +141,10 @@ Sin suscripci&oacute;n
 
 <h2>Acceso operativo de soporte</h2>
 
+<p><strong>Empresa SaaS:</strong> {{ empresa.nombre }}</p>
+<p><strong>Empresa operativa:</strong> {{ empresa_operativa.nombre|default:"—" }}</p>
+<p><strong>Estado vínculo:</strong> {% if empresa_operativa %}Vinculada{% else %}<span style="color:#b42318;font-weight:800;">SIN EMPRESA OPERATIVA VINCULADA</span>{% endif %}</p>
+
 <p style="color:#657995;line-height:1.5;">
 Permite ingresar temporalmente al ERP usando el contexto
 de esta empresa. El acceso queda registrado.
@@ -175,6 +179,16 @@ Entrar como empresa
 <p>
 No existe una empresa operativa vinculada.
 </p>
+
+<form method="post" action="{% url 'soporte_vincular_empresa_operativa' empresa.id %}">
+{% csrf_token %}
+<select name="empresa_operativa_id" required>
+<option value="">Selecciona una empresa operativa</option>
+{% for operativa in empresas_operativas_disponibles %}<option value="{{ operativa.pk }}">{{ operativa.nombre }}</option>{% endfor %}
+</select>
+<label><input type="checkbox" name="confirmar" value="1" required> Confirmo esta vinculación</label>
+<button class="dark">Vincular empresa operativa</button>
+</form>
 
 {% endif %}
 

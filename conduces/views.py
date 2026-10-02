@@ -3039,7 +3039,7 @@ def registro(request):
                 is_active=False
             )
 
-            Empresa.objects.create(
+            empresa_operativa = Empresa.objects.create(
                 usuario=user,
                 nombre="Mi empresa",
                 rnc="",
@@ -3047,6 +3047,9 @@ def registro(request):
                 correo=correo,
                 numero_inicial_conduce="0001",
             )
+
+            empresa_saas.empresa_operativa = empresa_operativa
+            empresa_saas.save(update_fields=["empresa_operativa"])
 
             PerfilUsuario.objects.create(
                 user=user,
@@ -3311,6 +3314,17 @@ def mi_empresa(request):
         empresa.modulo_inventario = request.POST.get("modulo_inventario") == "on"
 
         empresa.save()
+
+        empresa_saas = getattr(empresa, "empresa_saas", None)
+        if empresa_saas is None and perfil and perfil.empresa_id:
+            empresa_saas = perfil.empresa
+            if empresa_saas.empresa_operativa_id is None:
+                empresa_saas.empresa_operativa = empresa
+        if empresa_saas is not None:
+            empresa_saas.nombre = empresa.nombre
+            empresa_saas.rnc = empresa.rnc or ""
+            empresa_saas.correo = empresa.correo or empresa_saas.correo
+            empresa_saas.save(update_fields=["empresa_operativa", "nombre", "rnc", "correo"])
 
         messages.success(request, "Datos de la empresa actualizados correctamente.")
         return redirect("mi_empresa")
