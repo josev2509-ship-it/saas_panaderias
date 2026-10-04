@@ -8,6 +8,7 @@ from conduces.subscription_service import estado_acceso_modulo_request
 from conduces.tenant_context import (
     contexto_soporte_activo,
     empresa_operativa_usuario,
+    es_soporte_sastre,
     obtener_empresa_requerida,
     obtener_perfil_saas_usuario,
 )
@@ -21,14 +22,21 @@ def gestion_humana_requerida(permiso=None):
             if not request.user.is_authenticated:
                 return redirect_to_login(request.get_full_path())
 
-            pertenece_soporte = request.user.groups.filter(name="Soporte SASTRE").exists()
-            soporte = pertenece_soporte or (
-                request.user.is_superuser and empresa_operativa_usuario(request.user) is None
-            )
-            if soporte and not contexto_soporte_activo(request):
+            # El modo soporte es un estado explícito de la sesión, no una
+            # característica permanente del usuario. Fuera de ese modo, un
+            # usuario con capacidad de soporte solo puede usar su tenant propio.
+            soporte = contexto_soporte_activo(request)
+            empresa_propia = None if soporte else empresa_operativa_usuario(request.user)
+            if not soporte and empresa_propia is None and es_soporte_sastre(request.user):
                 raise PermissionDenied("El soporte requiere un contexto empresarial activo.")
 
-            empresa = obtener_empresa_requerida(request, permitir_soporte=True)
+            empresa = (
+                obtener_empresa_requerida(request, permitir_soporte=True)
+                if soporte
+                else empresa_propia
+            )
+            if empresa is None:
+                raise PermissionDenied("No existe una empresa operativa vinculada a esta cuenta.")
             if not empresa.activa:
                 raise PermissionDenied("La empresa se encuentra inactiva.")
 
@@ -40,7 +48,12 @@ def gestion_humana_requerida(permiso=None):
 
             perfil = None if soporte else obtener_perfil_saas_usuario(request.user)
             administrador = bool(
-                (request.user.is_superuser and not soporte)
+                (
+                    request.user.is_superuser
+                    and not soporte
+                    and empresa_propia is not None
+                    and empresa_propia.pk == empresa.pk
+                )
                 or (
                     perfil
                     and perfil.activo

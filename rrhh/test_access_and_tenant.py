@@ -45,6 +45,20 @@ class GestionHumanaAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("rrhh:dashboard")).status_code, 403)
         self.assertEqual(self.client.get(reverse("nomina:dashboard")).status_code, 403)
 
+    def test_usuario_normal_con_empresa_activa_accede_a_su_tenant(self):
+        user, empresa, _ = self.crear_tenant("normal")
+        self.client.force_login(user)
+        respuesta = self.client.get(reverse("rrhh:dashboard"))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.context["empresa"], empresa)
+
+    def test_usuario_con_empresa_inactiva_es_detenido(self):
+        user, empresa, _ = self.crear_tenant("inactiva")
+        empresa.activa = False
+        empresa.save(update_fields=["activa"])
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse("rrhh:dashboard")).status_code, 403)
+
     def test_usuario_granular_necesita_permiso_especifico(self):
         user, _, _ = self.crear_tenant(rol="operaciones")
         self.client.force_login(user)
@@ -106,3 +120,44 @@ class GestionHumanaAccessTests(TestCase):
         })
         self.assertTrue(Departamento.objects.filter(empresa=empresa_a, codigo="SOP").exists())
         self.assertFalse(Departamento.objects.filter(empresa=empresa_b, codigo="SOP").exists())
+
+    def test_superusuario_con_contexto_seleccionado_opera_solo_ese_tenant(self):
+        soporte = User.objects.create_superuser("root-soporte", "root@example.com", "x")
+        _, empresa_a, saas_a = self.crear_tenant("root-a")
+        _, empresa_b, _ = self.crear_tenant("root-b")
+        dep_b = Departamento.objects.create(empresa=empresa_b, codigo="B", nombre="Empresa B")
+        self.client.force_login(soporte)
+        session = self.client.session
+        session[SESSION_SOPORTE_ACTOR] = soporte.pk
+        session[SESSION_SOPORTE_SAAS] = saas_a.pk
+        session[SESSION_SOPORTE_OPERATIVA] = empresa_a.pk
+        session[SESSION_SOPORTE_MOTIVO] = "Diagnóstico autorizado"
+        session[SESSION_SOPORTE_INICIADO] = timezone.now().isoformat()
+        session.save()
+        self.assertEqual(self.client.get(reverse("rrhh:dashboard")).status_code, 200)
+        respuesta = self.client.post(
+            reverse("rrhh:recurso_estado", args=["departamentos", dep_b.pk]),
+            {"estado": "ACTIVO"},
+        )
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_superusuario_con_empresa_propia_no_es_forzado_a_modo_soporte(self):
+        user, empresa, saas = self.crear_tenant("root-propio")
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(update_fields=["is_staff", "is_superuser"])
+        self.client.force_login(user)
+        self.assertFalse(self.client.session.get(SESSION_SOPORTE_OPERATIVA))
+        self.assertEqual(self.client.get(reverse("rrhh:dashboard")).status_code, 200)
+        self.assertEqual(saas.empresa_operativa, empresa)
+
+    def test_miembro_soporte_con_tenant_propio_no_recibe_privilegios_de_soporte(self):
+        user, empresa, _ = self.crear_tenant("soporte-propio")
+        user.groups.add(Group.objects.create(name="Soporte SASTRE"))
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse("rrhh:dashboard")).status_code, 200)
+        respuesta = self.client.post(reverse("rrhh:recurso_crear", args=["departamentos"]), {
+            "codigo": "PROPIO", "nombre": "Tenant propio", "activo": "on",
+        })
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(Departamento.objects.filter(empresa=empresa, codigo="PROPIO").exists())
