@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="el-page"><header class="el-page-header"><div><nav class="el-breadcrumbs"><a href="{% url 'rrhh:dashboard' %}">Gestión Humana</a> / <a href="{% url 'rrhh:configuracion' %}">Configuración</a> / Puestos y funciones</nav><h1>Puestos y funciones</h1><p>Administra primero el catálogo de puestos y luego sus descripciones de funciones.</p></div></header><div class="rrhh-area-grid"><a class="rrhh-area rrhh-area--blue" href="{% url 'rrhh:puestos' %}"><strong>Puestos</strong><span>{{ puestos }} registrados</span><b>Administrar puestos</b></a><a class="rrhh-area rrhh-area--green" href="{% url 'rrhh:funciones' %}"><strong>Funciones</strong><span>{{ funciones }} descripciones registradas</span><b>Administrar funciones</b></a></div></section>
+{% endblock %}

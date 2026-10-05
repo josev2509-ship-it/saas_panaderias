@@ -6,6 +6,7 @@ from django.db import models,transaction
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404,redirect,render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from auditoria.models import EventoAuditoria
@@ -15,8 +16,8 @@ from documentos.forms import DocumentoForm
 from documentos.models import Documento
 from documentos.services import crear_documento_asociado
 from nomina.models import DetalleNominaEmpleado,LiquidacionLaboral,Nomina,PrestamoEmpleado
-from .forms import CapacitacionForm,ContratoForm,DepartamentoForm,DescripcionPuestoForm,DisciplinaForm,EmpleadoForm,EntidadFinancieraForm,LicenciaForm,LugarTrabajoForm,ParticipacionForm,SalidaForm,SolicitudDocumentoForm,VacacionForm
-from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,DescripcionPuesto,Empleado,EntidadFinancieraRRHH,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudDocumentoRRHH,SolicitudVacacion
+from .forms import CapacitacionForm,ContratoForm,DepartamentoForm,DescripcionPuestoForm,DisciplinaForm,EmpleadoForm,EntidadFinancieraForm,LicenciaForm,LugarTrabajoForm,ParticipacionForm,PuestoForm,SalidaForm,SolicitudDocumentoForm,VacacionForm
+from .models import AccionDisciplinaria,AusenciaEmpleado,Capacitacion,CentroTrabajo,ContratoEmpleado,Departamento,DescripcionPuesto,Empleado,EntidadFinancieraRRHH,HistorialLaboral,HoraExtra,IncidenciaAsistencia,LicenciaEmpleado,NovedadTSS,ParticipacionCapacitacion,Puesto,RegistroAsistencia,SaldoVacacion,SalidaEmpleado,SolicitudDocumentoRRHH,SolicitudVacacion
 from .access import gestion_humana_requerida, tiene_autorizacion_gestion_humana
 
 def _empresa(r):return getattr(r,"empresa_operativa",None) or obtener_empresa_requerida(r,permitir_soporte=True)
@@ -78,6 +79,71 @@ def reportes(request):return render(request,"rrhh/reportes.html")
 @login_required
 @gestion_humana_requerida("rrhh.view_departamento")
 def configuracion(request):return render(request,"rrhh/configuracion.html")
+
+@login_required
+@gestion_humana_requerida("rrhh.view_puesto")
+def puestos_funciones(request):
+ empresa=_empresa(request)
+ return render(request,"rrhh/puestos_funciones.html",{"puestos":Puesto.objects.filter(empresa=empresa).count(),"funciones":DescripcionPuesto.objects.filter(empresa=empresa).count()})
+
+@login_required
+@gestion_humana_requerida("rrhh.view_puesto")
+def puestos(request):
+ return render(request,"rrhh/puestos_lista.html",{"objetos":Puesto.objects.filter(empresa=_empresa(request)).order_by("codigo","nombre")})
+
+@login_required
+@gestion_humana_requerida("rrhh.add_puesto")
+@transaction.atomic
+def puesto_crear(request):
+ empresa=_empresa(request);form=PuestoForm(request.POST or None,empresa=empresa)
+ if request.method=="POST" and form.is_valid():
+  obj=form.save(commit=False);obj.empresa=empresa;obj.save();_audit(request,obj,EventoAuditoria.Accion.CREAR,"Puesto creado.",nuevos={"codigo":obj.codigo,"nombre":obj.nombre});messages.success(request,"Puesto creado correctamente.");return redirect("rrhh:puestos")
+ return render(request,"rrhh/form.html",{"form":form,"titulo":"Nuevo puesto","volver_url":reverse("rrhh:puestos")})
+
+@login_required
+@gestion_humana_requerida("rrhh.change_puesto")
+@transaction.atomic
+def puesto_editar(request,pk):
+ empresa=_empresa(request);obj=get_object_or_404(Puesto,pk=pk,empresa=empresa);antes={"codigo":obj.codigo,"nombre":obj.nombre};form=PuestoForm(request.POST or None,instance=obj,empresa=empresa)
+ if request.method=="POST" and form.is_valid():
+  obj=form.save();_audit(request,obj,EventoAuditoria.Accion.EDITAR,"Puesto actualizado.",antes,{"codigo":obj.codigo,"nombre":obj.nombre});messages.success(request,"Puesto actualizado correctamente.");return redirect("rrhh:puestos")
+ return render(request,"rrhh/form.html",{"form":form,"titulo":"Editar puesto","volver_url":reverse("rrhh:puestos")})
+
+@login_required
+@gestion_humana_requerida("rrhh.change_puesto")
+@require_POST
+@transaction.atomic
+def puesto_estado(request,pk):
+ obj=get_object_or_404(Puesto,pk=pk,empresa=_empresa(request));anterior=obj.activo;obj.activo=not obj.activo;obj.save(update_fields=["activo"]);_audit(request,obj,EventoAuditoria.Accion.CAMBIAR_ESTADO,"Estado del puesto actualizado.",{"activo":anterior},{"activo":obj.activo});messages.success(request,"Estado del puesto actualizado.");return redirect("rrhh:puestos")
+
+@login_required
+@gestion_humana_requerida("rrhh.view_descripcionpuesto")
+def funciones(request):
+ objetos=DescripcionPuesto.objects.filter(empresa=_empresa(request)).select_related("puesto").order_by("puesto__codigo","-version")
+ return render(request,"rrhh/funciones_lista.html",{"objetos":objetos})
+
+def _funcion_form(request,obj=None):
+ empresa=_empresa(request);form=DescripcionPuestoForm(request.POST or None,instance=obj,empresa=empresa);sin_puestos=obj is None and not Puesto.objects.filter(empresa=empresa,activo=True).exists()
+ if request.method=="POST" and form.is_valid():
+  registro=form.save(commit=False);registro.empresa=empresa;registro.save();_audit(request,registro,EventoAuditoria.Accion.EDITAR if obj else EventoAuditoria.Accion.CREAR,"Descripción de puesto actualizada." if obj else "Descripción de puesto creada.");messages.success(request,"Descripción de funciones guardada correctamente.");return redirect("rrhh:funciones")
+ return render(request,"rrhh/funcion_form.html",{"form":form,"titulo":"Editar descripción de funciones" if obj else "Nueva descripción de funciones","sin_puestos":sin_puestos})
+
+@login_required
+@gestion_humana_requerida("rrhh.add_descripcionpuesto")
+@transaction.atomic
+def funcion_crear(request):return _funcion_form(request)
+
+@login_required
+@gestion_humana_requerida("rrhh.change_descripcionpuesto")
+@transaction.atomic
+def funcion_editar(request,pk):return _funcion_form(request,get_object_or_404(DescripcionPuesto,pk=pk,empresa=_empresa(request)))
+
+@login_required
+@gestion_humana_requerida("rrhh.change_descripcionpuesto")
+@require_POST
+@transaction.atomic
+def funcion_estado(request,pk):
+ obj=get_object_or_404(DescripcionPuesto,pk=pk,empresa=_empresa(request));anterior=obj.activa;obj.activa=not obj.activa;obj.save(update_fields=["activa"]);_audit(request,obj,EventoAuditoria.Accion.CAMBIAR_ESTADO,"Estado de la descripción de puesto actualizado.",{"activa":anterior},{"activa":obj.activa});messages.success(request,"Estado de la descripción actualizado.");return redirect("rrhh:funciones")
 
 @login_required
 @gestion_humana_requerida("rrhh.view_empleado")

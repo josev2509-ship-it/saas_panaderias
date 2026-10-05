@@ -8,8 +8,9 @@ class Departamento(Base):
  codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);descripcion=models.TextField(blank=True);activo=models.BooleanField(default=True)
  def __str__(self):return f"{self.codigo} · {self.nombre}"
 class Puesto(Base):
- codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);descripcion=models.TextField(blank=True)
+ codigo=models.CharField(max_length=20);nombre=models.CharField(max_length=120);descripcion=models.TextField(blank=True);activo=models.BooleanField(default=True)
  def __str__(self):return f"{self.codigo} · {self.nombre}"
+ class Meta:constraints=[models.UniqueConstraint(fields=["empresa","codigo"],name="rrhh_puesto_empresa_codigo_uniq")]
 class SecuenciaEmpleado(models.Model):
  empresa=models.OneToOneField("conduces.Empresa",on_delete=models.CASCADE,related_name="secuencia_empleados");ultimo_numero=models.PositiveBigIntegerField(default=0);actualizado_en=models.DateTimeField(auto_now=True)
 

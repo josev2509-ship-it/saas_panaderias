@@ -1,6 +1,7 @@
 from django import forms
 from django.conf import settings
-from .models import AccionDisciplinaria, Capacitacion, CentroTrabajo, ContratoEmpleado, Departamento, DescripcionPuesto, Empleado, EntidadFinancieraRRHH, LicenciaEmpleado, ParticipacionCapacitacion, SalidaEmpleado, SolicitudDocumentoRRHH, SolicitudVacacion
+from django.db.models import Q
+from .models import AccionDisciplinaria, Capacitacion, CentroTrabajo, ContratoEmpleado, Departamento, DescripcionPuesto, Empleado, EntidadFinancieraRRHH, LicenciaEmpleado, ParticipacionCapacitacion, Puesto, SalidaEmpleado, SolicitudDocumentoRRHH, SolicitudVacacion
 
 class TenantForm(forms.ModelForm):
     def __init__(self,*args,empresa=None,**kwargs):
@@ -9,7 +10,24 @@ class TenantForm(forms.ModelForm):
         for field in self.fields.values():field.widget.attrs.setdefault("class","form-control")
         for name in ("puesto","departamento","centro","supervisor","empleado","renovacion_de"):
             field=self.fields.get(name)
-            if field is not None and hasattr(field,"queryset"):field.queryset=field.queryset.filter(empresa=empresa)
+            if field is not None and hasattr(field,"queryset"):
+                queryset=field.queryset.filter(empresa=empresa)
+                if name=="puesto":
+                    puesto_actual=getattr(self.instance,"puesto_id",None)
+                    queryset=queryset.filter(Q(activo=True)|Q(pk=puesto_actual)) if puesto_actual else queryset.filter(activo=True)
+                field.queryset=queryset
+
+class PuestoForm(TenantForm):
+    class Meta:
+        model=Puesto
+        fields=("codigo","nombre","descripcion")
+        widgets={"descripcion":forms.Textarea(attrs={"rows":3})}
+    def clean_codigo(self):
+        codigo=self.cleaned_data["codigo"].strip()
+        queryset=Puesto.objects.filter(empresa=self.empresa,codigo__iexact=codigo)
+        if self.instance.pk:queryset=queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():raise forms.ValidationError("Ya existe un puesto con este código en la empresa.")
+        return codigo
 
 class EmpleadoForm(TenantForm):
     eliminar_foto=forms.BooleanField(required=False,label="Eliminar fotografía actual")
@@ -66,4 +84,4 @@ class SalidaForm(TenantForm):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs);self.fields["checklist"].required=False
 class DescripcionPuestoForm(TenantForm):
-    class Meta:model=DescripcionPuesto;exclude=("empresa","creado_en");widgets={"vigente_desde":forms.DateInput(attrs={"type":"date"})}
+    class Meta:model=DescripcionPuesto;exclude=("empresa","creado_en","activa");widgets={"vigente_desde":forms.DateInput(attrs={"type":"date"})}
